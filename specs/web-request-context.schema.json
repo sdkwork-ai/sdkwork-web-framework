@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sdkwork.dev/schemas/web-request-context/v1",
+  "title": "SDKWork WebRequestContext",
+  "description": "Canonical request context for SDKWork HTTP APIs. Injected by framework; not client-writable.",
+  "$defs": {
+    "ServerRequestId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Server-owned request correlation ID (UUID v4)."
+    },
+    "WebApiSurface": {
+      "type": "string",
+      "enum": ["openApi", "appApi", "backendApi", "gatewayApi", "unknown"]
+    },
+    "WebAuthMode": {
+      "type": "string",
+      "enum": ["public", "apiKey", "oauth", "dualToken"]
+    },
+    "WebLoginScope": {
+      "type": "string",
+      "enum": ["tenant", "organization"]
+    },
+    "WebEnvironment": {
+      "type": "string",
+      "enum": ["dev", "test", "prod"]
+    },
+    "WebDeploymentMode": {
+      "type": "string",
+      "enum": ["saas", "private", "local"]
+    },
+    "WebAuthLevel": {
+      "type": "string",
+      "enum": ["anonymous", "password", "mfa", "system", "apiKey"]
+    },
+    "WebSubjectType": {
+      "type": "string",
+      "enum": ["user", "service", "apiKey", "system"]
+    },
+    "WebTransportFacts": {
+      "type": "object",
+      "required": ["path", "method", "authTokenPresent", "accessTokenPresent", "apiKeyPresent", "oauthBearerPresent"],
+      "properties": {
+        "path": { "type": "string" },
+        "method": { "type": "string" },
+        "authTokenPresent": { "type": "boolean" },
+        "accessTokenPresent": { "type": "boolean" },
+        "apiKeyPresent": { "type": "boolean" },
+        "oauthBearerPresent": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "WebTenancyContext": {
+      "type": "object",
+      "description": "Resolved tenant and organization scope.",
+      "required": ["tenantId", "loginScope"],
+      "properties": {
+        "tenantId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Current tenant. Platform scope uses '0' with explicit authorization."
+        },
+        "organizationId": {
+          "type": ["string", "null"],
+          "description": "Organization when loginScope is organization; null or '0' for tenant scope."
+        },
+        "loginScope": { "$ref": "#/$defs/WebLoginScope" }
+      },
+      "additionalProperties": false
+    },
+    "WebAppContext": {
+      "type": "object",
+      "description": "Application and runtime deployment binding.",
+      "required": ["appId", "environment", "deploymentMode"],
+      "properties": {
+        "appId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "PlusApp or registered application identifier."
+        },
+        "environment": { "$ref": "#/$defs/WebEnvironment" },
+        "deploymentMode": { "$ref": "#/$defs/WebDeploymentMode" },
+        "workspaceId": { "type": ["string", "null"] },
+        "compositionId": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "WebSubjectContext": {
+      "type": "object",
+      "required": ["userId", "subjectType"],
+      "properties": {
+        "userId": { "type": "string", "minLength": 1 },
+        "sessionId": { "type": ["string", "null"] },
+        "subjectType": { "$ref": "#/$defs/WebSubjectType" }
+      },
+      "additionalProperties": false
+    },
+    "WebAuthContext": {
+      "type": "object",
+      "required": ["authLevel"],
+      "properties": {
+        "authLevel": { "$ref": "#/$defs/WebAuthLevel" },
+        "apiKeyId": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "WebScopeContext": {
+      "type": "object",
+      "required": ["dataScope", "permissionScope"],
+      "properties": {
+        "dataScope": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "permissionScope": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "WebRequestPrincipal": {
+      "type": "object",
+      "description": "Authenticated SaaS principal resolved from tokens or API key record.",
+      "required": ["tenancy", "app", "subject", "auth", "scopes"],
+      "properties": {
+        "tenancy": { "$ref": "#/$defs/WebTenancyContext" },
+        "app": { "$ref": "#/$defs/WebAppContext" },
+        "subject": { "$ref": "#/$defs/WebSubjectContext" },
+        "auth": { "$ref": "#/$defs/WebAuthContext" },
+        "scopes": { "$ref": "#/$defs/WebScopeContext" }
+      },
+      "additionalProperties": false
+    },
+    "WebOperationBinding": {
+      "type": "object",
+      "required": ["operationId", "routeTemplate"],
+      "properties": {
+        "operationId": { "type": "string" },
+        "routeTemplate": { "type": "string" },
+        "rateLimitTier": { "type": ["string", "null"] },
+        "idempotent": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "WebRequestContext": {
+      "type": "object",
+      "description": "Injected once per request at framework boundary.",
+      "required": ["requestId", "apiSurface", "authMode", "transport"],
+      "properties": {
+        "requestId": { "$ref": "#/$defs/ServerRequestId" },
+        "apiSurface": { "$ref": "#/$defs/WebApiSurface" },
+        "authMode": { "$ref": "#/$defs/WebAuthMode" },
+        "transport": { "$ref": "#/$defs/WebTransportFacts" },
+        "principal": {
+          "oneOf": [
+            { "$ref": "#/$defs/WebRequestPrincipal" },
+            { "type": "null" }
+          ]
+        },
+        "locale": { "type": ["string", "null"] },
+        "clientKind": {
+          "type": ["string", "null"],
+          "enum": ["browser", "mobile", "desktop", "server", "unknown", null]
+        },
+        "operation": {
+          "oneOf": [
+            { "$ref": "#/$defs/WebOperationBinding" },
+            { "type": "null" }
+          ]
+        },
+        "traceId": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{32}$",
+          "description": "W3C trace id propagated from traceparent for observability correlation."
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$ref": "#/$defs/WebRequestContext"
+}

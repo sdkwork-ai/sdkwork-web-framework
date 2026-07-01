@@ -1,0 +1,89 @@
+:root {
+  color-scheme: light dark;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  line-height: 1.5;
+}
+
+body {
+  margin: 0;
+  background: #0f1419;
+  color: #e7ecf3;
+}
+
+.layout {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+header h1 {
+  margin: 0 0 0.25rem;
+  font-size: 1.5rem;
+}
+
+header p {
+  margin: 0 0 1rem;
+  color: #9aa7b8;
+}
+
+nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+nav button,
+.toolbar button {
+  background: #1c2733;
+  color: inherit;
+  border: 1px solid #2d3b4d;
+  border-radius: 8px;
+  padding: 0.45rem 0.8rem;
+  cursor: pointer;
+}
+
+nav button.active {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+.toolbar {
+  display: flex;
+  gap: 0.75rem;
+  align-items: end;
+  margin-bottom: 1rem;
+}
+
+.panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+textarea,
+pre {
+  width: 100%;
+  box-sizing: border-box;
+  background: #111822;
+  border: 1px solid #2d3b4d;
+  border-radius: 8px;
+  padding: 0.75rem;
+  min-height: 280px;
+  overflow: auto;
+}
+
+.error {
+  background: #3f1d1d;
+  border: 1px solid #7f1d1d;
+  color: #fecaca;
+  padding: 0.75rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 900px) {
+  .panels {
+    grid-template-columns: 1fr;
+  }
+}

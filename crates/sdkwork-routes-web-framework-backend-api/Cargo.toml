@@ -1,0 +1,33 @@
+[package]
+name = "sdkwork-routes-web-framework-backend-api"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Platform backend-api for web framework runtime governance (web_* config, control nodes)."
+
+[lib]
+name = "sdkwork_routes_web_framework_backend_api"
+path = "src/lib.rs"
+
+[dependencies]
+axum.workspace = true
+http.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sdkwork-web-core.workspace = true
+sdkwork-web-contract.workspace = true
+sdkwork-web-framework-admin-repository-sqlx = { path = "../sdkwork-web-framework-admin-repository-sqlx" }
+# serde_int64 helper：API JSON 边界 int64-as-string 强制（API_SPEC §13）。
+sdkwork-utils-rust.workspace = true
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+tower.workspace = true
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
+sdkwork-web-store-sqlx = { workspace = true }
+sdkwork-web-axum = { workspace = true }
+sdkwork-web-test-utils = { workspace = true }
+serde_json.workspace = true

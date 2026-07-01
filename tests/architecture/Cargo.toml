@@ -1,0 +1,87 @@
+[package]
+name = "sdkwork-web-architecture-tests"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dev-dependencies]
+async-trait.workspace = true
+axum.workspace = true
+serde_json = "1.0"
+sdkwork-web-contract.workspace = true
+sdkwork-web-core.workspace = true
+sdkwork-web-test-utils.workspace = true
+tokio.workspace = true
+
+[[test]]
+name = "dependency_graph"
+path = "tests/dependency_graph.rs"
+
+[[test]]
+name = "capability_matrix"
+path = "tests/capability_matrix.rs"
+
+[[test]]
+name = "security_vectors"
+path = "tests/security_vectors.rs"
+
+[[test]]
+name = "sqlx_migrations"
+path = "tests/sqlx_migrations.rs"
+
+[[test]]
+name = "handler_static_rules"
+path = "tests/handler_static_rules.rs"
+
+[[test]]
+name = "openapi_context_selectors"
+path = "tests/openapi_context_selectors.rs"
+
+[[test]]
+name = "component_spec"
+path = "tests/component_spec.rs"
+
+[[test]]
+name = "problem_snapshot"
+path = "tests/problem_snapshot.rs"
+
+[[test]]
+name = "java_parity"
+path = "tests/java_parity.rs"
+
+[[test]]
+name = "header_fuzz"
+path = "tests/header_fuzz.rs"
+
+[[test]]
+name = "pipeline_stress"
+path = "tests/pipeline_stress.rs"
+
+[[test]]
+name = "pipeline_benchmark"
+path = "tests/pipeline_benchmark.rs"
+
+[[test]]
+name = "problem_catalog"
+path = "tests/problem_catalog.rs"
+
+[[test]]
+name = "problem_correlation_rules"
+path = "tests/problem_correlation_rules.rs"
+
+[[test]]
+name = "bootstrap_contract_fallback"
+path = "tests/bootstrap_contract_fallback.rs"
+
+[[test]]
+name = "commercial_ga_readiness"
+path = "tests/commercial_ga_readiness.rs"
+
+[[test]]
+name = "ws_security_vectors"
+path = "tests/ws_security_vectors.rs"
+
+[[test]]
+name = "service_static_rules"
+path = "tests/service_static_rules.rs"

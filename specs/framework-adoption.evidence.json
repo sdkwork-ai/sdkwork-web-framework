@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.web-framework.adoption-evidence",
+  "framework": {
+    "name": "sdkwork-web-framework",
+    "version": "0.1.0",
+    "verifyCommand": "scripts/verify.ps1"
+  },
+  "notes": "Framework pathfinder adoptions — validates evidence schema and verify gates; M4 external GA still requires two independent consumer product records.",
+  "adoptions": [
+    {
+      "productId": "sdkwork-web-admin-server",
+      "frameworkVersion": "0.1.0",
+      "integrationProfile": "control-plane-standalone",
+      "resolver": "tenant_bound_verifying_web_request_resolver + EnvBootstrapTenantSigningKeyLookup + DisabledApiKeyLookupService",
+      "stores": {
+        "primary": "SqlitePool (web_* tables)",
+        "rateLimit": "SqlxRateLimitStore or RedisRateLimitStore when SDKWORK_WEB_FRAMEWORK_REDIS_URL set",
+        "idempotency": "SqlxIdempotencyStore or RedisIdempotencyStore when Redis configured",
+        "readiness": ["SqliteReadinessCheck", "optional RedisReadinessCheck"]
+      },
+      "verifyEvidence": "cargo test -p sdkwork-web-admin-server; scripts/e2e-web-stack.mjs + Playwright integration E2E (K17)",
+      "productionSince": "2026-06-23T00:00:00Z",
+      "owner": "platform-web-framework",
+      "notes": "assemble_control_plane() production assembly with validate_production_assembly guards."
+    },
+    {
+      "productId": "sdkwork-web-framework-pc",
+      "frameworkVersion": "0.1.0",
+      "integrationProfile": "control-plane-console",
+      "resolver": "Dual-token backend SDK; auth JWT in sessionStorage; access token baked at E2E build",
+      "stores": {
+        "backend": "Proxied to admin-server via vite preview /backend",
+        "sdk": "Manifest-generated operations.ts (K14)"
+      },
+      "verifyEvidence": "npm run test:e2e; npm run test:e2e:integration; pc-admin-build.smoke + operations contract tests",
+      "productionSince": "2026-06-23T00:00:00Z",
+      "owner": "platform-web-framework",
+      "notes": "ORGANIZATION login_scope required for backend-api (EnforcePrincipalTenantIsolationPolicy)."
+    }
+  ]
+}

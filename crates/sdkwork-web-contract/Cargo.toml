@@ -1,0 +1,14 @@
+[package]
+name = "sdkwork-web-contract"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "SDKWork web framework contract types (ApiSurface, HttpRoute)."
+
+[lib]
+name = "sdkwork_web_contract"
+path = "src/lib.rs"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }

@@ -1,0 +1,27 @@
+[package]
+name = "sdkwork-web-axum"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Axum integration: HTTP/WebSocket middleware, WebRequestContext extractors."
+
+[lib]
+name = "sdkwork_web_axum"
+path = "src/lib.rs"
+
+[dependencies]
+async-trait.workspace = true
+axum.workspace = true
+futures-util.workspace = true
+http.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tower.workspace = true
+tracing.workspace = true
+
+sdkwork-web-core.workspace = true
+
+[dev-dependencies]
+serde.workspace = true
+tokio.workspace = true
+tower.workspace = true

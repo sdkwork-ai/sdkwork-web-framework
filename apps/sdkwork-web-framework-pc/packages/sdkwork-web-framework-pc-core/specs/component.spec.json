@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.component.spec",
+  "component": {
+    "name": "@sdkwork/web-framework-pc-core",
+    "type": "typescript-package",
+    "root": "sdkwork-web-framework-pc/packages/sdkwork-web-framework-pc-core",
+    "domain": "web-framework",
+    "capability": "core",
+    "surface": "app",
+    "languages": [
+      "typescript"
+    ],
+    "generated": false
+  },
+  "contracts": {
+    "sdkDependencies": [],
+    "dependencyApiExports": [],
+    "dependencyApiSurfaces": []
+  },
+  "composition": {
+    "consumerIntegrationsExempt": true
+  }
+}

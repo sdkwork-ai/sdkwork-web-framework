@@ -1,0 +1,1 @@
+ALTER TABLE web_tenant_runtime_profile ADD COLUMN max_concurrent_requests INTEGER;

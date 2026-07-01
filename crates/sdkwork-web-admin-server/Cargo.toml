@@ -1,0 +1,30 @@
+[package]
+name = "sdkwork-web-admin-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Optional standalone server for web-framework admin API and distributed config store."
+
+[lib]
+name = "sdkwork_web_admin_server"
+path = "src/lib.rs"
+
+[[bin]]
+name = "sdkwork-web-admin-server"
+path = "src/main.rs"
+
+[dependencies]
+axum.workspace = true
+sdkwork-routes-web-framework-backend-api.workspace = true
+sdkwork-web-bootstrap = { workspace = true, features = ["admin-api", "sqlx", "redis", "otel"] }
+sdkwork-web-core.workspace = true
+sdkwork-web-store-sqlx.workspace = true
+sdkwork-web-store-redis.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
+
+[dev-dependencies]
+axum = { workspace = true }
+tower = { workspace = true }

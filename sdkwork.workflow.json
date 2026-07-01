@@ -1,0 +1,104 @@
+{
+  "$schema": "../sdkwork-github-workflow/schemas/sdkwork-workflow.schema.json",
+  "schemaVersion": "2026-06-06.sdkwork.workflow.v1",
+  "app": {
+    "id": "sdkwork-web-framework",
+    "name": "SDKWork Web Framework",
+    "repository": "Sdkwork-Cloud/sdkwork-web-framework",
+    "sourcePath": "."
+  },
+  "release": {
+    "artifactPrefix": "sdkwork-web-framework",
+    "defaultVersion": "0.1.0",
+    "changelog": {
+      "source": "auto",
+      "maxCommitSubjects": 50
+    }
+  },
+  "dependencies": [
+    {
+      "id": "sdkwork-database",
+      "repository": "Sdkwork-Cloud/sdkwork-database",
+      "refInput": "SDKWORK_DATABASE_REF",
+      "tokenSecret": "SDKWORK_RELEASE_TOKEN"
+    },
+    {
+      "id": "sdkwork-utils",
+      "repository": "Sdkwork-Cloud/sdkwork-utils",
+      "refInput": "SDKWORK_UTILS_REF",
+      "tokenSecret": "SDKWORK_RELEASE_TOKEN"
+    }
+  ],
+  "toolchains": {
+    "rust": "stable"
+  },
+  "lifecycle": {
+    "build": [
+      {
+        "name": "Verify Rust workspace",
+        "shell": "pwsh",
+        "run": "$ErrorActionPreference = \"Stop\"\n$PSNativeCommandUseErrorActionPreference = $true\n./scripts/verify.ps1"
+      }
+    ],
+    "package": [
+      {
+        "name": "Build admin server release binary",
+        "shell": "pwsh",
+        "run": "cargo build -p sdkwork-web-admin-server --release"
+      }
+    ],
+    "sign": [
+      {
+        "name": "Signing policy placeholder",
+        "shell": "node",
+        "run": "console.log(`Signing is not required for ${process.env.SDKWORK_PACKAGE_ID}.`);"
+      }
+    ],
+    "sbom": [
+      {
+        "name": "SBOM policy placeholder",
+        "shell": "node",
+        "run": "console.log(`SBOM generation is not required for ${process.env.SDKWORK_PACKAGE_ID}.`);"
+      }
+    ],
+    "validate": [
+      {
+        "name": "Re-run workspace verification",
+        "shell": "pwsh",
+        "run": "./scripts/verify.ps1"
+      },
+      {
+        "name": "Collect release evidence bundle",
+        "shell": "node",
+        "run": "node scripts/collect-release-evidence.mjs"
+      }
+    ]
+  },
+  "targets": [
+    {
+      "id": "linux-x64-cloud-server-tar-gz",
+      "profile": "server",
+      "platform": "linux",
+      "architecture": "x64",
+      "formats": [
+        "tar.gz"
+      ],
+      "runner": "ubuntu-24.04",
+      "deploymentProfile": "cloud",
+      "runtimeTarget": "server",
+      "outputGlobs": [
+        "target/release/sdkwork-web-admin-server"
+      ]
+    }
+  ],
+  "security": {
+    "artifactAttestations": true,
+    "sbomRequired": false,
+    "signingRequired": false
+  },
+  "publish": {
+    "workflowArtifact": true,
+    "githubRelease": true,
+    "retentionDays": 30
+  }
+}

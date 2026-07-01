@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.web-framework.adoption-evidence",
+  "framework": {
+    "name": "sdkwork-web-framework",
+    "version": "0.1.0",
+    "verifyCommand": "scripts/verify.ps1"
+  },
+  "adoptions": [
+    {
+      "productId": "example-saas-api",
+      "frameworkVersion": "0.1.0",
+      "integrationProfile": "saas",
+      "resolver": "tenant_bound_saas_verifying_web_request_resolver_with_claim_policy + IamTenantSigningKeyLookup",
+      "stores": {
+        "rateLimit": "RedisRateLimitStore",
+        "idempotency": "RedisIdempotencyStore",
+        "concurrentAdmission": "RedisConcurrentAdmissionStore",
+        "readiness": ["SqlxReadinessCheck", "RedisReadinessCheck"]
+      },
+      "verifyEvidence": "https://ci.example.com/job/example-saas-api/123/artifact/verify.log",
+      "productionSince": "2026-06-01T00:00:00Z",
+      "owner": "platform-oncall@example.com",
+      "notes": "Replace with real consumer evidence before M4 GA sign-off."
+    }
+  ]
+}

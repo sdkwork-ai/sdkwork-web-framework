@@ -1,0 +1,23 @@
+[package]
+name = "sdkwork-web-schema-registry"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Composable schema registry loader for SDKWork applications"
+
+[lib]
+name = "sdkwork_web_schema_registry"
+
+[[bin]]
+name = "sdkwork-schema-registry"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = "0.9"
+thiserror = "2.0"
+
+[dev-dependencies]
+tempfile = "3.14"

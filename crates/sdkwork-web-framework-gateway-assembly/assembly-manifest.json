@@ -1,0 +1,20 @@
+{
+  "kind": "sdkwork.gateway.assembly",
+  "schemaVersion": 1,
+  "applicationCode": "web-framework",
+  "packageName": "sdkwork-web-framework-gateway-assembly",
+  "crateDir": "crates/sdkwork-web-framework-gateway-assembly",
+  "generatedAt": "2026-06-26T13:58:34.694Z",
+  "routeCrates": [
+    {
+      "packageName": "sdkwork-routes-web-framework-backend-api",
+      "memberDir": "crates/sdkwork-routes-web-framework-backend-api",
+      "libName": "sdkwork_routes_web_framework_backend_api",
+      "surface": "backend-api",
+      "pathPrefix": null,
+      "mountOrder": 0,
+      "hasGatewayMount": true,
+      "hasGatewayRouteManifest": false
+    }
+  ]
+}

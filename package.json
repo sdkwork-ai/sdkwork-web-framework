@@ -1,0 +1,23 @@
+{
+  "name": "sdkwork-web-framework",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "db:materialize:contract": "node ../sdkwork-specs/tools/materialize-database-contract-from-baseline.mjs --root . --baseline database/ddl/baseline/postgres/0001_webstore_baseline.sql --module-id webstore --owner web-framework-platform --prefixes web_ --engines postgres",
+    "db:validate": "node ../sdkwork-specs/tools/check-database-framework-standard.mjs --root .",
+    "schema-registry:test": "python -m pytest tools/schema_registry/tests -q",
+    "schema-registry:compose:tables": "cargo run -p sdkwork-web-schema-registry -- compose tables --app-root . --registry docs/schema-registry/sdkwork-web-framework.tables.yaml --output generated/schema/registry/sdkwork-web-framework.tables.effective.yaml",
+    "db:plan": "cargo run --manifest-path ../sdkwork-database/Cargo.toml -p sdkwork-database-cli -- --app-root . plan",
+    "db:init": "cargo run --manifest-path ../sdkwork-database/Cargo.toml -p sdkwork-database-cli -- --app-root . init",
+    "db:migrate": "cargo run --manifest-path ../sdkwork-database/Cargo.toml -p sdkwork-database-cli -- --app-root . migrate",
+    "db:seed": "cargo run --manifest-path ../sdkwork-database/Cargo.toml -p sdkwork-database-cli -- --app-root . seed",
+    "db:status": "cargo run --manifest-path ../sdkwork-database/Cargo.toml -p sdkwork-database-cli -- --app-root . status",
+    "db:drift": "cargo run --manifest-path ../sdkwork-database/Cargo.toml -p sdkwork-database-cli -- --app-root . drift",
+    "db:drift:check": "cargo run --manifest-path ../sdkwork-database/Cargo.toml -p sdkwork-database-cli -- --app-root . drift-check",
+    "db:bootstrap": "cargo run --manifest-path ../sdkwork-database/Cargo.toml -p sdkwork-database-cli -- --app-root . bootstrap",
+    "test": "node ../sdkwork-specs/tools/check-database-framework-standard.mjs --root . && cargo test -p sdkwork-web-schema-registry && python -m pytest tools/schema_registry/tests -q",
+    "gateway:assembly:materialize": "node scripts/gateway/assembly-materialize.mjs",
+    "gateway:assembly:validate": "node scripts/gateway/assembly-validate.mjs",
+    "check:app-composition": "node ../sdkwork-specs/tools/verify-repo.mjs --root ."
+  }
+}

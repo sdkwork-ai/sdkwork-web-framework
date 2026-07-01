@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.web-framework.pipeline-stage-order",
+  "description": "Cross-runtime pipeline stage order shared vector (Rust WebCallStage ↔ Java Filter stage names).",
+  "mandatoryStageCount": 18,
+  "stages": [
+    { "order": 1, "rust": "RequestIdentity", "java": "RequestIdentity", "interceptor": "RequestIdentity" },
+    { "order": 2, "rust": "SurfaceClassification", "java": "SurfaceClassification", "interceptor": "SurfaceClassification" },
+    { "order": 3, "rust": "Cors", "java": "Cors", "interceptor": "Cors" },
+    { "order": 4, "rust": "MethodGuard", "java": "MethodGuard", "interceptor": "MethodGuard" },
+    { "order": 5, "rust": "CrossSiteRequest", "java": "CrossSiteRequest", "interceptor": "CrossSiteRequest" },
+    { "order": 6, "rust": "SqlInjectionGuard", "java": "SqlInjectionGuard", "interceptor": "SqlInjectionGuard" },
+    { "order": 7, "rust": "RequestSizeLimit", "java": "RequestSizeLimit", "interceptor": "RequestSizeLimit" },
+    { "order": 8, "rust": "RateLimit", "java": "RateLimit", "interceptor": "RateLimit" },
+    { "order": 9, "rust": "Idempotency", "java": "Idempotency", "interceptor": "Idempotency" },
+    { "order": 10, "rust": "RequestContextResolution", "java": "RequestContextResolution", "interceptor": "RequestContextResolution" },
+    { "order": 11, "rust": "Authentication", "java": "Authentication", "interceptor": "Authentication" },
+    { "order": 12, "rust": "Authorization", "java": "Authorization", "interceptor": "Authorization" },
+    { "order": 13, "rust": "TenantIsolation", "java": "TenantIsolation", "interceptor": "TenantIsolation" },
+    { "order": 14, "rust": "ContextInjection", "java": "ContextInjection", "interceptor": "ContextInjection" },
+    { "order": 15, "rust": "Logging", "java": "Logging", "interceptor": "Logging" },
+    { "order": 16, "rust": "Audit", "java": "Audit", "interceptor": "Audit" },
+    { "order": 17, "rust": "HeaderSecurity", "java": "HeaderSecurity", "interceptor": "HeaderSecurity" },
+    { "order": 18, "rust": "ResponseIdentity", "java": "ResponseIdentity", "interceptor": "ResponseIdentity" }
+  ]
+}

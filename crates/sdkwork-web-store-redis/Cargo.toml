@@ -1,0 +1,23 @@
+[package]
+name = "sdkwork-web-store-redis"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Redis-backed RateLimitStore and IdempotencyStore adapters."
+
+[lib]
+name = "sdkwork_web_store_redis"
+path = "src/lib.rs"
+
+[dependencies]
+async-trait.workspace = true
+redis = { version = "0.27", features = ["tokio-comp"] }
+serde.workspace = true
+serde_json.workspace = true
+sdkwork-web-core.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+sdkwork-web-core.workspace = true
+tokio = { workspace = true, features = ["rt", "macros"] }

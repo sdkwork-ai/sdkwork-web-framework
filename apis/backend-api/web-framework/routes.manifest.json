@@ -1,0 +1,154 @@
+[
+  {
+    "alternatePermissions": [
+      "web-framework.platform.read"
+    ],
+    "apiSurface": "backend-api",
+    "auth": "dual-token",
+    "forbidCredentialHeaders": false,
+    "method": "get",
+    "operationId": "webFramework.corsPolicies.list",
+    "path": "/backend/v3/api/web-framework/cors_policies",
+    "requestContext": "WebRequestContext",
+    "requiredPermission": "web-framework.tenant.admin"
+  },
+  {
+    "apiSurface": "backend-api",
+    "auth": "dual-token",
+    "forbidCredentialHeaders": false,
+    "method": "put",
+    "operationId": "webFramework.corsPolicies.upsert",
+    "path": "/backend/v3/api/web-framework/cors_policies",
+    "requestContext": "WebRequestContext",
+    "requiredPermission": "web-framework.tenant.admin"
+  },
+  {
+    "alternatePermissions": [
+      "web-framework.platform.read"
+    ],
+    "apiSurface": "backend-api",
+    "auth": "dual-token",
+    "forbidCredentialHeaders": false,
+    "method": "get",
+    "operationId": "webFramework.rateLimitPolicies.list",
+    "path": "/backend/v3/api/web-framework/rate_limit_policies",
+    "requestContext": "WebRequestContext",
+    "requiredPermission": "web-framework.tenant.admin"
+  },
+  {
+    "apiSurface": "backend-api",
+    "auth": "dual-token",
+    "forbidCredentialHeaders": false,
+    "method": "put",
+    "operationId": "webFramework.rateLimitPolicies.upsert",
+    "path": "/backend/v3/api/web-framework/rate_limit_policies",
+    "requestContext": "WebRequestContext",
+    "requiredPermission": "web-framework.tenant.admin"
+  },
+  {
+    "alternatePermissions": [
+      "web-framework.platform.read"
+    ],
+    "apiSurface": "backend-api",
+    "auth": "dual-token",
+    "forbidCredentialHeaders": false,
+    "method": "get",
+    "operationId": "webFramework.tenantRuntimeProfiles.list",
+    "path": "/backend/v3/api/web-framework/tenant_runtime_profiles",
+    "requestContext": "WebRequestContext",
+    "requiredPermission": "web-framework.tenant.admin"
+  },
+  {
+    "apiSurface": "backend-api",
+    "auth": "dual-token",
+    "forbidCredentialHeaders": false,
+    "method": "put",
+    "operationId": "webFramework.tenantRuntimeProfiles.upsert",
+    "path": "/backend/v3/api/web-framework/tenant_runtime_profiles",
+    "requestContext": "WebRequestContext",
+    "requiredPermission": "web-framework.tenant.admin"
+  },
+  {
+    "apiSurface": "backend-api",
+    "auth": "dual-token",
+    "forbidCredentialHeaders": false,
+    "method": "get",
+    "operationId": "webFramework.securityEvents.list",
+    "path": "/backend/v3/api/web-framework/security_events",
+    "requestContext": "WebRequestContext",
+    "requiredPermission": "web-framework.control-plane"
+  },
+  {
+    "alternatePermissions": [
+      "web-framework.platform.read"
+    ],
+    "apiSurface": "backend-api",
+    "auth": "dual-token",
+    "forbidCredentialHeaders": false,
+    "method": "get",
+    "operationId": "webFramework.auditEvents.list",
+    "path": "/backend/v3/api/web-framework/audit_events",
+    "requestContext": "WebRequestContext",
+    "requiredPermission": "web-framework.tenant.admin"
+  },
+  {
+    "apiSurface": "backend-api",
+    "auth": "dual-token",
+    "forbidCredentialHeaders": false,
+    "method": "get",
+    "operationId": "webFramework.controlNodes.list",
+    "path": "/backend/v3/api/web-framework/control_nodes",
+    "requestContext": "WebRequestContext",
+    "requiredPermission": "web-framework.control-plane"
+  },
+  {
+    "apiSurface": "backend-api",
+    "auth": "dual-token",
+    "forbidCredentialHeaders": false,
+    "method": "post",
+    "operationId": "webFramework.controlNodes.register",
+    "path": "/backend/v3/api/web-framework/control_nodes",
+    "requestContext": "WebRequestContext",
+    "requiredPermission": "web-framework.control-plane"
+  },
+  {
+    "apiSurface": "backend-api",
+    "auth": "dual-token",
+    "forbidCredentialHeaders": false,
+    "method": "post",
+    "operationId": "webFramework.controlNodes.heartbeat",
+    "path": "/backend/v3/api/web-framework/control_nodes/{nodeId}/heartbeat",
+    "requestContext": "WebRequestContext",
+    "requiredPermission": "web-framework.control-plane"
+  },
+  {
+    "apiSurface": "backend-api",
+    "auth": "dual-token",
+    "forbidCredentialHeaders": false,
+    "method": "delete",
+    "operationId": "webFramework.controlNodes.delete",
+    "path": "/backend/v3/api/web-framework/control_nodes/{nodeId}",
+    "requestContext": "WebRequestContext",
+    "requiredPermission": "web-framework.control-plane"
+  },
+  {
+    "apiSurface": "backend-api",
+    "auth": "dual-token",
+    "forbidCredentialHeaders": false,
+    "method": "get",
+    "operationId": "webFramework.runtimeDefaults.snapshot",
+    "path": "/backend/v3/api/web-framework/runtime_defaults",
+    "requestContext": "WebRequestContext",
+    "requiredPermission": "web-framework.tenant.admin"
+  },
+  {
+    "apiSurface": "backend-api",
+    "auth": "dual-token",
+    "forbidCredentialHeaders": false,
+    "method": "get",
+    "operationId": "webFramework.optionalFeatures.snapshot",
+    "path": "/backend/v3/api/web-framework/optional_features",
+    "requestContext": "WebRequestContext",
+    "requiredPermission": "web-framework.tenant.admin"
+  }
+]

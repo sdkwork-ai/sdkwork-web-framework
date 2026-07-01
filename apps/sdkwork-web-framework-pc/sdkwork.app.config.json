@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 2,
+  "appId": "sdkwork-web-framework-pc",
+  "name": "SDKWork Web Framework Console",
+  "family": "platform",
+  "runtime": {
+    "framework": "vite-react",
+    "supportedDeploymentProfiles": [
+      "cloud"
+    ],
+    "defaultDeploymentProfile": "cloud"
+  },
+  "preset": "pc-admin",
+  "apiSurfaces": [
+    {
+      "surface": "backend",
+      "prefix": "/backend/v3/api/web-framework",
+      "owner": "local",
+      "serviceId": "sdkwork-web-framework-backend-api"
+    }
+  ],
+  "envBindings": {
+    "variables": [
+      {
+        "name": "VITE_SDKWORK_WEB_FRAMEWORK_BACKEND_API_BASE_URL",
+        "required": false,
+        "tracked": true
+      },
+      {
+        "name": "VITE_SDKWORK_ACCESS_TOKEN",
+        "required": false,
+        "tracked": true
+      }
+    ]
+  }
+}

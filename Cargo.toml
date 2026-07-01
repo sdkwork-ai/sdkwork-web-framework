@@ -1,0 +1,59 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/sdkwork-web-framework-gateway-assembly",
+    "crates/sdkwork-web-contract",
+    "crates/sdkwork-web-core",
+    "crates/sdkwork-web-axum",
+    "crates/sdkwork-web-bootstrap",
+    "crates/sdkwork-web-store-redis",
+    "crates/sdkwork-web-store-sqlx",
+    "crates/sdkwork-webstore-database-host",
+    "crates/sdkwork-web-test-utils",
+    "crates/sdkwork-web-schema-registry",
+    "crates/sdkwork-web-framework-admin-repository-sqlx",
+    "crates/sdkwork-routes-web-framework-backend-api",
+    "crates/sdkwork-web-admin-server",
+    "tests/architecture",
+]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+license = "Apache-2.0"
+
+[workspace.dependencies]
+async-trait = "0.1"
+axum = { version = "0.8", features = ["ws"] }
+futures-util = "0.3"
+getrandom = "0.2"
+http = "1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.48", features = ["macros", "rt-multi-thread", "sync", "signal"] }
+tower = { version = "0.5", features = ["util"] }
+tracing = "0.1"
+rsa = { version = "0.9", features = ["sha2", "pkcs8"] }
+
+sdkwork-web-contract = { path = "crates/sdkwork-web-contract" }
+sdkwork-web-core = { path = "crates/sdkwork-web-core" }
+sdkwork-web-axum = { path = "crates/sdkwork-web-axum" }
+sdkwork-web-bootstrap = { path = "crates/sdkwork-web-bootstrap" }
+sdkwork-web-store-redis = { path = "crates/sdkwork-web-store-redis" }
+sdkwork-web-store-sqlx = { path = "crates/sdkwork-web-store-sqlx" }
+sdkwork-webstore-database-host = { path = "crates/sdkwork-webstore-database-host" }
+sdkwork-web-test-utils = { path = "crates/sdkwork-web-test-utils" }
+sdkwork-web-schema-registry = { path = "crates/sdkwork-web-schema-registry" }
+sdkwork-routes-web-framework-backend-api = { path = "crates/sdkwork-routes-web-framework-backend-api" }
+sdkwork-web-framework-admin-repository-sqlx = { path = "crates/sdkwork-web-framework-admin-repository-sqlx" }
+
+sdkwork-database-config = { path = "../sdkwork-database/crates/sdkwork-database-config" }
+sdkwork-database-lifecycle = { path = "../sdkwork-database/crates/sdkwork-database-lifecycle" }
+sdkwork-database-spi = { path = "../sdkwork-database/crates/sdkwork-database-spi" }
+sdkwork-database-sqlx = { path = "../sdkwork-database/crates/sdkwork-database-sqlx" }
+sdkwork_database_config = { path = "../sdkwork-database/crates/sdkwork-database-config", package = "sdkwork-database-config" }
+sdkwork_database_lifecycle = { path = "../sdkwork-database/crates/sdkwork-database-lifecycle", package = "sdkwork-database-lifecycle" }
+sdkwork_database_spi = { path = "../sdkwork-database/crates/sdkwork-database-spi", package = "sdkwork-database-spi" }
+sdkwork_database_sqlx = { path = "../sdkwork-database/crates/sdkwork-database-sqlx", package = "sdkwork-database-sqlx" }
+# SDKWork 跨语言工具库（serde_int64、crypto 等）。API_SPEC §13 int64-as-string 强制使用。
+sdkwork-utils-rust = { path = "../sdkwork-utils/packages/sdkwork-utils-rust" }

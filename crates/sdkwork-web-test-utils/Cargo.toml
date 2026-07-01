@@ -1,0 +1,16 @@
+[package]
+name = "sdkwork-web-test-utils"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Test fixtures and TestRuntime builder for sdkwork-web-framework (catalog K2)."
+
+[lib]
+name = "sdkwork_web_test_utils"
+path = "src/lib.rs"
+
+[dependencies]
+async-trait.workspace = true
+sdkwork-web-axum.workspace = true
+sdkwork-web-core.workspace = true
+tokio.workspace = true

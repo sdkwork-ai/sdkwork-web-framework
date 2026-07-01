@@ -1,0 +1,22 @@
+[package]
+name = "sdkwork-web-framework-admin-repository-sqlx"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "SQLx repository for web-framework admin control-plane tables (WEB_BACKEND_SPEC.md)."
+
+[lib]
+name = "sdkwork_web_framework_admin_repository_sqlx"
+path = "src/lib.rs"
+
+[dependencies]
+async-trait.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+sdkwork-web-store-sqlx = { path = "../sdkwork-web-store-sqlx" }
+tokio = { workspace = true, features = ["rt", "macros"] }

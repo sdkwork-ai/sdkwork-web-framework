@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.composition.resolved",
+  "repository": "sdkwork-web-framework",
+  "integrations": [
+    {
+      "workspace": "sdkwork-web-framework-app-sdk",
+      "surface": "app-api",
+      "apiPrefix": "/app/v3/api",
+      "connectivityPlane": "application",
+      "runtimeMode": "same-origin-embedded",
+      "mountStatus": null,
+      "envKey": null,
+      "forbidProductSameOriginFallback": false,
+      "corePackage": "@sdkwork/web-framework-pc-core",
+      "source": "apps/sdkwork-web-framework-pc/packages/sdkwork-web-framework-pc-core/specs/component.spec.json"
+    }
+  ],
+  "permissions": {
+    "inheritanceMode": "module-catalog-with-overrides",
+    "inheritedManifests": []
+  },
+  "env": {},
+  "requiresPlatformGatewayProcess": false,
+  "issues": [],
+  "meta": {
+    "resolver": "sdkwork-specs/tools/lib/composition-resolver.mjs",
+    "credentialModes": {
+      "sdkwork-web-framework-app-sdk": "authenticated-app-api"
+    }
+  }
+}

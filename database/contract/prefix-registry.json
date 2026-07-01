@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.database.prefix-registry",
+  "prefixes": [
+    {
+      "prefix": "web_",
+      "owner": "web-framework-platform",
+      "domain": "webstore"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.web-framework.forged-identity-vector",
+  "description": "Client identity projection headers that MUST be rejected on protected app-api routes (B9 / API_SPEC section 10.2).",
+  "vectors": [
+    { "header": "x-sdkwork-tenant-id", "value": "tenant-evil" },
+    { "header": "X-Sdkwork-Tenant-Id", "value": "tenant-evil" },
+    { "header": "x-sdkwork-app-id", "value": "app-evil" },
+    { "header": "x-sdkwork-user-id", "value": "user-evil" },
+    { "header": "x-sdkwork-organization-id", "value": "org-evil" },
+    { "header": "x-sdkwork-actor-id", "value": "actor-evil" },
+    { "header": "x-sdkwork-session-id", "value": "session-evil" },
+    { "header": "x-sdkwork-permission-scope", "value": "admin.*" },
+    { "header": "x-tenant-id", "value": "tenant-evil" },
+    { "header": "x-app-id", "value": "app-evil" },
+    { "header": "x-user-id", "value": "user-evil" },
+    { "header": "x-organization-id", "value": "org-evil" }
+  ]
+}

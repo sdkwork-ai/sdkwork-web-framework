@@ -1,0 +1,31 @@
+[package]
+name = "sdkwork-web-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "SDKWork web framework core: WebRequestContext, pipeline, security."
+
+[lib]
+name = "sdkwork_web_core"
+path = "src/lib.rs"
+
+[dependencies]
+async-trait.workspace = true
+axum.workspace = true
+getrandom.workspace = true
+hmac = "0.12"
+http.workspace = true
+percent-encoding = "2"
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10"
+tokio = { workspace = true, features = ["sync"] }
+tracing.workspace = true
+rsa = { version = "0.9", features = ["sha2", "pem"] }
+
+sdkwork-web-contract.workspace = true
+sdkwork-utils-rust.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+tower.workspace = true

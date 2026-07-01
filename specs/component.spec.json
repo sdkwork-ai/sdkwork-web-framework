@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.component.spec",
+  "component": {
+    "name": "sdkwork-web-framework",
+    "displayName": "SDKWork Web Framework",
+    "version": "0.1.0",
+    "type": "rust-workspace",
+    "root": "sdkwork-web-framework",
+    "domain": "platform",
+    "capability": "web-framework",
+    "status": "implementing",
+    "languages": ["rust"],
+    "generated": false,
+    "private": false
+  },
+  "canonicalSpecs": [
+    { "file": "WEB_FRAMEWORK_STANDARD.md", "path": "specs/WEB_FRAMEWORK_STANDARD.md", "purpose": "Framework-local standard (narrows root specs)." },
+    { "file": "WEB_FRAMEWORK_SPEC.md", "path": "../../sdkwork-specs/WEB_FRAMEWORK_SPEC.md", "purpose": "L0 web framework standard." },
+    { "file": "API_SPEC.md", "path": "../../sdkwork-specs/API_SPEC.md", "purpose": "HTTP contract §10 request context." },
+    { "file": "WEB_BACKEND_SPEC.md", "path": "../../sdkwork-specs/WEB_BACKEND_SPEC.md", "purpose": "Handler/service layering." },
+    { "file": "SECURITY_SPEC.md", "path": "../../sdkwork-specs/SECURITY_SPEC.md", "purpose": "Security interceptor baseline." },
+    { "file": "OBSERVABILITY_SPEC.md", "path": "../../sdkwork-specs/OBSERVABILITY_SPEC.md", "purpose": "Logs, metrics, correlation." },
+    { "file": "RUST_CODE_SPEC.md", "path": "../../sdkwork-specs/RUST_CODE_SPEC.md", "purpose": "Rust implementation rules." },
+    { "file": "CODE_STYLE_SPEC.md", "path": "../../sdkwork-specs/CODE_STYLE_SPEC.md", "purpose": "Cross-language code style." },
+    { "file": "NAMING_SPEC.md", "path": "../../sdkwork-specs/NAMING_SPEC.md", "purpose": "Naming conventions." },
+    { "file": "TEST_SPEC.md", "path": "../../sdkwork-specs/TEST_SPEC.md", "purpose": "Verification expectations." },
+    { "file": "QUALITY_GATE_SPEC.md", "path": "../../sdkwork-specs/QUALITY_GATE_SPEC.md", "purpose": "Release gate evidence." },
+    { "file": "DEPLOYMENT_SPEC.md", "path": "../../sdkwork-specs/DEPLOYMENT_SPEC.md", "purpose": "Deployment profiles." }
+  ],
+  "contracts": {
+    "requestContextFramework": {
+      "contextType": "WebRequestContext",
+      "legacyAlias": "AppRequestContext",
+      "mandatoryPipelineStages": 18,
+      "standardDocument": "specs/WEB_FRAMEWORK_STANDARD.md",
+      "capabilityMatrix": "specs/web-framework-capability.matrix.json"
+    },
+    "apiSurfaces": ["open-api", "app-api", "backend-api"],
+    "extensionTraits": [
+      "WebRequestContextResolver",
+      "AuthorizationPolicy",
+      "TenantIsolationPolicy",
+      "DomainContextInjector",
+      "ApiKeyLookupService",
+      "OAuthTokenLookupService",
+      "OpenApiCredentialSchemeDetector",
+      "TenantSigningKeyLookup",
+      "JwtSessionRevocationChecker",
+      "RateLimitStore",
+      "IdempotencyStore",
+      "ConcurrentAdmissionStore",
+      "AuditEmitter",
+      "SecurityEventEmitter",
+      "ReadinessCheck",
+      "WebFrameworkLifecycle",
+      "DynamicCorsPolicySource",
+      "DynamicRateLimitPolicySource",
+      "DynamicTenantRuntimeProfileSource"
+    ],
+    "dependencyRule": "business-repos-depend-on-framework; framework-must-not-depend-on-business",
+    "runtimeEntrypoints": [
+      "crates/sdkwork-web-admin-server/src/main.rs",
+      "scripts/verify.ps1",
+      "scripts/verify.sh"
+    ]
+  },
+  "verification": {
+    "commands": [
+      "cargo test --workspace",
+      "cargo clippy --workspace -- -D warnings",
+      "cargo test -p sdkwork-web-admin-server",
+      "cargo test -p sdkwork-web-architecture-tests",
+      "cargo test --release -p sdkwork-web-architecture-tests --test pipeline_benchmark",
+      "cargo test -p sdkwork-web-bootstrap --test integration",
+      "cargo test -p sdkwork-routes-web-framework-backend-api --test openapi_authority",
+      "cargo test -p sdkwork-routes-web-framework-backend-api --test routes_contract",
+      "cargo test -p sdkwork-web-bootstrap --features admin-api --test admin_api_readiness",
+      "node tests/contract/database-framework.contract.test.mjs",
+      "node scripts/generate-pc-admin-operations.mjs --check",
+      "node tests/contract/pc-admin-operations.contract.test.mjs",
+      "node tests/contract/pc-admin-build.smoke.test.mjs",
+      "cd apps/sdkwork-web-framework-pc && npm run test:e2e",
+      "node tests/contract/pc-admin-e2e-build.contract.test.mjs",
+      "node tests/contract/production-rollout.contract.test.mjs",
+      "node tests/contract/release-evidence.contract.test.mjs",
+      "node tests/contract/adoption-evidence.contract.test.mjs",
+      "node scripts/collect-release-evidence.mjs",
+      "cd apps/sdkwork-web-framework-pc && npm run test:e2e:integration",
+      "cd apps/sdkwork-web-framework-pc && npm run verify",
+      "cd apps/sdkwork-web-framework-pc && npm test"
+    ]
+  },
+  "metadata": {
+    "managedBy": "sdkwork-web-framework design rev.3",
+    "standardVersion": "2026-06-22",
+    "capabilityMaturity": "M3",
+    "commercialReadiness": "production-ops-documented-sdk-generated-playwright-e2e-integration-rollout-adoption-release-evidence"
+  }
+}

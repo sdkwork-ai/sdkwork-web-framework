@@ -1,0 +1,61 @@
+[package]
+name = "sdkwork-web-bootstrap"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "SDKWork web framework bootstrap: health, metrics, service router, WebFramework builder."
+
+[lib]
+name = "sdkwork_web_bootstrap"
+path = "src/lib.rs"
+
+[features]
+default = []
+redis = ["dep:sdkwork-web-store-redis", "dep:redis"]
+sqlx = ["dep:sdkwork-web-store-sqlx"]
+admin-api = ["sqlx", "dep:sdkwork-routes-web-framework-backend-api"]
+otel = [
+    "dep:tracing-opentelemetry",
+    "dep:opentelemetry",
+    "dep:opentelemetry_sdk",
+    "dep:opentelemetry-otlp",
+]
+
+[dependencies]
+async-trait.workspace = true
+axum.workspace = true
+http.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-opentelemetry = { version = "0.28", optional = true }
+opentelemetry = { version = "0.27", optional = true }
+opentelemetry_sdk = { version = "0.27", features = ["rt-tokio"], optional = true }
+opentelemetry-otlp = { version = "0.27", features = ["grpc-tonic"], optional = true }
+
+sdkwork-web-axum.workspace = true
+sdkwork-web-contract.workspace = true
+sdkwork-web-core.workspace = true
+sdkwork-web-store-redis = { workspace = true, optional = true }
+sdkwork-web-store-sqlx = { workspace = true, optional = true }
+redis = { version = "0.27", features = ["tokio-comp"], optional = true }
+sdkwork-routes-web-framework-backend-api = { workspace = true, optional = true }
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "postgres"] }
+
+[dev-dependencies]
+tokio.workspace = true
+tower.workspace = true
+sdkwork-web-store-sqlx = { workspace = true }
+sdkwork-web-test-utils = { workspace = true }
+
+[[test]]
+name = "sqlx_integration"
+path = "tests/sqlx_integration.rs"
+required-features = ["sqlx"]
+
+[[test]]
+name = "admin_api_readiness"
+path = "tests/admin_api_readiness.rs"
+required-features = ["admin-api"]
