@@ -173,9 +173,10 @@ pub fn with_server_request_identity(router: Router) -> Router {
     router.layer(from_fn(server_request_identity_middleware))
 }
 
-pub fn with_web_request_context<R>(router: Router, layer: WebFrameworkLayer<R>) -> Router
+pub fn with_web_request_context<R, S>(router: Router<S>, layer: WebFrameworkLayer<R>) -> Router<S>
 where
     R: WebRequestContextResolver + Clone,
+    S: Clone + Send + Sync + 'static,
 {
     let max_body = layer
         .runtime
