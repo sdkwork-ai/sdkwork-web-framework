@@ -187,7 +187,7 @@ pub enum WebLoginScope {
 ```rust
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WebAppContext {
-    /// PlusApp / 注册应用 ID。所有 app-api 必须非空。
+    /// Registered application ID (platform_app / app.key). All app-api handlers must receive a non-empty value.
     pub app_id: String,
 
     /// 运行环境。

@@ -76,7 +76,7 @@
         "appId": {
           "type": "string",
           "minLength": 1,
-          "description": "PlusApp or registered application identifier."
+          "description": "Registered application identifier (platform_app / app.key)."
         },
         "environment": { "$ref": "#/$defs/WebEnvironment" },
         "deploymentMode": { "$ref": "#/$defs/WebDeploymentMode" },

@@ -683,7 +683,7 @@ fn is_state_changing_method(method: &Method) -> bool {
 
 fn contains_sql_injection_signal(value: &str) -> bool {
     let lowered = value.to_ascii_lowercase();
-    [
+    const CORE_PATTERNS: &[&str] = &[
         "' or ",
         "\" or ",
         " union select ",
@@ -693,13 +693,25 @@ fn contains_sql_injection_signal(value: &str) -> bool {
         " information_schema",
         " sleep(",
         " benchmark(",
-        "--",
-        "/*",
-        "*/",
         " xp_",
-    ]
-    .iter()
-    .any(|pattern| lowered.contains(pattern))
+    ];
+    if CORE_PATTERNS
+        .iter()
+        .any(|pattern| lowered.contains(pattern))
+    {
+        return true;
+    }
+    contains_sql_comment_signal(&lowered)
+}
+
+/// Match SQL line/block comment introducers with surrounding syntax context.
+///
+/// Bare `--` is intentionally excluded: base64url JWT segments and cursor tokens
+/// legitimately contain consecutive hyphens.
+fn contains_sql_comment_signal(lowered: &str) -> bool {
+    ["'--", "\"--", " --", ";--", "#--", "/*", "*/"]
+        .iter()
+        .any(|pattern| lowered.contains(pattern))
 }
 
 #[cfg(test)]
@@ -738,6 +750,20 @@ mod tests {
         policy
             .validate_for_production()
             .expect("explicit allowlist is production-safe");
+    }
+
+    #[test]
+    fn sql_injection_guard_allows_base64url_jwt_segments_with_double_hyphen() {
+        let token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjogImFjY2VzcyIsInRlbmFudF9pZCI6IjEwMDAwMSJ9.ab--cd";
+        assert!(!contains_sql_injection_signal(token));
+    }
+
+    #[test]
+    fn sql_injection_guard_blocks_classic_comment_payloads() {
+        assert!(contains_sql_injection_signal("' OR 1=1--"));
+        assert!(contains_sql_injection_signal("\" OR 1=1--"));
+        assert!(contains_sql_injection_signal("admin'--"));
+        assert!(contains_sql_injection_signal("1;--"));
     }
 
     #[test]

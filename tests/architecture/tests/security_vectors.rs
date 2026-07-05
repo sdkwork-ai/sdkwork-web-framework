@@ -102,6 +102,24 @@ async fn sql_injection_guard_blocks_api_key_header_payload() {
 }
 
 #[tokio::test]
+async fn sql_injection_guard_allows_base64url_dual_token_headers() {
+    let runtime = WebCallRuntime::new(DefaultWebRequestContextResolver::default());
+    let chain = WebCallInterceptorChain::standard();
+    let (auth, access) = dual_token_fixture_headers();
+    let mut request = Request::builder()
+        .uri("/app/v3/api/auth/sessions/current")
+        .header("Authorization", auth)
+        .header("Access-Token", access)
+        .body(Body::empty())
+        .expect("request");
+    let mut state = WebCallState::from_request(&request);
+    chain
+        .before(&mut state, &mut request, &runtime)
+        .await
+        .expect("base64url jwt segments must not trip sql comment heuristics");
+}
+
+#[tokio::test]
 async fn oversized_content_length_returns_413() {
     let runtime = WebCallRuntime::new(DefaultWebRequestContextResolver::default());
     let chain = WebCallInterceptorChain::standard();
