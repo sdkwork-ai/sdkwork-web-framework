@@ -21,7 +21,8 @@
         { "id": "A9", "name": "operation-binding-in-context", "targetM": "M3", "designStatus": "defined", "implStatus": "implemented", "modules": ["WebOperationBinding", "pipeline:ContextInjection", "surface:SurfaceClassification"] },
         { "id": "A10", "name": "request-timeout", "targetM": "M3", "designStatus": "defined", "implStatus": "implemented", "modules": ["axum:with_request_timeout", "bootstrap:WebFrameworkBuilder::request_timeout", "constants:PRODUCTION_DEFAULT_REQUEST_TIMEOUT_SECS"] },
         { "id": "A13", "name": "handler-auto-inject-from-request-parts", "targetM": "M3", "designStatus": "defined", "implStatus": "implemented", "modules": ["axum:FromRequestParts<WebRequestContext>"] },
-        { "id": "A14", "name": "require-tenant-app-extractors", "targetM": "M3", "designStatus": "defined", "implStatus": "implemented", "modules": ["axum:RequirePrincipal", "axum:RequireTenantApp"] }
+        { "id": "A14", "name": "require-tenant-app-extractors", "targetM": "M3", "designStatus": "defined", "implStatus": "implemented", "modules": ["axum:RequirePrincipal", "axum:RequireTenantApp"] },
+        { "id": "A16", "name": "locale-context-resolution", "targetM": "M3", "designStatus": "defined", "implStatus": "planned", "modules": ["WebLocaleContext", "LocaleResolver", "pipeline:RequestContextResolution"] }
       ]
     },
     {
@@ -106,7 +107,8 @@
         { "id": "G1", "name": "problem-plus-json", "targetM": "M3", "designStatus": "defined", "implStatus": "implemented", "modules": ["core:problem_response", "ProblemCorrelation", "WebRequestContext::problem_correlation", "router:finish_api_json", "axum:OwnedProblemCorrelation"] },
         { "id": "G2", "name": "problem-type-uri", "targetM": "M2", "designStatus": "defined", "implStatus": "implemented", "modules": ["https://sdkwork.dev/problems/*"] },
         { "id": "G3", "name": "stage-error-status-mapping", "targetM": "M3", "designStatus": "defined", "implStatus": "implemented", "modules": ["WebFrameworkError::status"] },
-        { "id": "G6", "name": "no-client-stack-traces", "targetM": "M3", "designStatus": "defined", "implStatus": "implemented", "modules": ["problem::problem_response", "WebFrameworkRejection", "router:finish_api_json", "router:into_response_for", "tests/problem_correlation_rules"] }
+        { "id": "G6", "name": "no-client-stack-traces", "targetM": "M3", "designStatus": "defined", "implStatus": "implemented", "modules": ["problem::problem_response", "WebFrameworkRejection", "router:finish_api_json", "router:into_response_for", "tests/problem_correlation_rules"] },
+        { "id": "G7", "name": "localized-problem-metadata", "targetM": "M3", "designStatus": "defined", "implStatus": "planned", "modules": ["LocalizedProblemMapper", "MessageBundleProvider", "ValidationMessageResolver", "ProblemDetail.i18nKey", "ProblemDetail.locale"] }
       ]
     },
     {
@@ -166,7 +168,8 @@
         { "id": "K16", "name": "pc-admin-playwright-e2e", "targetM": "M3", "designStatus": "defined", "implStatus": "implemented", "modules": ["apps/sdkwork-web-framework-pc/e2e/console.smoke.spec.ts", "apps/sdkwork-web-framework-pc/playwright.config.ts"] },
         { "id": "K17", "name": "pc-admin-playwright-integration-e2e", "targetM": "M3", "designStatus": "defined", "implStatus": "implemented", "modules": ["apps/sdkwork-web-framework-pc/e2e/console.integration.spec.ts", "scripts/e2e-web-stack.mjs", "scripts/build-pc-admin-e2e.mjs"] },
         { "id": "K18", "name": "production-rollout-adoption-evidence", "targetM": "M4", "designStatus": "defined", "implStatus": "implemented", "modules": ["docs/architecture/tech/TECH-24-production-rollout-and-adoption.md", "specs/production-adoption.evidence.template.json", "tests/contract/production-rollout.contract.test.mjs"] },
-        { "id": "K19", "name": "release-evidence-bundle", "targetM": "M4", "designStatus": "defined", "implStatus": "implemented", "modules": ["scripts/collect-release-evidence.mjs", "scripts/validate-adoption-evidence.mjs", "specs/framework-adoption.evidence.json", "tests/contract/release-evidence.contract.test.mjs"] }
+        { "id": "K19", "name": "release-evidence-bundle", "targetM": "M4", "designStatus": "defined", "implStatus": "implemented", "modules": ["scripts/collect-release-evidence.mjs", "scripts/validate-adoption-evidence.mjs", "specs/framework-adoption.evidence.json", "tests/contract/release-evidence.contract.test.mjs"] },
+        { "id": "K20", "name": "locale-context-contract-tests", "targetM": "M3", "designStatus": "defined", "implStatus": "planned", "modules": ["tests/architecture/locale_context", "tests/architecture/localized_problem_metadata"] }
       ]
     },
     {

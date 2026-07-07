@@ -10,12 +10,12 @@ use sdkwork_web_core::{
     EnvBootstrapTenantSigningKeyLookup, HttpRouteManifest, ManifestAuthorizationPolicy,
     WebFrameworkOptionalFeatures, WebRequestContextResolver,
 };
+use sdkwork_web_framework_admin_repository_sqlx::AdminStorePool;
 use sdkwork_web_store_sqlx::{
     shared_audit_emitter, shared_dynamic_policy_bundle,
     shared_idempotency_store as sqlx_idempotency_store,
     shared_rate_limit_store as sqlx_rate_limit_store, shared_security_event_emitter,
 };
-use sqlx::SqlitePool;
 use std::any::Any;
 use std::sync::Arc;
 
@@ -131,7 +131,7 @@ pub async fn assemble_control_plane(
         .dynamic_rate_limit_policy_source(policy_bundle.rate_limit_policy_source)
         .dynamic_tenant_runtime_profile_source(policy_bundle.tenant_runtime_profile_source)
         .readiness_check(readiness)
-        .enable_admin_api(pool.clone())
+        .enable_admin_api(AdminStorePool::Sqlite(pool.clone()))
         .admin_policy_caches(policy_bundle.caches)
         .build();
 

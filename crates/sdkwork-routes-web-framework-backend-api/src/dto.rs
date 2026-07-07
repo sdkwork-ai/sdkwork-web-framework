@@ -173,20 +173,66 @@ pub struct OptionalFeaturesSnapshot {
     pub development: sdkwork_web_core::WebFrameworkOptionalFeatures,
 }
 
-/// 列表查询参数。`API_SPEC.md §11.2`：多词 query 参数名使用 `lower_snake_case`。
-///
-/// 注意：query 参数命名规则与 JSON body 字段不同。JSON body 用 `lowerCamelCase`，
-/// query 参数用 `lower_snake_case`。因此此结构体不使用 `rename_all`。
-#[derive(Debug, Clone, Deserialize)]
-pub struct ListQuery {
+/// Offset-mode admin list query (`page` + `page_size`; legacy `limit` alias).
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default)]
+pub struct AdminOffsetListQuery {
     pub environment: Option<String>,
     pub tenant_id: Option<String>,
-    pub limit: Option<u32>,
+    pub page: Option<i64>,
+    #[serde(alias = "page_size", alias = "pageSize")]
+    pub page_size: Option<i64>,
+    pub limit: Option<i64>,
+}
+
+/// Cursor/keyset admin list query for high-volume audit and security feeds.
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(default)]
+pub struct AdminKeysetListQuery {
+    pub environment: Option<String>,
+    pub tenant_id: Option<String>,
+    pub cursor: Option<String>,
+    #[serde(alias = "page_size", alias = "pageSize")]
+    pub page_size: Option<i32>,
+    pub limit: Option<i32>,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pagination::validated_offset_params;
+
+    #[test]
+    fn offset_list_query_accepts_page_size_fields() {
+        let query = AdminOffsetListQuery {
+            page: Some(2),
+            page_size: Some(10),
+            ..AdminOffsetListQuery::default()
+        };
+        let params =
+            validated_offset_params(query.page, query.page_size, query.limit).expect("params");
+        assert_eq!(2, params.page);
+        assert_eq!(10, params.page_size);
+
+        let legacy = AdminOffsetListQuery {
+            limit: Some(15),
+            ..AdminOffsetListQuery::default()
+        };
+        let params =
+            validated_offset_params(legacy.page, legacy.page_size, legacy.limit).expect("legacy");
+        assert_eq!(15, params.page_size);
+    }
+
+    #[test]
+    fn keyset_list_query_holds_cursor_and_page_size() {
+        let query = AdminKeysetListQuery {
+            cursor: Some("42".to_owned()),
+            page_size: Some(20),
+            ..AdminKeysetListQuery::default()
+        };
+        assert_eq!(Some("42".to_owned()), query.cursor);
+        assert_eq!(Some(20), query.page_size);
+    }
 
     #[test]
     fn cors_policy_record_serializes_int64_as_string() {

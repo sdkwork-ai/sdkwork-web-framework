@@ -386,8 +386,14 @@ fn openapi_parameters_for_route(route: &HttpRoute) -> Option<Value> {
     if !route_supports_list_query(route) {
         return None;
     }
+
+    let is_keyset_list = matches!(
+        route.operation_id,
+        "webFramework.auditEvents.list" | "webFramework.securityEvents.list"
+    );
+
     let mut parameters = Vec::new();
-    if route.operation_id != "webFramework.securityEvents.list" {
+    if route.operation_id != "webFramework.securityEvents.list" && !is_keyset_list {
         parameters.push(json!({
             "name": "environment",
             "in": "query",
@@ -395,7 +401,9 @@ fn openapi_parameters_for_route(route: &HttpRoute) -> Option<Value> {
             "schema": { "type": "string" }
         }));
     }
-    if route.alternate_permissions.is_some() {
+    if route.alternate_permissions.is_some()
+        || route.operation_id == "webFramework.auditEvents.list"
+    {
         parameters.push(json!({
             "name": "tenant_id",
             "in": "query",
@@ -403,12 +411,52 @@ fn openapi_parameters_for_route(route: &HttpRoute) -> Option<Value> {
             "schema": { "type": "string" }
         }));
     }
-    parameters.push(json!({
-        "name": "limit",
-        "in": "query",
-        "required": false,
-        "schema": { "type": "integer", "minimum": 1, "maximum": 200 }
-    }));
+
+    if is_keyset_list {
+        parameters.push(json!({
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 1, "maximum": 200 }
+        }));
+        parameters.push(json!({
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "deprecated": true,
+            "description": "Legacy alias for page_size (cursor mode).",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 200 }
+        }));
+        parameters.push(json!({
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Opaque keyset cursor (audit/security event id).",
+            "schema": { "type": "string" }
+        }));
+    } else {
+        parameters.push(json!({
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 1 }
+        }));
+        parameters.push(json!({
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 1, "maximum": 200 }
+        }));
+        parameters.push(json!({
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "deprecated": true,
+            "description": "Legacy alias for page_size (offset mode).",
+            "schema": { "type": "integer", "minimum": 1, "maximum": 200 }
+        }));
+    }
+
     Some(Value::Array(parameters))
 }
 

@@ -108,6 +108,7 @@ impl ApiProblem {
     fn framework_error(&self) -> WebFrameworkError {
         let kind = match self.status {
             StatusCode::BAD_REQUEST => WebFrameworkErrorKind::BadRequest,
+            StatusCode::UNPROCESSABLE_ENTITY => WebFrameworkErrorKind::UnprocessableEntity,
             StatusCode::FORBIDDEN => WebFrameworkErrorKind::Forbidden,
             StatusCode::NOT_FOUND => WebFrameworkErrorKind::NotFound,
             StatusCode::CONFLICT => WebFrameworkErrorKind::Conflict,
@@ -253,6 +254,25 @@ mod tests {
         assert_eq!(40401, payload["code"].as_i64().unwrap());
         assert_eq!(
             "https://docs.sdkwork.com/problems/40401",
+            payload["type"].as_str().unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn api_problem_unprocessable_entity_returns_422_validation_problem_json() {
+        let response = ApiProblem {
+            message: "missing field `drive`".to_owned(),
+            status: StatusCode::UNPROCESSABLE_ENTITY,
+        }
+        .into_response_for(&test_context());
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body");
+        let payload: serde_json::Value = serde_json::from_slice(&body).expect("json");
+        assert_eq!(422, payload["status"].as_u64().unwrap());
+        assert_eq!(40001, payload["code"].as_i64().unwrap());
+        assert_eq!(
+            "https://docs.sdkwork.com/problems/40001",
             payload["type"].as_str().unwrap()
         );
     }

@@ -6,22 +6,26 @@ import {
 } from "../web-framework-admin-service";
 import type { WebFrameworkAdminBackendSdk } from "../../sdk/backend-sdk";
 
+function emptyOffsetPage<T>(): { items: T[]; pageInfo: { mode: "offset" } } {
+  return { items: [], pageInfo: { mode: "offset" } };
+}
+
 function makeFakeSdk(overrides: Partial<WebFrameworkAdminBackendSdk> = {}): WebFrameworkAdminBackendSdk {
   return {
-    listCorsPolicies: vi.fn().mockResolvedValue([]),
+    listCorsPolicies: vi.fn().mockResolvedValue(emptyOffsetPage()),
     upsertCorsPolicy: vi.fn().mockResolvedValue({}),
-    listRateLimitPolicies: vi.fn().mockResolvedValue([]),
+    listRateLimitPolicies: vi.fn().mockResolvedValue(emptyOffsetPage()),
     upsertRateLimitPolicy: vi.fn().mockResolvedValue({}),
-    listTenantProfiles: vi.fn().mockResolvedValue([]),
+    listTenantProfiles: vi.fn().mockResolvedValue(emptyOffsetPage()),
     upsertTenantProfile: vi.fn().mockResolvedValue({}),
-    listControlNodes: vi.fn().mockResolvedValue([]),
+    listControlNodes: vi.fn().mockResolvedValue(emptyOffsetPage()),
     registerControlNode: vi.fn().mockResolvedValue({}),
     heartbeatControlNode: vi.fn().mockResolvedValue({}),
     deleteControlNode: vi.fn().mockResolvedValue(undefined),
     runtimeDefaults: vi.fn().mockResolvedValue({}),
     optionalFeatures: vi.fn().mockResolvedValue({}),
-    listSecurityEvents: vi.fn().mockResolvedValue([]),
-    listAuditEvents: vi.fn().mockResolvedValue([]),
+    listSecurityEvents: vi.fn().mockResolvedValue({ items: [], pageInfo: { mode: "cursor" } }),
+    listAuditEvents: vi.fn().mockResolvedValue({ items: [], pageInfo: { mode: "cursor" } }),
     ...overrides,
   } as unknown as WebFrameworkAdminBackendSdk;
 }
@@ -50,13 +54,13 @@ describe("web-framework-admin-service", () => {
     expect(getWebFrameworkAdminService()).toBe(fake);
   });
 
-  it("fake SDK listCorsPolicies returns empty array", async () => {
+  it("fake SDK listCorsPolicies returns empty page", async () => {
     const fake = makeFakeSdk();
     setWebFrameworkAdminServiceForTests(fake);
     const service = getWebFrameworkAdminService();
     const result = await service.listCorsPolicies("prod");
-    expect(result).toEqual([]);
-    expect(fake.listCorsPolicies).toHaveBeenCalledWith("prod");
+    expect(result).toEqual(emptyOffsetPage());
+    expect(fake.listCorsPolicies).toHaveBeenCalledWith("prod", 20, 1);
   });
 
   it("fake SDK listCorsPolicies returns error when configured to reject", async () => {

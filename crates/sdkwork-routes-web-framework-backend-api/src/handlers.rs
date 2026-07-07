@@ -1,9 +1,10 @@
 //! Thin HTTP adapters for framework control-plane backend-api (`WEB_BACKEND_SPEC.md` §2).
 
 use crate::dto::{
-    ListQuery, RegisterControlNodeRequest, UpsertCorsPolicyRequest, UpsertRateLimitPolicyRequest,
-    UpsertTenantRuntimeProfileRequest,
+    AdminKeysetListQuery, AdminOffsetListQuery, RegisterControlNodeRequest,
+    UpsertCorsPolicyRequest, UpsertRateLimitPolicyRequest, UpsertTenantRuntimeProfileRequest,
 };
+use crate::pagination::validated_offset_params;
 use crate::response::{
     created_json, finish_api_json, finish_api_response, no_content, ok_json, success_json,
 };
@@ -28,18 +29,19 @@ fn now_epoch() -> i64 {
 pub async fn list_cors_policies(
     ctx: WebRequestContext,
     State(state): State<WebFrameworkAdminState>,
-    Query(query): Query<ListQuery>,
+    Query(query): Query<AdminOffsetListQuery>,
 ) -> Response {
     finish_api_json(
         &ctx,
         async {
             require_tenant_admin(&ctx)?;
             let tenant_id = resolve_list_tenant_id(&ctx, query.tenant_id.as_deref())?;
-            let limit = crate::services::validation::validate_list_limit(query.limit)?;
+            let params = validated_offset_params(query.page, query.page_size, query.limit)
+                .map_err(|code| crate::response::ApiProblem::bad_request(code.title()))?;
             ok_json(
                 state
                     .service
-                    .list_cors_policies(&tenant_id, query.environment, limit)
+                    .list_cors_policies(&tenant_id, query.environment, params)
                     .await?,
             )
         }
@@ -66,18 +68,19 @@ pub async fn upsert_cors_policy(
 pub async fn list_rate_limit_policies(
     ctx: WebRequestContext,
     State(state): State<WebFrameworkAdminState>,
-    Query(query): Query<ListQuery>,
+    Query(query): Query<AdminOffsetListQuery>,
 ) -> Response {
     finish_api_json(
         &ctx,
         async {
             require_tenant_admin(&ctx)?;
             let tenant_id = resolve_list_tenant_id(&ctx, query.tenant_id.as_deref())?;
-            let limit = crate::services::validation::validate_list_limit(query.limit)?;
+            let params = validated_offset_params(query.page, query.page_size, query.limit)
+                .map_err(|code| crate::response::ApiProblem::bad_request(code.title()))?;
             ok_json(
                 state
                     .service
-                    .list_rate_limit_policies(&tenant_id, query.environment, limit)
+                    .list_rate_limit_policies(&tenant_id, query.environment, params)
                     .await?,
             )
         }
@@ -104,18 +107,19 @@ pub async fn upsert_rate_limit_policy(
 pub async fn list_tenant_runtime_profiles(
     ctx: WebRequestContext,
     State(state): State<WebFrameworkAdminState>,
-    Query(query): Query<ListQuery>,
+    Query(query): Query<AdminOffsetListQuery>,
 ) -> Response {
     finish_api_json(
         &ctx,
         async {
             require_tenant_admin(&ctx)?;
             let tenant_id = resolve_list_tenant_id(&ctx, query.tenant_id.as_deref())?;
-            let limit = crate::services::validation::validate_list_limit(query.limit)?;
+            let params = validated_offset_params(query.page, query.page_size, query.limit)
+                .map_err(|code| crate::response::ApiProblem::bad_request(code.title()))?;
             ok_json(
                 state
                     .service
-                    .list_tenant_runtime_profiles(&tenant_id, query.environment, limit)
+                    .list_tenant_runtime_profiles(&tenant_id, query.environment, params)
                     .await?,
             )
         }
@@ -142,14 +146,21 @@ pub async fn upsert_tenant_runtime_profile(
 pub async fn list_security_events(
     ctx: WebRequestContext,
     State(state): State<WebFrameworkAdminState>,
-    Query(query): Query<ListQuery>,
+    Query(query): Query<AdminKeysetListQuery>,
 ) -> Response {
     finish_api_json(
         &ctx,
         async {
             let scope = resolve_security_event_list_scope(&ctx, query.tenant_id.as_deref())?;
-            let limit = crate::services::validation::validate_list_limit(query.limit)?;
-            ok_json(state.service.list_security_events(scope, limit).await?)
+            let page_size =
+                WebFrameworkAdminService::map_keyset_page_size(query.page_size, query.limit)?;
+            let before_id = WebFrameworkAdminService::map_keyset_cursor(query.cursor.as_deref())?;
+            ok_json(
+                state
+                    .service
+                    .list_security_events(scope, before_id, page_size)
+                    .await?,
+            )
         }
         .await,
     )
@@ -158,14 +169,21 @@ pub async fn list_security_events(
 pub async fn list_audit_events(
     ctx: WebRequestContext,
     State(state): State<WebFrameworkAdminState>,
-    Query(query): Query<ListQuery>,
+    Query(query): Query<AdminKeysetListQuery>,
 ) -> Response {
     finish_api_json(
         &ctx,
         async {
             let scope = resolve_audit_event_list_scope(&ctx, query.tenant_id.as_deref())?;
-            let limit = crate::services::validation::validate_list_limit(query.limit)?;
-            ok_json(state.service.list_audit_events(scope, limit).await?)
+            let page_size =
+                WebFrameworkAdminService::map_keyset_page_size(query.page_size, query.limit)?;
+            let before_id = WebFrameworkAdminService::map_keyset_cursor(query.cursor.as_deref())?;
+            ok_json(
+                state
+                    .service
+                    .list_audit_events(scope, before_id, page_size)
+                    .await?,
+            )
         }
         .await,
     )
@@ -174,17 +192,18 @@ pub async fn list_audit_events(
 pub async fn list_control_nodes(
     ctx: WebRequestContext,
     State(state): State<WebFrameworkAdminState>,
-    Query(query): Query<ListQuery>,
+    Query(query): Query<AdminOffsetListQuery>,
 ) -> Response {
     finish_api_json(
         &ctx,
         async {
             require_control_plane(&ctx)?;
-            let limit = crate::services::validation::validate_list_limit(query.limit)?;
+            let params = validated_offset_params(query.page, query.page_size, query.limit)
+                .map_err(|code| crate::response::ApiProblem::bad_request(code.title()))?;
             ok_json(
                 state
                     .service
-                    .list_control_nodes(query.environment, limit)
+                    .list_control_nodes(query.environment, params)
                     .await?,
             )
         }

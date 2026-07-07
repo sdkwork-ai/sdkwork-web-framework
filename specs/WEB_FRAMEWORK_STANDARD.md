@@ -6,9 +6,11 @@
 - Authority: narrows `../sdkwork-specs/WEB_FRAMEWORK_SPEC.md`, `API_SPEC.md` §10, `WEB_BACKEND_SPEC.md`, `SECURITY_SPEC.md` §5.1; does not contradict root specs
 - Related: [docs/architecture/tech/TECH-00-framework-foundation.md](../docs/architecture/tech/TECH-00-framework-foundation.md), [docs/architecture/tech/TECH-14-standards-system.md](../docs/architecture/tech/TECH-14-standards-system.md)
 
+Internationalization authority: `../sdkwork-specs/I18N_SPEC.md`. This L1 standard defines the framework runtime hooks required to enforce it.
+
 ## 1. Purpose
 
-This standard defines how SDKWork embeds Axum/Tower for multi-tenant SaaS APIs. Business repositories implement extension traits; the framework enforces pipeline order, context vocabulary, and secure defaults.
+This standard defines how SDKWork embeds Axum/Tower for multi-tenant SaaS APIs. Business repositories implement extension traits; the framework enforces pipeline order, context vocabulary, locale negotiation, response mapping, and secure defaults.
 
 ## 2. Dependency Rule
 
@@ -29,6 +31,8 @@ JSON Schema: [web-request-context.schema.json](./web-request-context.schema.json
 - `api_surface`, `auth_mode`
 - `transport` — path, method, credential presence flags
 - `principal: Option<WebRequestPrincipal>` — `None` only on public routes
+
+- `locale: WebLocaleContext` - effective locale, fallback locale, active locales, source, and message bundle version metadata
 
 `WebRequestPrincipal` `MUST` be grouped as:
 
@@ -57,7 +61,34 @@ JSON Schema: [web-request-context.schema.json](./web-request-context.schema.json
 
 Legacy alias `AppRequestContext` `MAY` exist for migration only.
 
-### 3.4 Public routes (auth bypass)
+### 3.4 Locale context
+
+`WebRequestContext.locale` `MUST` follow `../sdkwork-specs/I18N_SPEC.md`:
+
+```text
+WebLocaleContext {
+  requestedLocale?: LocaleTag
+  effectiveLocale: LocaleTag
+  fallbackLocale: LocaleTag
+  supportedLocales: LocaleTag[]
+  activeLocales: LocaleTag[]
+  source: user-preference | tenant-preference | app-default | accept-language | sdk-header | system-default
+  catalogVersion?: string
+  messageBundleVersion?: string
+  timezone?: string
+  numberingSystem?: string
+}
+```
+
+Rules:
+
+- Locale resolution `MUST` run inside RequestContextResolution before ContextInjection.
+- Public and protected routes `MUST` receive locale context.
+- Resolver precedence is authenticated user preference, tenant/application preference, approved SDK/host runtime locale, `Accept-Language`, application default, explicit fallback.
+- Handlers `MUST NOT` parse `Accept-Language`, `X-SdkWork-Locale`, cookies, query parameters, or user-agent language values.
+- Localized responses `MUST` emit `Content-Language`; language-varying responses `MUST` emit `Vary: Accept-Language`.
+
+### 3.5 Public routes (auth bypass)
 
 Business APIs that do not require login `MUST` declare `RouteAuth::Public` on the matching `HttpRoute` in the route crate `manifest.rs`. Infrastructure paths (`/healthz`, `/readyz`, `/metrics`, WebSocket bootstrap prefixes, etc.) `MAY` remain in `WebRequestContextProfile::public_path_prefixes`.
 
@@ -117,6 +148,8 @@ No duplicate `public_path_prefixes` entry is required for manifest-declared publ
 
 Protected routers `MUST` use `WebCallInterceptorChain::standard()` or a documented strict superset.
 
+`LocaleResolution` is a required sub-stage of RequestContextResolution. It does not change the fixed 18-stage order.
+
 ## 6. Mandatory Extension Traits (business implements)
 
 | Trait | When invoked |
@@ -128,6 +161,12 @@ Protected routers `MUST` use `WebCallInterceptorChain::standard()` or a document
 | `ApiKeyLookupService` | Stage 10 (open-api api-key) |
 | `OAuthTokenLookupService` | Stage 10 (open-api oauth) |
 | `OpenApiCredentialSchemeDetector` | Stage 10 (open-api flexible) |
+| `LocaleResolver` | Stage 10 |
+| `UserLocalePreferenceProvider` | Stage 10/11 |
+| `TenantLocalePreferenceProvider` | Stage 10/11 |
+| `MessageBundleProvider` | response/error boundary |
+| `LocalizedProblemMapper` | response/error boundary |
+| `ValidationMessageResolver` | extractor/validation boundary |
 | `TenantSigningKeyLookup` | Stage 10 JWT verify (auth/access/oauth); production SaaS `MUST` use tenant-bound keys (`HS256` secret or `RS256` SPKI via `kid`) |
 | `JwtSessionRevocationChecker` | Stage 10 JWT verify after claim validation; production SaaS `MUST` wire IAM session revocation via `tenant_bound_saas_verifying_web_request_resolver()` |
 | `ReadinessCheck` | `/readyz` assembly; production SaaS `MUST` wire via `WebFrameworkBuilder::readiness_check()` |
@@ -146,7 +185,8 @@ Production SaaS assembly `MUST` use `tenant_bound_saas_verifying_web_request_res
 
 - Handlers `MUST` take `WebRequestContext` as a function parameter (auto-injected via `FromRequestParts`).
 - Handlers `MUST NOT` use `Extension<WebRequestContext>` as the only pattern when `FromRequestParts` is available.
-- Handlers `MUST NOT` parse `Authorization`, `Access-Token`, `X-API-Key`, or SDKWork identity projection headers.
+- Handlers `MUST NOT` parse `Authorization`, `Access-Token`, `X-API-Key`, SDKWork identity projection headers, locale headers, cookies, query parameters, or user-agent language values to resolve context.
+- Handlers `MUST` consume locale, timezone, numbering system, and message bundle version from `WebRequestContext.locale`.
 - Services `MUST` accept `&WebRequestContext` or `TenantAppContext` for tenant/app scoping.
 - Services `MUST NOT` depend on Axum request types.
 - Repositories `MUST NOT` accept bare `tenant_id` without a context provenance.
@@ -180,7 +220,8 @@ Route crates for **business** capabilities `MUST NOT` live in `sdkwork-web-frame
 
 - Logs `MUST` redact tokens and API keys.
 - Metrics and logs `SHOULD` include `request_id`, `trace_id` (when known), `api_surface`, `operation_id` when known.
-- All framework Problem+json error surfaces (pipeline, extractors, handlers, contract fallback, timeouts) `MUST` include `traceId` when available via `WebRequestContext` or inbound W3C `traceparent`.
+- Metrics and logs `SHOULD` include locale as diagnostic context when it is available, but machine names and audit action codes remain non-localized.
+- All framework Problem+json error surfaces (pipeline, extractors, handlers, contract fallback, timeouts) `MUST` include `traceId` when available via `WebRequestContext` or inbound W3C `traceparent`, and `SHOULD` include safe `i18nKey`/`locale` metadata when message mapping exists.
 - Raw URL paths with identifiers `MUST NOT` be logged; use route templates.
 
 ## 11. Verification
@@ -195,7 +236,9 @@ scripts/verify.sh    # Unix
 Business repository after integration:
 
 - Contract test: pipeline order unchanged.
-- Handler static rule: no raw credential header parsing in route crates.
+- Handler static rule: no raw credential or locale header parsing in route crates.
+- Locale context test: public and protected routes receive `WebRequestContext.locale`; unsupported locales resolve through fallback.
+- Locale response test: localized responses emit `Content-Language`, language-varying responses emit `Vary: Accept-Language`, and localized problem mapping preserves numeric `ProblemDetail.code` and `traceId`.
 - Open-api auth check: protected routes declare `api-key`, `oauth`, or `open-api-flexible`; security vectors cover missing credentials, API key resolution, OAuth bearer resolution, and flexible scheme selection.
 
 ## 12. Capability Matrix

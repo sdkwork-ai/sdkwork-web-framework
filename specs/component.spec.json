@@ -9,7 +9,7 @@
     "root": "sdkwork-web-framework",
     "domain": "platform",
     "capability": "web-framework",
-    "status": "implementing",
+    "status": "production-aligned",
     "languages": ["rust"],
     "generated": false,
     "private": false
@@ -95,6 +95,6 @@
     "managedBy": "sdkwork-web-framework design rev.3",
     "standardVersion": "2026-06-22",
     "capabilityMaturity": "M3",
-    "commercialReadiness": "production-ops-documented-sdk-generated-playwright-e2e-integration-rollout-adoption-release-evidence"
+    "commercialReadiness": "pagination-api-envelope-postgres-admin-repository-sqlite-default-production-aligned"
   }
 }

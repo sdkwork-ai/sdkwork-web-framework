@@ -5,6 +5,7 @@ import type {
   OptionalFeaturesSnapshot,
   RateLimitPolicyRecord,
   RuntimeDefaultsSnapshot,
+  SdkWorkPageData,
   SecurityEventRecord,
   TenantRuntimeProfileRecord,
 } from "../../api/types";
@@ -13,6 +14,8 @@ import { createBackendSdkTransport, query, type BackendSdkTransport } from "./tr
 
 export type WebFrameworkAdminBackendSdk = ReturnType<typeof createWebFrameworkAdminBackendSdk>;
 
+const DEFAULT_PAGE_SIZE = 20;
+
 /** Backend SDK facade for framework control-plane `/backend/v3/api/web-framework` operations. */
 export function createWebFrameworkAdminBackendSdk(
   baseUrl: string,
@@ -20,27 +23,43 @@ export function createWebFrameworkAdminBackendSdk(
 ) {
   const ops = webFrameworkAdminOperations;
   return {
-    listCorsPolicies: (environment?: string, limit = 50) =>
-      transport.get<CorsPolicyRecord[]>(
-        `${ops.corsPolicies.list}${query({ environment, limit: String(limit) })}`,
+    listCorsPolicies: (environment?: string, pageSize = DEFAULT_PAGE_SIZE, page = 1) =>
+      transport.get<SdkWorkPageData<CorsPolicyRecord>>(
+        `${ops.corsPolicies.list}${query({
+          environment,
+          page_size: String(pageSize),
+          page: String(page),
+        })}`,
       ),
     upsertCorsPolicy: (payload: CorsPolicyRecord) =>
       transport.put<CorsPolicyRecord>(ops.corsPolicies.upsert, payload),
-    listRateLimitPolicies: (environment?: string, limit = 50) =>
-      transport.get<RateLimitPolicyRecord[]>(
-        `${ops.rateLimitPolicies.list}${query({ environment, limit: String(limit) })}`,
+    listRateLimitPolicies: (environment?: string, pageSize = DEFAULT_PAGE_SIZE, page = 1) =>
+      transport.get<SdkWorkPageData<RateLimitPolicyRecord>>(
+        `${ops.rateLimitPolicies.list}${query({
+          environment,
+          page_size: String(pageSize),
+          page: String(page),
+        })}`,
       ),
     upsertRateLimitPolicy: (payload: RateLimitPolicyRecord) =>
       transport.put<RateLimitPolicyRecord>(ops.rateLimitPolicies.upsert, payload),
-    listTenantProfiles: (environment?: string, limit = 50) =>
-      transport.get<TenantRuntimeProfileRecord[]>(
-        `${ops.tenantRuntimeProfiles.list}${query({ environment, limit: String(limit) })}`,
+    listTenantProfiles: (environment?: string, pageSize = DEFAULT_PAGE_SIZE, page = 1) =>
+      transport.get<SdkWorkPageData<TenantRuntimeProfileRecord>>(
+        `${ops.tenantRuntimeProfiles.list}${query({
+          environment,
+          page_size: String(pageSize),
+          page: String(page),
+        })}`,
       ),
     upsertTenantProfile: (payload: TenantRuntimeProfileRecord) =>
       transport.put<TenantRuntimeProfileRecord>(ops.tenantRuntimeProfiles.upsert, payload),
-    listControlNodes: (environment?: string, limit = 50) =>
-      transport.get<ControlNodeRecord[]>(
-        `${ops.controlNodes.list}${query({ environment, limit: String(limit) })}`,
+    listControlNodes: (environment?: string, pageSize = DEFAULT_PAGE_SIZE, page = 1) =>
+      transport.get<SdkWorkPageData<ControlNodeRecord>>(
+        `${ops.controlNodes.list}${query({
+          environment,
+          page_size: String(pageSize),
+          page: String(page),
+        })}`,
       ),
     registerControlNode: (
       payload: Pick<ControlNodeRecord, "node_id" | "base_url" | "environment"> & {
@@ -55,13 +74,19 @@ export function createWebFrameworkAdminBackendSdk(
       transport.get<RuntimeDefaultsSnapshot>(ops.runtimeDefaults.snapshot),
     optionalFeatures: () =>
       transport.get<OptionalFeaturesSnapshot>(ops.optionalFeatures.snapshot),
-    listSecurityEvents: (limit = 50) =>
-      transport.get<SecurityEventRecord[]>(
-        `${ops.securityEvents.list}${query({ limit: String(limit) })}`,
+    listSecurityEvents: (pageSize = DEFAULT_PAGE_SIZE, cursor?: string) =>
+      transport.get<SdkWorkPageData<SecurityEventRecord>>(
+        `${ops.securityEvents.list}${query({
+          page_size: String(pageSize),
+          cursor,
+        })}`,
       ),
-    listAuditEvents: (limit = 50) =>
-      transport.get<AuditEventRecord[]>(
-        `${ops.auditEvents.list}${query({ limit: String(limit) })}`,
+    listAuditEvents: (pageSize = DEFAULT_PAGE_SIZE, cursor?: string) =>
+      transport.get<SdkWorkPageData<AuditEventRecord>>(
+        `${ops.auditEvents.list}${query({
+          page_size: String(pageSize),
+          cursor,
+        })}`,
       ),
   };
 }

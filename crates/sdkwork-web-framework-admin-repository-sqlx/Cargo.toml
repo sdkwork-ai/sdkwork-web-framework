@@ -13,9 +13,15 @@ path = "src/lib.rs"
 async-trait.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sdkwork-utils-rust.workspace = true
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
 tokio.workspace = true
 tracing.workspace = true
+
+[features]
+default = ["sqlite"]
+sqlite = ["sqlx/sqlite"]
+postgres = ["sqlx/postgres"]
 
 [dev-dependencies]
 sdkwork-web-store-sqlx = { path = "../sdkwork-web-store-sqlx" }

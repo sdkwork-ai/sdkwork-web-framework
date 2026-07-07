@@ -176,12 +176,13 @@ pub fn problem_response(
         .resolved_trace_id()
         .unwrap_or_else(|| "unknown".to_owned());
     let result_code = map_result_code(error.result_code());
-    let problem = SdkWorkProblemDetail::platform_enriched(
+    let mut problem = SdkWorkProblemDetail::platform_enriched(
         result_code,
         client_safe_problem_detail(error),
         trace_id.clone(),
         correlation.routing(),
     );
+    problem.status = status.as_u16();
     let mut response = (
         status,
         [(header::CONTENT_TYPE, "application/problem+json")],

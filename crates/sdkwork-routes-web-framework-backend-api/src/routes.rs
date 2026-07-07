@@ -3,14 +3,14 @@ use crate::paths;
 use crate::state::WebFrameworkAdminState;
 use axum::routing::{delete, get, post};
 use axum::Router;
-use sqlx::SqlitePool;
+use sdkwork_web_framework_admin_repository_sqlx::AdminStorePool;
 
-pub fn build_admin_router(pool: SqlitePool) -> Router {
+pub fn build_admin_router(pool: AdminStorePool) -> Router {
     build_admin_router_with_options(pool, None)
 }
 
 pub fn build_admin_router_with_options(
-    pool: SqlitePool,
+    pool: AdminStorePool,
     policy_caches: Option<std::sync::Arc<sdkwork_web_core::DynamicPolicyCaches>>,
 ) -> Router {
     let mut state = WebFrameworkAdminState::new(pool);

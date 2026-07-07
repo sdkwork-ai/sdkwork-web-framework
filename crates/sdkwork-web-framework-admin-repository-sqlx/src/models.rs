@@ -1,3 +1,4 @@
+use crate::pagination::KeysetId;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -129,4 +130,16 @@ pub enum AuditEventListScope {
 pub enum SecurityEventListScope {
     Tenant(String),
     PlatformAll,
+}
+
+impl KeysetId for SecurityEventRecord {
+    fn keyset_id(&self) -> i64 {
+        self.id
+    }
+}
+
+impl KeysetId for AuditEventRecord {
+    fn keyset_id(&self) -> i64 {
+        self.id
+    }
 }

@@ -287,14 +287,6 @@
         "parameters": [
           {
             "in": "query",
-            "name": "environment",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "in": "query",
             "name": "tenant_id",
             "required": false,
             "schema": {
@@ -303,13 +295,34 @@
           },
           {
             "in": "query",
-            "name": "limit",
+            "name": "page_size",
             "required": false,
             "schema": {
               "maximum": 200,
               "minimum": 1,
               "type": "integer"
             }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "deprecated": true,
+            "description": "Legacy alias for page_size (cursor mode).",
+            "schema": {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque keyset cursor (audit/security event id)."
           }
         ],
         "responses": {
@@ -418,8 +431,29 @@
           },
           {
             "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
             "name": "limit",
             "required": false,
+            "deprecated": true,
+            "description": "Legacy alias for page_size (offset mode).",
             "schema": {
               "maximum": 200,
               "minimum": 1,
@@ -845,8 +879,29 @@
           },
           {
             "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
             "name": "limit",
             "required": false,
+            "deprecated": true,
+            "description": "Legacy alias for page_size (offset mode).",
             "schema": {
               "maximum": 200,
               "minimum": 1,
@@ -1150,8 +1205,29 @@
           },
           {
             "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
             "name": "limit",
             "required": false,
+            "deprecated": true,
+            "description": "Legacy alias for page_size (offset mode).",
             "schema": {
               "maximum": 200,
               "minimum": 1,
@@ -1439,13 +1515,34 @@
         "parameters": [
           {
             "in": "query",
-            "name": "limit",
+            "name": "page_size",
             "required": false,
             "schema": {
               "maximum": 200,
               "minimum": 1,
               "type": "integer"
             }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "deprecated": true,
+            "description": "Legacy alias for page_size (cursor mode).",
+            "schema": {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Opaque keyset cursor (audit/security event id)."
           }
         ],
         "responses": {
@@ -1559,8 +1656,29 @@
           },
           {
             "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
             "name": "limit",
             "required": false,
+            "deprecated": true,
+            "description": "Legacy alias for page_size (offset mode).",
             "schema": {
               "maximum": 200,
               "minimum": 1,

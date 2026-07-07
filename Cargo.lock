@@ -2023,6 +2023,7 @@ dependencies = [
  "sdkwork-web-axum",
  "sdkwork-web-contract",
  "sdkwork-web-core",
+ "sdkwork-web-framework-admin-repository-sqlx",
  "sdkwork-web-store-redis",
  "sdkwork-web-store-sqlx",
  "sdkwork-web-test-utils",
@@ -2070,6 +2071,7 @@ name = "sdkwork-web-framework-admin-repository-sqlx"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "sdkwork-utils-rust",
  "sdkwork-web-store-sqlx",
  "serde",
  "serde_json",

@@ -5,6 +5,7 @@ use axum::http::{Request, StatusCode};
 use axum::Router;
 use sdkwork_web_bootstrap::WebFramework;
 use sdkwork_web_core::DefaultWebRequestContextResolver;
+use sdkwork_web_framework_admin_repository_sqlx::AdminStorePool;
 use sdkwork_web_store_sqlx::connect_sqlite;
 use sdkwork_web_test_utils::IsolatedDeploymentEnv;
 use tower::ServiceExt;
@@ -14,7 +15,7 @@ async fn enable_admin_api_wires_sqlite_readiness_probe() {
     let _env = IsolatedDeploymentEnv::enter();
     let pool = connect_sqlite("sqlite::memory:", 1).await.expect("pool");
     let framework = WebFramework::builder(DefaultWebRequestContextResolver::default())
-        .enable_admin_api(pool)
+        .enable_admin_api(AdminStorePool::Sqlite(pool))
         .build();
     let app = framework.mount_service_routes(Router::new());
 
@@ -39,7 +40,7 @@ async fn enable_admin_api_auto_manifest_contract_fallback_returns_501() {
     let _env = IsolatedDeploymentEnv::enter();
     let pool = connect_sqlite("sqlite::memory:", 1).await.expect("pool");
     let framework = WebFramework::builder(DefaultWebRequestContextResolver::default())
-        .enable_admin_api(pool)
+        .enable_admin_api(AdminStorePool::Sqlite(pool))
         .build();
     assert!(
         framework

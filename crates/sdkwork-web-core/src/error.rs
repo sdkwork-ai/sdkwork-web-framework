@@ -9,6 +9,7 @@ pub enum WebFrameworkErrorKind {
     InvalidCredentials,
     Forbidden,
     BadRequest,
+    UnprocessableEntity,
     Conflict,
     PayloadTooLarge,
     RateLimitExceeded,
@@ -116,6 +117,7 @@ impl WebFrameworkError {
             WebFrameworkErrorKind::BadRequest | WebFrameworkErrorKind::WebSocketRejected => {
                 StatusCode::BAD_REQUEST
             }
+            WebFrameworkErrorKind::UnprocessableEntity => StatusCode::UNPROCESSABLE_ENTITY,
             WebFrameworkErrorKind::MethodNotAllowed => StatusCode::METHOD_NOT_ALLOWED,
             WebFrameworkErrorKind::NotFound => StatusCode::NOT_FOUND,
             WebFrameworkErrorKind::NotImplemented => StatusCode::NOT_IMPLEMENTED,
@@ -138,6 +140,9 @@ impl WebFrameworkError {
             WebFrameworkErrorKind::InvalidCredentials => SdkWorkResultCode::InvalidToken.as_i32(),
             WebFrameworkErrorKind::Forbidden => SdkWorkResultCode::PermissionRequired.as_i32(),
             WebFrameworkErrorKind::BadRequest => SdkWorkResultCode::ValidationError.as_i32(),
+            WebFrameworkErrorKind::UnprocessableEntity => {
+                SdkWorkResultCode::ValidationError.as_i32()
+            }
             WebFrameworkErrorKind::Conflict => SdkWorkResultCode::Conflict.as_i32(),
             WebFrameworkErrorKind::PayloadTooLarge => SdkWorkResultCode::PayloadTooLarge.as_i32(),
             WebFrameworkErrorKind::RateLimitExceeded => {
@@ -172,6 +177,7 @@ impl fmt::Display for WebFrameworkErrorKind {
             WebFrameworkErrorKind::InvalidCredentials => write!(f, "invalid_credentials"),
             WebFrameworkErrorKind::Forbidden => write!(f, "forbidden"),
             WebFrameworkErrorKind::BadRequest => write!(f, "bad_request"),
+            WebFrameworkErrorKind::UnprocessableEntity => write!(f, "unprocessable_entity"),
             WebFrameworkErrorKind::Conflict => write!(f, "conflict"),
             WebFrameworkErrorKind::PayloadTooLarge => write!(f, "payload_too_large"),
             WebFrameworkErrorKind::RateLimitExceeded => write!(f, "rate_limit_exceeded"),

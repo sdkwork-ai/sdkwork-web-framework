@@ -21,77 +21,77 @@ fn problem_type_uris_cover_all_framework_error_kinds() {
         (
             WebFrameworkError::missing_credentials("missing"),
             401_u16,
-            "https://sdkwork.dev/problems/missing-credentials",
+            "https://docs.sdkwork.com/problems/40101",
         ),
         (
             WebFrameworkError::invalid_credentials("invalid"),
             401,
-            "https://sdkwork.dev/problems/invalid-credentials",
+            "https://docs.sdkwork.com/problems/40103",
         ),
         (
             WebFrameworkError::forbidden("forbidden"),
             403,
-            "https://sdkwork.dev/problems/forbidden",
+            "https://docs.sdkwork.com/problems/40301",
         ),
         (
             WebFrameworkError::bad_request("bad"),
             400,
-            "https://sdkwork.dev/problems/bad-request",
+            "https://docs.sdkwork.com/problems/40001",
         ),
         (
             WebFrameworkError::conflict("conflict"),
             409,
-            "https://sdkwork.dev/problems/conflict",
+            "https://docs.sdkwork.com/problems/40901",
         ),
         (
             WebFrameworkError::payload_too_large("large"),
             413,
-            "https://sdkwork.dev/problems/payload-too-large",
+            "https://docs.sdkwork.com/problems/41301",
         ),
         (
             WebFrameworkError::rate_limit_exceeded("slow down", 30),
             429,
-            "https://sdkwork.dev/problems/rate-limit-exceeded",
+            "https://docs.sdkwork.com/problems/42901",
         ),
         (
             WebFrameworkError::dependency_unavailable("down"),
             503,
-            "https://sdkwork.dev/problems/dependency-unavailable",
+            "https://docs.sdkwork.com/problems/50301",
         ),
         (
             WebFrameworkError::request_timeout("timeout"),
             408,
-            "https://sdkwork.dev/problems/request-timeout",
+            "https://docs.sdkwork.com/problems/40801",
         ),
         (
             WebFrameworkError::method_not_allowed("method"),
             405,
-            "https://sdkwork.dev/problems/method-not-allowed",
+            "https://docs.sdkwork.com/problems/40501",
         ),
         (
             WebFrameworkError::not_found("missing"),
             404,
-            "https://sdkwork.dev/problems/not-found",
+            "https://docs.sdkwork.com/problems/40401",
         ),
         (
             WebFrameworkError::not_implemented("unmounted"),
             501,
-            "https://sdkwork.dev/problems/not-implemented",
+            "https://docs.sdkwork.com/problems/50001",
         ),
         (
             WebFrameworkError::internal_server_error("internal"),
             500,
-            "https://sdkwork.dev/problems/internal-server-error",
+            "https://docs.sdkwork.com/problems/50001",
         ),
         (
             WebFrameworkError::context_not_injected(),
             500,
-            "https://sdkwork.dev/problems/context-not-injected",
+            "https://docs.sdkwork.com/problems/50001",
         ),
         (
             WebFrameworkError::websocket_rejected("rejected"),
             400,
-            "https://sdkwork.dev/problems/websocket-rejected",
+            "https://docs.sdkwork.com/problems/40001",
         ),
     ];
 
@@ -113,8 +113,8 @@ fn problem_type_uris_cover_all_framework_error_kinds() {
         );
         assert_eq!(expected_type, ty);
         assert!(
-            expected_type.starts_with("https://sdkwork.dev/problems/"),
-            "problem type must use sdkwork.dev URI namespace"
+            expected_type.starts_with("https://docs.sdkwork.com/problems/"),
+            "problem type must use docs.sdkwork.com numeric URI namespace"
         );
     }
 }

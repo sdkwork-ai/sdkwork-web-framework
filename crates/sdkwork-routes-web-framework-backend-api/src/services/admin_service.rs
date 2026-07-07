@@ -6,6 +6,9 @@ use crate::dto::{
     RuntimeDefaultsSnapshot, SecurityEventRecord, TenantRuntimeProfileRecord,
     UpsertCorsPolicyRequest, UpsertRateLimitPolicyRequest, UpsertTenantRuntimeProfileRequest,
 };
+use crate::pagination::{
+    keyset_page, offset_page, parse_keyset_id_cursor, validated_keyset_page_size,
+};
 use crate::persistence::map_repository_error;
 use crate::response::ApiProblem;
 use crate::services::validation::{
@@ -13,6 +16,7 @@ use crate::services::validation::{
     validate_tenant_runtime_profile_upsert,
 };
 use crate::tenant_scope::{AuditEventListScope, SecurityEventListScope};
+use sdkwork_utils_rust::{OffsetListPageParams, SdkWorkPageData, SdkWorkResultCode};
 use sdkwork_web_core::{DynamicPolicyCaches, SecurityPolicy, WebFrameworkOptionalFeatures};
 use sdkwork_web_framework_admin_repository_sqlx::{
     AuditEventListScope as RepoAuditScope, RegisterControlNodeRecord,
@@ -46,28 +50,36 @@ impl WebFrameworkAdminService {
         }
     }
 
+    fn map_pagination_error(code: SdkWorkResultCode) -> ApiProblem {
+        ApiProblem::bad_request(code.title())
+    }
+
     pub async fn list_cors_policies(
         &self,
         tenant_id: &str,
         environment: Option<String>,
-        limit: u32,
-    ) -> Result<Vec<CorsPolicyRecord>, ApiProblem> {
-        self.repository
-            .list_cors_policies(tenant_id, environment, limit)
+        params: OffsetListPageParams,
+    ) -> Result<SdkWorkPageData<CorsPolicyRecord>, ApiProblem> {
+        let page = self
+            .repository
+            .list_cors_policies(tenant_id, environment, params)
             .await
-            .map_err(map_repository_error)
-            .map(|rows| {
-                rows.into_iter()
-                    .map(|row| CorsPolicyRecord {
-                        tenant_id: row.tenant_id,
-                        environment: row.environment,
-                        allow_all_origins: row.allow_all_origins,
-                        allowed_origins: row.allowed_origins,
-                        allow_credentials: row.allow_credentials,
-                        version: row.version,
-                    })
-                    .collect()
-            })
+            .map_err(map_repository_error)?;
+        Ok(offset_page(
+            page.items
+                .into_iter()
+                .map(|row| CorsPolicyRecord {
+                    tenant_id: row.tenant_id,
+                    environment: row.environment,
+                    allow_all_origins: row.allow_all_origins,
+                    allowed_origins: row.allowed_origins,
+                    allow_credentials: row.allow_credentials,
+                    version: row.version,
+                })
+                .collect(),
+            page.total_items,
+            params,
+        ))
     }
 
     pub async fn upsert_cors_policy(
@@ -101,25 +113,29 @@ impl WebFrameworkAdminService {
         &self,
         tenant_id: &str,
         environment: Option<String>,
-        limit: u32,
-    ) -> Result<Vec<RateLimitPolicyRecord>, ApiProblem> {
-        self.repository
-            .list_rate_limit_policies(tenant_id, environment, limit)
+        params: OffsetListPageParams,
+    ) -> Result<SdkWorkPageData<RateLimitPolicyRecord>, ApiProblem> {
+        let page = self
+            .repository
+            .list_rate_limit_policies(tenant_id, environment, params)
             .await
-            .map_err(map_repository_error)
-            .map(|rows| {
-                rows.into_iter()
-                    .map(|row| RateLimitPolicyRecord {
-                        tenant_id: row.tenant_id,
-                        environment: row.environment,
-                        tier_key: row.tier_key,
-                        max_requests: row.max_requests,
-                        window_secs: row.window_secs,
-                        enabled: row.enabled,
-                        version: row.version,
-                    })
-                    .collect()
-            })
+            .map_err(map_repository_error)?;
+        Ok(offset_page(
+            page.items
+                .into_iter()
+                .map(|row| RateLimitPolicyRecord {
+                    tenant_id: row.tenant_id,
+                    environment: row.environment,
+                    tier_key: row.tier_key,
+                    max_requests: row.max_requests,
+                    window_secs: row.window_secs,
+                    enabled: row.enabled,
+                    version: row.version,
+                })
+                .collect(),
+            page.total_items,
+            params,
+        ))
     }
 
     pub async fn upsert_rate_limit_policy(
@@ -155,24 +171,28 @@ impl WebFrameworkAdminService {
         &self,
         tenant_id: &str,
         environment: Option<String>,
-        limit: u32,
-    ) -> Result<Vec<TenantRuntimeProfileRecord>, ApiProblem> {
-        self.repository
-            .list_tenant_runtime_profiles(tenant_id, environment, limit)
+        params: OffsetListPageParams,
+    ) -> Result<SdkWorkPageData<TenantRuntimeProfileRecord>, ApiProblem> {
+        let page = self
+            .repository
+            .list_tenant_runtime_profiles(tenant_id, environment, params)
             .await
-            .map_err(map_repository_error)
-            .map(|rows| {
-                rows.into_iter()
-                    .map(|row| TenantRuntimeProfileRecord {
-                        tenant_id: row.tenant_id,
-                        environment: row.environment,
-                        rate_limit_enabled: row.rate_limit_enabled,
-                        max_content_length: row.max_content_length,
-                        max_concurrent_requests: row.max_concurrent_requests,
-                        version: row.version,
-                    })
-                    .collect()
-            })
+            .map_err(map_repository_error)?;
+        Ok(offset_page(
+            page.items
+                .into_iter()
+                .map(|row| TenantRuntimeProfileRecord {
+                    tenant_id: row.tenant_id,
+                    environment: row.environment,
+                    rate_limit_enabled: row.rate_limit_enabled,
+                    max_content_length: row.max_content_length,
+                    max_concurrent_requests: row.max_concurrent_requests,
+                    version: row.version,
+                })
+                .collect(),
+            page.total_items,
+            params,
+        ))
     }
 
     pub async fn upsert_tenant_runtime_profile(
@@ -205,39 +225,47 @@ impl WebFrameworkAdminService {
     pub async fn list_security_events(
         &self,
         scope: SecurityEventListScope,
-        limit: u32,
-    ) -> Result<Vec<SecurityEventRecord>, ApiProblem> {
+        before_id: Option<i64>,
+        page_size: u32,
+    ) -> Result<SdkWorkPageData<SecurityEventRecord>, ApiProblem> {
         let repo_scope = match scope {
             SecurityEventListScope::Tenant(tenant_id) => RepoSecurityScope::Tenant(tenant_id),
             SecurityEventListScope::PlatformAll => RepoSecurityScope::PlatformAll,
         };
-        self.repository
-            .list_security_events(repo_scope, limit)
+        let page = self
+            .repository
+            .list_security_events(repo_scope, before_id, page_size)
             .await
-            .map_err(map_repository_error)
-            .map(|rows| {
-                rows.into_iter()
-                    .map(|row| SecurityEventRecord {
-                        id: row.id,
-                        kind: row.kind,
-                        request_id: row.request_id,
-                        tenant_id: row.tenant_id,
-                        path: row.path,
-                        method: row.method,
-                        api_surface: row.api_surface,
-                        origin: row.origin,
-                        detail: row.detail,
-                        created_at: row.created_at,
-                    })
-                    .collect()
-            })
+            .map_err(map_repository_error)?;
+        let next_cursor = page.next_cursor_from_last_id();
+        Ok(keyset_page(
+            page.items
+                .into_iter()
+                .map(|row| SecurityEventRecord {
+                    id: row.id,
+                    kind: row.kind,
+                    request_id: row.request_id,
+                    tenant_id: row.tenant_id,
+                    path: row.path,
+                    method: row.method,
+                    api_surface: row.api_surface,
+                    origin: row.origin,
+                    detail: row.detail,
+                    created_at: row.created_at,
+                })
+                .collect(),
+            page_size,
+            next_cursor,
+            page.has_more,
+        ))
     }
 
     pub async fn list_audit_events(
         &self,
         scope: AuditEventListScope,
-        limit: u32,
-    ) -> Result<Vec<AuditEventRecord>, ApiProblem> {
+        before_id: Option<i64>,
+        page_size: u32,
+    ) -> Result<SdkWorkPageData<AuditEventRecord>, ApiProblem> {
         let repo_scope = match scope {
             AuditEventListScope::Tenant(tenant_id) => RepoAuditScope::Tenant(tenant_id),
             AuditEventListScope::PlatformTenant(tenant_id) => {
@@ -245,52 +273,62 @@ impl WebFrameworkAdminService {
             }
             AuditEventListScope::PlatformAll => RepoAuditScope::PlatformAll,
         };
-        self.repository
-            .list_audit_events(repo_scope, limit)
+        let page = self
+            .repository
+            .list_audit_events(repo_scope, before_id, page_size)
             .await
-            .map_err(map_repository_error)
-            .map(|rows| {
-                rows.into_iter()
-                    .map(|row| AuditEventRecord {
-                        id: row.id,
-                        request_id: row.request_id,
-                        tenant_id: row.tenant_id,
-                        user_id: row.user_id,
-                        api_surface: row.api_surface,
-                        path: row.path,
-                        method: row.method,
-                        operation_id: row.operation_id,
-                        status_code: row.status_code,
-                        duration_ms: row.duration_ms,
-                        created_at: row.created_at,
-                    })
-                    .collect()
-            })
+            .map_err(map_repository_error)?;
+        let next_cursor = page.next_cursor_from_last_id();
+        Ok(keyset_page(
+            page.items
+                .into_iter()
+                .map(|row| AuditEventRecord {
+                    id: row.id,
+                    request_id: row.request_id,
+                    tenant_id: row.tenant_id,
+                    user_id: row.user_id,
+                    api_surface: row.api_surface,
+                    path: row.path,
+                    method: row.method,
+                    operation_id: row.operation_id,
+                    status_code: row.status_code,
+                    duration_ms: row.duration_ms,
+                    created_at: row.created_at,
+                })
+                .collect(),
+            page_size,
+            next_cursor,
+            page.has_more,
+        ))
     }
 
     pub async fn list_control_nodes(
         &self,
         environment: Option<String>,
-        limit: u32,
-    ) -> Result<Vec<ControlNodeRecord>, ApiProblem> {
-        self.repository
-            .list_control_nodes(environment, limit)
+        params: OffsetListPageParams,
+    ) -> Result<SdkWorkPageData<ControlNodeRecord>, ApiProblem> {
+        let page = self
+            .repository
+            .list_control_nodes(environment, params)
             .await
-            .map_err(map_repository_error)
-            .map(|rows| {
-                rows.into_iter()
-                    .map(|row| ControlNodeRecord {
-                        node_id: row.node_id,
-                        region: row.region,
-                        base_url: row.base_url,
-                        environment: row.environment,
-                        status: row.status,
-                        last_heartbeat_at: row.last_heartbeat_at,
-                        created_at: row.created_at,
-                        updated_at: row.updated_at,
-                    })
-                    .collect()
-            })
+            .map_err(map_repository_error)?;
+        Ok(offset_page(
+            page.items
+                .into_iter()
+                .map(|row| ControlNodeRecord {
+                    node_id: row.node_id,
+                    region: row.region,
+                    base_url: row.base_url,
+                    environment: row.environment,
+                    status: row.status,
+                    last_heartbeat_at: row.last_heartbeat_at,
+                    created_at: row.created_at,
+                    updated_at: row.updated_at,
+                })
+                .collect(),
+            page.total_items,
+            params,
+        ))
     }
 
     pub async fn register_control_node(
@@ -300,7 +338,6 @@ impl WebFrameworkAdminService {
     ) -> Result<RegisterControlNodeOutcome, ApiProblem> {
         validate_control_node_register(&body)?;
         let region = body.region.unwrap_or_else(|| "default".to_owned());
-        // Repository returns `(record, created)` atomically — no TOCTOU pre-check.
         let (record, created) = self
             .repository
             .register_control_node(
@@ -384,5 +421,16 @@ impl WebFrameworkAdminService {
             recommended_production_sqlx: WebFrameworkOptionalFeatures::production_sqlx(),
             development: WebFrameworkOptionalFeatures::development(),
         }
+    }
+
+    pub fn map_keyset_page_size(
+        page_size: Option<i32>,
+        legacy_limit: Option<i32>,
+    ) -> Result<u32, ApiProblem> {
+        validated_keyset_page_size(page_size, legacy_limit).map_err(Self::map_pagination_error)
+    }
+
+    pub fn map_keyset_cursor(cursor: Option<&str>) -> Result<Option<i64>, ApiProblem> {
+        parse_keyset_id_cursor(cursor).map_err(Self::map_pagination_error)
     }
 }

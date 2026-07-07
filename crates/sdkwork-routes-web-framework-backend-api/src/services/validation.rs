@@ -163,15 +163,6 @@ pub fn validate_control_node_register(body: &RegisterControlNodeRequest) -> Resu
     Ok(())
 }
 
-pub fn validate_list_limit(limit: Option<u32>) -> Result<u32, ApiProblem> {
-    match limit {
-        None => Ok(50),
-        Some(0) => Err(ApiProblem::bad_request("limit must be greater than zero")),
-        Some(value) if value > 200 => Ok(200),
-        Some(value) => Ok(value),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -255,15 +246,5 @@ mod tests {
             allow_credentials: false,
         };
         assert!(validate_cors_upsert(&body).is_err());
-    }
-
-    #[test]
-    fn rejects_zero_list_limit() {
-        assert!(validate_list_limit(Some(0)).is_err());
-    }
-
-    #[test]
-    fn caps_list_limit_at_two_hundred() {
-        assert_eq!(200, validate_list_limit(Some(500)).expect("limit"));
     }
 }

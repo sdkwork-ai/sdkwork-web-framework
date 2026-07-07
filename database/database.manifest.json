@@ -6,9 +6,10 @@
   "displayName": "WEB_STORE Database",
   "owner": "web-framework-platform",
   "engines": [
+    "sqlite",
     "postgres"
   ],
-  "defaultEngine": "postgres",
+  "defaultEngine": "sqlite",
   "tablePrefix": "web_",
   "contractVersion": "1.0.0",
   "baselineStrategy": "baseline-plus-migrations",

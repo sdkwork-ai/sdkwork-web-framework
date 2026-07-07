@@ -16,7 +16,7 @@ use std::sync::Arc;
 #[cfg(feature = "admin-api")]
 use sdkwork_web_core::DynamicPolicyCaches;
 #[cfg(feature = "admin-api")]
-use sqlx::SqlitePool;
+use sdkwork_web_framework_admin_repository_sqlx::AdminStorePool;
 
 use crate::health::{CompositeReadinessCheck, ReadinessCheck};
 use crate::lifecycle::{NoOpWebFrameworkLifecycle, WebFrameworkLifecycle};
@@ -47,7 +47,7 @@ where
     dynamic_tenant_runtime_profile_source: Option<Arc<dyn DynamicTenantRuntimeProfileSource>>,
     optional_features: WebFrameworkOptionalFeatures,
     #[cfg(feature = "admin-api")]
-    admin_api_pool: Option<SqlitePool>,
+    admin_api_pool: Option<AdminStorePool>,
     #[cfg(feature = "admin-api")]
     admin_policy_caches: Option<Arc<DynamicPolicyCaches>>,
     route_manifest: Option<HttpRouteManifest>,
@@ -71,7 +71,7 @@ where
     shutdown_grace_period: Option<Duration>,
     lifecycle: Arc<dyn WebFrameworkLifecycle>,
     #[cfg(feature = "admin-api")]
-    pub admin_api_pool: Option<SqlitePool>,
+    pub admin_api_pool: Option<AdminStorePool>,
     #[cfg(feature = "admin-api")]
     admin_policy_caches: Option<Arc<DynamicPolicyCaches>>,
 }
@@ -226,11 +226,13 @@ where
     }
 
     #[cfg(feature = "admin-api")]
-    pub fn enable_admin_api(mut self, pool: SqlitePool) -> Self {
+    pub fn enable_admin_api(mut self, pool: AdminStorePool) -> Self {
         if self.readiness_check.is_none() {
-            self.readiness_check = Some(Arc::new(
-                crate::sqlx_readiness::SqliteReadinessCheck::new(pool.clone()),
-            ));
+            self.readiness_check = Some(match pool.clone() {
+                AdminStorePool::Sqlite(sqlite) => {
+                    Arc::new(crate::sqlx_readiness::SqliteReadinessCheck::new(sqlite))
+                }
+            });
         }
         self.admin_api_pool = Some(pool);
         self

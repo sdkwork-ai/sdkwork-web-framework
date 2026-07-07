@@ -27,7 +27,7 @@ WebRequestContext                          # 每个 HTTP 请求一个（Clone）
 ├── api_surface: WebApiSurface
 ├── auth_mode: WebAuthMode
 ├── transport: WebTransportFacts           # path/method/凭证存在性（只读快照）
-├── locale: Option<WebLocale>
+├── locale: WebLocaleContext
 ├── client_kind: Option<WebClientKind>       # UA 推断；JSON 字段 clientKind
 ├── operation: Option<WebOperationBinding> # 可选：绑定 operationId
 └── principal: Option<WebRequestPrincipal> # 见 §3.3 / WEB_FRAMEWORK_STANDARD P5
@@ -69,7 +69,7 @@ pub struct WebRequestContext {
     pub principal: Option<WebRequestPrincipal>,
 
     /// Accept-Language 解析结果。
-    pub locale: Option<WebLocale>,
+    pub locale: WebLocaleContext,
 
     /// 客户端形态推断（UA / 自定义头，可选）。序列化名 `clientKind`。
     pub client_kind: Option<WebClientKind>,
@@ -130,6 +130,28 @@ pub enum WebAuthMode {
     ApiKey,      // open-api（X-Api-Key）
     OAuth,       // open-api（Authorization: Bearer）
     DualToken,   // app-api / backend-api
+}
+
+pub struct WebLocaleContext {
+    pub requested_locale: Option<LocaleTag>,
+    pub effective_locale: LocaleTag,
+    pub fallback_locale: LocaleTag,
+    pub supported_locales: Vec<LocaleTag>,
+    pub active_locales: Vec<LocaleTag>,
+    pub source: WebLocaleSource,
+    pub catalog_version: Option<String>,
+    pub message_bundle_version: Option<String>,
+    pub timezone: Option<String>,
+    pub numbering_system: Option<String>,
+}
+
+pub enum WebLocaleSource {
+    UserPreference,
+    TenantPreference,
+    AppDefault,
+    AcceptLanguage,
+    SdkHeader,
+    SystemDefault,
 }
 
 pub enum WebClientKind {

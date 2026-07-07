@@ -1,6 +1,7 @@
 pub mod dto;
 pub mod handlers;
 pub mod manifest;
+pub mod pagination;
 pub mod paths;
 pub mod persistence;
 pub mod response;
@@ -15,8 +16,8 @@ pub use routes::{build_admin_router, build_admin_router_with_options};
 pub use state::WebFrameworkAdminState;
 
 use axum::Router;
-use sqlx::SqlitePool;
+use sdkwork_web_framework_admin_repository_sqlx::AdminStorePool;
 
-pub fn gateway_mount(pool: SqlitePool) -> Router {
+pub fn gateway_mount(pool: AdminStorePool) -> Router {
     build_admin_router(pool)
 }

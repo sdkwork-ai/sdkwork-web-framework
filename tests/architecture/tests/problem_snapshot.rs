@@ -20,7 +20,7 @@ fn problem_json_snapshot_missing_credentials() {
     let error = WebFrameworkError::missing_credentials("Access-Token header is required");
     let payload = render_problem(error, Some("req-snapshot-1"));
     assert_eq!(
-        "https://sdkwork.dev/problems/missing-credentials",
+        "https://docs.sdkwork.com/problems/40101",
         payload["type"].as_str().unwrap()
     );
     assert_eq!(401, payload["status"].as_u64().unwrap());
@@ -47,7 +47,7 @@ fn problem_json_snapshot_not_found() {
     let error = WebFrameworkError::not_found("control node missing");
     let payload = render_problem(error, Some("req-snapshot-404"));
     assert_eq!(
-        "https://sdkwork.dev/problems/not-found",
+        "https://docs.sdkwork.com/problems/40401",
         payload["type"].as_str().unwrap()
     );
     assert_eq!(404, payload["status"].as_u64().unwrap());
@@ -60,7 +60,7 @@ fn problem_json_snapshot_not_implemented() {
     let error = WebFrameworkError::not_implemented("handler is not mounted");
     let payload = render_problem(error, Some("req-snapshot-501"));
     assert_eq!(
-        "https://sdkwork.dev/problems/not-implemented",
+        "https://docs.sdkwork.com/problems/50001",
         payload["type"].as_str().unwrap()
     );
     assert_eq!(501, payload["status"].as_u64().unwrap());
@@ -73,7 +73,7 @@ fn problem_json_snapshot_internal_server_error() {
     let error = WebFrameworkError::internal_server_error("unexpected failure");
     let payload = render_problem(error, None);
     assert_eq!(
-        "https://sdkwork.dev/problems/internal-server-error",
+        "https://docs.sdkwork.com/problems/50001",
         payload["type"].as_str().unwrap()
     );
     assert_eq!(500, payload["status"].as_u64().unwrap());
@@ -84,7 +84,7 @@ fn problem_json_snapshot_dependency_unavailable() {
     let error = WebFrameworkError::dependency_unavailable("database operation failed");
     let payload = render_problem(error, Some("req-snapshot-503"));
     assert_eq!(
-        "https://sdkwork.dev/problems/dependency-unavailable",
+        "https://docs.sdkwork.com/problems/50301",
         payload["type"].as_str().unwrap()
     );
     assert_eq!(503, payload["status"].as_u64().unwrap());
@@ -95,7 +95,7 @@ fn problem_json_snapshot_conflict() {
     let error = WebFrameworkError::conflict("idempotency fingerprint mismatch");
     let payload = render_problem(error, Some("req-snapshot-409"));
     assert_eq!(
-        "https://sdkwork.dev/problems/conflict",
+        "https://docs.sdkwork.com/problems/40901",
         payload["type"].as_str().unwrap()
     );
     assert_eq!(409, payload["status"].as_u64().unwrap());
@@ -106,7 +106,7 @@ fn problem_json_snapshot_payload_too_large() {
     let error = WebFrameworkError::payload_too_large("request body exceeds limit");
     let payload = render_problem(error, Some("req-snapshot-413"));
     assert_eq!(
-        "https://sdkwork.dev/problems/payload-too-large",
+        "https://docs.sdkwork.com/problems/41301",
         payload["type"].as_str().unwrap()
     );
     assert_eq!(413, payload["status"].as_u64().unwrap());
@@ -119,7 +119,7 @@ fn problem_json_snapshot_invalid_credentials() {
     let error = WebFrameworkError::invalid_credentials("token signature invalid");
     let payload = render_problem(error, None);
     assert_eq!(
-        "https://sdkwork.dev/problems/invalid-credentials",
+        "https://docs.sdkwork.com/problems/40103",
         payload["type"].as_str().unwrap()
     );
     assert_eq!(401, payload["status"].as_u64().unwrap());
@@ -130,7 +130,7 @@ fn problem_json_snapshot_bad_request() {
     let error = WebFrameworkError::bad_request("environment must not be empty");
     let payload = render_problem(error, None);
     assert_eq!(
-        "https://sdkwork.dev/problems/bad-request",
+        "https://docs.sdkwork.com/problems/40001",
         payload["type"].as_str().unwrap()
     );
     assert_eq!(400, payload["status"].as_u64().unwrap());
@@ -141,7 +141,7 @@ fn problem_json_snapshot_method_not_allowed() {
     let error = WebFrameworkError::method_not_allowed("PATCH is not supported");
     let payload = render_problem(error, None);
     assert_eq!(
-        "https://sdkwork.dev/problems/method-not-allowed",
+        "https://docs.sdkwork.com/problems/40501",
         payload["type"].as_str().unwrap()
     );
     assert_eq!(405, payload["status"].as_u64().unwrap());
@@ -152,7 +152,7 @@ fn problem_json_snapshot_request_timeout() {
     let error = WebFrameworkError::request_timeout("request exceeded deadline");
     let payload = render_problem(error, Some("req-snapshot-timeout"));
     assert_eq!(
-        "https://sdkwork.dev/problems/request-timeout",
+        "https://docs.sdkwork.com/problems/40801",
         payload["type"].as_str().unwrap()
     );
     assert_eq!(408, payload["status"].as_u64().unwrap());
@@ -164,7 +164,7 @@ fn problem_json_snapshot_context_not_injected() {
     let error = WebFrameworkError::context_not_injected();
     let payload = render_problem(error, None);
     assert_eq!(
-        "https://sdkwork.dev/problems/context-not-injected",
+        "https://docs.sdkwork.com/problems/50001",
         payload["type"].as_str().unwrap()
     );
     assert_eq!(500, payload["status"].as_u64().unwrap());
@@ -202,7 +202,7 @@ fn problem_json_snapshot_websocket_rejected() {
     let error = WebFrameworkError::websocket_rejected("upgrade denied");
     let payload = render_problem(error, None);
     assert_eq!(
-        "https://sdkwork.dev/problems/websocket-rejected",
+        "https://docs.sdkwork.com/problems/40001",
         payload["type"].as_str().unwrap()
     );
     assert_eq!(400, payload["status"].as_u64().unwrap());
@@ -227,7 +227,7 @@ fn problem_json_snapshot_rate_limit_includes_retry_after() {
         Some("req-snapshot-429"),
     );
     assert_eq!(
-        "https://sdkwork.dev/problems/rate-limit-exceeded",
+        "https://docs.sdkwork.com/problems/42901",
         payload["type"].as_str().unwrap()
     );
     assert_eq!(429, payload["status"].as_u64().unwrap());

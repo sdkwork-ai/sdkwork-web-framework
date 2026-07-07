@@ -21,7 +21,12 @@ fn protected_app(pool: sqlx::SqlitePool) -> Router {
     let layer = TestRuntimeBuilder::new(DefaultWebRequestContextResolver::default())
         .build_layer()
         .with_authorization_policy(Arc::new(ManifestAuthorizationPolicy::new(manifest)));
-    with_web_request_context(build_admin_router(pool.clone()), layer)
+    with_web_request_context(
+        build_admin_router(
+            sdkwork_web_framework_admin_repository_sqlx::AdminStorePool::Sqlite(pool.clone()),
+        ),
+        layer,
+    )
 }
 
 fn dual_token_request(method: &str, uri: &str, body: Option<&str>) -> Request<Body> {
@@ -64,11 +69,19 @@ fn control_node_heartbeat(node_id: &str) -> String {
     paths::control_nodes::HEARTBEAT.replace("{nodeId}", node_id)
 }
 
-fn audit_events_query(limit: Option<u32>) -> String {
-    match limit {
-        Some(value) => format!("{}?limit={value}", paths::audit_events::PATH),
+fn audit_events_query(page_size: Option<u32>) -> String {
+    match page_size {
+        Some(value) => format!("{}?page_size={value}", paths::audit_events::PATH),
         None => paths::audit_events::PATH.to_owned(),
     }
+}
+
+fn list_items(payload: &serde_json::Value) -> Vec<&serde_json::Value> {
+    payload["data"]["items"]
+        .as_array()
+        .expect("data.items array")
+        .iter()
+        .collect()
 }
 
 #[tokio::test]
@@ -361,7 +374,7 @@ async fn admin_api_returns_not_found_for_missing_control_node() {
     assert_eq!(StatusCode::NOT_FOUND, response.status());
     let payload = response_json(response).await;
     assert_eq!(
-        "https://sdkwork.dev/problems/not-found",
+        "https://docs.sdkwork.com/problems/40401",
         payload["type"].as_str().unwrap()
     );
 }
@@ -396,7 +409,7 @@ async fn admin_api_audit_events_exclude_null_tenant_rows_for_tenant_admin() {
         .unwrap();
     assert_eq!(StatusCode::OK, response.status());
     let payload = response_json(response).await;
-    let rows = payload["data"].as_array().expect("audit rows");
+    let rows = list_items(&payload);
     assert_eq!(1, rows.len());
     assert_eq!("100001", rows[0]["tenantId"].as_str().unwrap());
 }
@@ -424,7 +437,7 @@ async fn admin_api_platform_read_can_list_global_audit_rows() {
         .unwrap();
     assert_eq!(StatusCode::OK, response.status());
     let payload = response_json(response).await;
-    let rows = payload["data"].as_array().expect("audit rows");
+    let rows = list_items(&payload);
     assert_eq!(1, rows.len());
     assert!(rows[0]["tenantId"].is_null());
 }
@@ -442,7 +455,7 @@ async fn admin_api_maps_database_errors_to_503_problem_json() {
     let payload = response_json(response).await;
     assert_eq!(503, payload["status"].as_u64().unwrap());
     assert_eq!(
-        "https://sdkwork.dev/problems/dependency-unavailable",
+        "https://docs.sdkwork.com/problems/50301",
         payload["type"].as_str().unwrap()
     );
 }
@@ -575,7 +588,7 @@ async fn admin_api_rejects_empty_tenant_id_on_upsert() {
 }
 
 #[tokio::test]
-async fn admin_api_rejects_zero_list_limit() {
+async fn admin_api_rejects_zero_page_size() {
     let pool = test_pool().await;
     let app = protected_app(pool);
     let response = app
@@ -605,7 +618,7 @@ async fn seed_tenant_audit_rows(pool: &sqlx::SqlitePool, count: usize) {
 }
 
 #[tokio::test]
-async fn admin_api_defaults_list_limit_to_fifty() {
+async fn admin_api_defaults_page_size_to_twenty() {
     let pool = test_pool().await;
     seed_tenant_audit_rows(&pool, 60).await;
     let app = protected_app(pool);
@@ -615,12 +628,16 @@ async fn admin_api_defaults_list_limit_to_fifty() {
         .unwrap();
     assert_eq!(StatusCode::OK, response.status());
     let payload = response_json(response).await;
-    let rows = payload["data"].as_array().expect("audit rows");
-    assert_eq!(50, rows.len());
+    let rows = list_items(&payload);
+    assert_eq!(20, rows.len());
+    assert_eq!(
+        "cursor",
+        payload["data"]["pageInfo"]["mode"].as_str().unwrap()
+    );
 }
 
 #[tokio::test]
-async fn admin_api_caps_list_limit_at_two_hundred() {
+async fn admin_api_rejects_page_size_above_two_hundred() {
     let pool = test_pool().await;
     seed_tenant_audit_rows(&pool, 210).await;
     let app = protected_app(pool);
@@ -632,10 +649,27 @@ async fn admin_api_caps_list_limit_at_two_hundred() {
         ))
         .await
         .unwrap();
+    assert_eq!(StatusCode::BAD_REQUEST, response.status());
+}
+
+#[tokio::test]
+async fn admin_api_keyset_page_size_two_hundred_returns_up_to_two_hundred() {
+    let pool = test_pool().await;
+    seed_tenant_audit_rows(&pool, 210).await;
+    let app = protected_app(pool);
+    let response = app
+        .oneshot(dual_token_request(
+            "GET",
+            &audit_events_query(Some(200)),
+            None,
+        ))
+        .await
+        .unwrap();
     assert_eq!(StatusCode::OK, response.status());
     let payload = response_json(response).await;
-    let rows = payload["data"].as_array().expect("audit rows");
+    let rows = list_items(&payload);
     assert_eq!(200, rows.len());
+    assert!(payload["data"]["pageInfo"]["hasMore"].as_bool().unwrap());
 }
 
 #[tokio::test]
@@ -685,7 +719,7 @@ async fn admin_api_lists_cors_policies() {
         .await
         .unwrap();
     assert_eq!(StatusCode::OK, response.status());
-    assert!(response_json(response).await["data"].is_array());
+    assert!(response_json(response).await["data"]["items"].is_array());
 }
 
 #[tokio::test]
@@ -697,7 +731,7 @@ async fn admin_api_lists_rate_limit_policies() {
         .await
         .unwrap();
     assert_eq!(StatusCode::OK, response.status());
-    assert!(response_json(response).await["data"].is_array());
+    assert!(response_json(response).await["data"]["items"].is_array());
 }
 
 #[tokio::test]
@@ -709,7 +743,7 @@ async fn admin_api_lists_tenant_runtime_profiles() {
         .await
         .unwrap();
     assert_eq!(StatusCode::OK, response.status());
-    assert!(response_json(response).await["data"].is_array());
+    assert!(response_json(response).await["data"]["items"].is_array());
 }
 
 #[tokio::test]
@@ -726,7 +760,7 @@ async fn admin_api_lists_control_nodes() {
         .await
         .unwrap();
     assert_eq!(StatusCode::OK, response.status());
-    assert!(response_json(response).await["data"].is_array());
+    assert!(response_json(response).await["data"]["items"].is_array());
 }
 
 #[tokio::test]
@@ -759,7 +793,11 @@ async fn admin_api_control_plane_can_list_security_events() {
         .unwrap();
     assert_eq!(StatusCode::OK, response.status());
     let payload = response_json(response).await;
-    assert!(payload["data"].is_array());
+    assert!(payload["data"]["items"].is_array());
+    assert_eq!(
+        "cursor",
+        payload["data"]["pageInfo"]["mode"].as_str().unwrap()
+    );
 }
 
 #[tokio::test]
@@ -793,7 +831,7 @@ async fn admin_api_security_event_scope_narrows_to_requested_tenant() {
         .unwrap();
     assert_eq!(StatusCode::OK, response.status());
     let payload = response_json(response).await;
-    let rows = payload["data"].as_array().expect("array");
+    let rows = list_items(&payload);
     assert_eq!(1, rows.len());
     assert_eq!("100001", rows[0]["tenantId"].as_str().expect("tenant_id"));
 
@@ -808,7 +846,7 @@ async fn admin_api_security_event_scope_narrows_to_requested_tenant() {
         .await
         .unwrap();
     let payload = response_json(response).await;
-    let rows = payload["data"].as_array().expect("array");
+    let rows = list_items(&payload);
     assert_eq!(3, rows.len());
 }
 
@@ -832,7 +870,10 @@ async fn admin_api_security_event_rejects_tenant_admin() {
 async fn admin_api_rejects_cross_tenant_audit_query_for_tenant_admin() {
     let pool = test_pool().await;
     let app = protected_app(pool);
-    let uri = format!("{}?tenant_id=100002&limit=10", paths::audit_events::PATH);
+    let uri = format!(
+        "{}?tenant_id=100002&page_size=10",
+        paths::audit_events::PATH
+    );
     let response = app
         .oneshot(dual_token_request("GET", &uri, None))
         .await

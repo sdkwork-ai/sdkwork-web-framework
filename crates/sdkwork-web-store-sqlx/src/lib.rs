@@ -67,6 +67,35 @@ pub async fn connect_sqlite(
     Ok(pool)
 }
 
+/// Open a PostgreSQL pool through `sdkwork-database-sqlx`, run embedded migrations, and return it.
+#[cfg(feature = "postgres")]
+pub async fn connect_postgres(
+    database_url: &str,
+    max_connections: u32,
+) -> Result<sqlx::PgPool, sqlx::Error> {
+    let mut config = DatabaseConfig {
+        engine: DatabaseEngine::Postgres,
+        url: database_url.to_string(),
+        mode: DeploymentMode::Standalone,
+        max_connections: max_connections.max(1),
+        ..DatabaseConfig::default()
+    };
+    config.postgres.application_name = Some("sdkwork-web-store".to_owned());
+
+    let db_pool = PoolBuilder::new(config)
+        .build()
+        .await
+        .map_err(|error| sqlx::Error::Configuration(error.to_string().into()))?;
+
+    let pool = db_pool
+        .as_postgres()
+        .cloned()
+        .ok_or_else(|| sqlx::Error::Configuration("expected postgres pool".into()))?;
+
+    sqlx::migrate!("./migrations").run(&pool).await?;
+    Ok(pool)
+}
+
 // ---- Shared factory functions (SQLite) ----
 
 pub fn shared_idempotency_store(

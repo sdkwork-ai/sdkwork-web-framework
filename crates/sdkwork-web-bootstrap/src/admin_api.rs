@@ -2,17 +2,17 @@ use axum::Router;
 use sdkwork_routes_web_framework_backend_api::build_admin_router_with_options;
 use sdkwork_web_axum::{with_web_request_context, WebFrameworkLayer};
 use sdkwork_web_core::{DynamicPolicyCaches, WebRequestContextResolver};
-use sqlx::SqlitePool;
+use sdkwork_web_framework_admin_repository_sqlx::AdminStorePool;
 use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct WebFrameworkAdminMount {
-    pool: SqlitePool,
+    pool: AdminStorePool,
     policy_caches: Option<Arc<DynamicPolicyCaches>>,
 }
 
 impl WebFrameworkAdminMount {
-    pub fn new(pool: SqlitePool) -> Self {
+    pub fn new(pool: AdminStorePool) -> Self {
         Self {
             pool,
             policy_caches: None,
@@ -37,7 +37,7 @@ impl WebFrameworkAdminMount {
 
 pub fn mount_web_framework_admin_api<R>(
     router: Router,
-    pool: SqlitePool,
+    pool: AdminStorePool,
     layer: WebFrameworkLayer<R>,
     policy_caches: Option<Arc<DynamicPolicyCaches>>,
 ) -> Router

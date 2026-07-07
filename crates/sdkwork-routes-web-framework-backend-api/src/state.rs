@@ -1,9 +1,8 @@
 use crate::services::WebFrameworkAdminService;
 use sdkwork_web_core::DynamicPolicyCaches;
 use sdkwork_web_framework_admin_repository_sqlx::{
-    SqlxWebFrameworkAdminRepository, WebFrameworkAdminRepository,
+    AdminStorePool, SqlxWebFrameworkAdminRepository, WebFrameworkAdminRepository,
 };
-use sqlx::SqlitePool;
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -12,8 +11,12 @@ pub struct WebFrameworkAdminState {
 }
 
 impl WebFrameworkAdminState {
-    pub fn new(pool: SqlitePool) -> Self {
+    pub fn new(pool: AdminStorePool) -> Self {
         Self::from_repository(Arc::new(SqlxWebFrameworkAdminRepository::new(pool)))
+    }
+
+    pub fn from_sqlite(pool: sqlx::SqlitePool) -> Self {
+        Self::new(AdminStorePool::Sqlite(pool))
     }
 
     pub fn from_repository(repository: Arc<dyn WebFrameworkAdminRepository>) -> Self {
