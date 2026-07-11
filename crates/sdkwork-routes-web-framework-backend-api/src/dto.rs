@@ -173,15 +173,15 @@ pub struct OptionalFeaturesSnapshot {
     pub development: sdkwork_web_core::WebFrameworkOptionalFeatures,
 }
 
-/// Offset-mode admin list query (`page` + `page_size`; legacy `limit` alias).
+/// Offset-mode admin list query (`page` + `page_size`).
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(default)]
 pub struct AdminOffsetListQuery {
     pub environment: Option<String>,
     pub tenant_id: Option<String>,
     pub page: Option<i64>,
-    #[serde(alias = "page_size", alias = "pageSize")]
     pub page_size: Option<i64>,
+    #[serde(alias = "limit")]
     pub limit: Option<i64>,
 }
 
@@ -192,8 +192,8 @@ pub struct AdminKeysetListQuery {
     pub environment: Option<String>,
     pub tenant_id: Option<String>,
     pub cursor: Option<String>,
-    #[serde(alias = "page_size", alias = "pageSize")]
     pub page_size: Option<i32>,
+    #[serde(alias = "limit")]
     pub limit: Option<i32>,
 }
 
@@ -210,7 +210,7 @@ mod tests {
             ..AdminOffsetListQuery::default()
         };
         let params =
-            validated_offset_params(query.page, query.page_size, query.limit).expect("params");
+            validated_offset_params(query.page, query.page_size, query.page_size).expect("params");
         assert_eq!(2, params.page);
         assert_eq!(10, params.page_size);
 

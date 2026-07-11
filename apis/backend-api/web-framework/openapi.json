@@ -305,7 +305,7 @@
           },
           {
             "in": "query",
-            "name": "limit",
+            "name": "page_size",
             "required": false,
             "deprecated": true,
             "description": "Legacy alias for page_size (cursor mode).",
@@ -450,7 +450,7 @@
           },
           {
             "in": "query",
-            "name": "limit",
+            "name": "page_size",
             "required": false,
             "deprecated": true,
             "description": "Legacy alias for page_size (offset mode).",
@@ -898,7 +898,7 @@
           },
           {
             "in": "query",
-            "name": "limit",
+            "name": "page_size",
             "required": false,
             "deprecated": true,
             "description": "Legacy alias for page_size (offset mode).",
@@ -1224,7 +1224,7 @@
           },
           {
             "in": "query",
-            "name": "limit",
+            "name": "page_size",
             "required": false,
             "deprecated": true,
             "description": "Legacy alias for page_size (offset mode).",
@@ -1525,7 +1525,7 @@
           },
           {
             "in": "query",
-            "name": "limit",
+            "name": "page_size",
             "required": false,
             "deprecated": true,
             "description": "Legacy alias for page_size (cursor mode).",
@@ -1675,7 +1675,7 @@
           },
           {
             "in": "query",
-            "name": "limit",
+            "name": "page_size",
             "required": false,
             "deprecated": true,
             "description": "Legacy alias for page_size (offset mode).",

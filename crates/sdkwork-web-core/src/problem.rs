@@ -122,6 +122,13 @@ pub fn enrich_problem_detail_value(
             payload["operationId"] = serde_json::Value::String(operation_id.to_owned());
         }
     }
+    if field_missing(payload, "i18nKey") {
+        // API_SPEC.md §15.2: SDKWork-owned problem details SHOULD include i18nKey
+        // when a safe localized message exists. The standard key is errors.result.<code>.
+        if let Some(code) = payload.get("code").and_then(|v| v.as_i64()) {
+            payload["i18nKey"] = serde_json::Value::String(format!("errors.result.{}", code));
+        }
+    }
 }
 
 /// Enriches an HTTP response body when it is `application/problem+json`.
