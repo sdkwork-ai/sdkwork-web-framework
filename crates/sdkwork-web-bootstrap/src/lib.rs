@@ -26,8 +26,8 @@ mod tracing_init;
 #[cfg(feature = "admin-api")]
 pub use admin_api::{mount_web_framework_admin_api, WebFrameworkAdminMount};
 pub use env_config::{
-    cors_allowed_origins_from_env, security_policy_for_environment, web_environment_from_env,
-    WebFrameworkEnv,
+    application_cors_layer_from_env, cors_allowed_origins_from_env,
+    security_policy_for_environment, web_environment_from_env, WebFrameworkEnv,
 };
 pub use fallback::{contract_fallback_handler, ContractFallbackConfig};
 pub use framework::{WebFramework, WebFrameworkBuilder};

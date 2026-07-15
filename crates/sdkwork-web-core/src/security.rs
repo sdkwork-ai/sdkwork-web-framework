@@ -1,8 +1,12 @@
 use crate::error::WebFrameworkError;
 use axum::extract::Request;
-use axum::http::{HeaderName, HeaderValue, Method};
+use axum::http::{HeaderName, HeaderValue, Method, Uri};
 use axum::response::Response;
 use percent_encoding::percent_decode_str;
+use std::net::IpAddr;
+
+const DEVELOPMENT_PRIVATE_NETWORK_HTTP_ORIGIN: &str = "http://private-network:*";
+const DEVELOPMENT_PRIVATE_NETWORK_HTTPS_ORIGIN: &str = "https://private-network:*";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CorsPolicy {
@@ -264,6 +268,20 @@ impl CorsPolicy {
         }
     }
 
+    /// Development policy for browser apps served from loopback or dynamically assigned
+    /// private-network IP addresses on arbitrary numeric dev-server ports.
+    ///
+    /// The private-network markers are framework directives, never response origins, and are
+    /// rejected by `validate_for_production` through the production wildcard guard.
+    pub fn development_private_network() -> Self {
+        let mut policy = Self::development_loopback();
+        policy.allowed_origins.extend([
+            DEVELOPMENT_PRIVATE_NETWORK_HTTP_ORIGIN.to_owned(),
+            DEVELOPMENT_PRIVATE_NETWORK_HTTPS_ORIGIN.to_owned(),
+        ]);
+        policy
+    }
+
     pub fn validate_origin(&self, request: &Request) -> Result<(), WebFrameworkError> {
         let Some(origin) = request
             .headers()
@@ -328,6 +346,10 @@ impl CorsPolicy {
         ))
     }
 
+    pub fn allows_origin_value(&self, origin: &str) -> bool {
+        self.allows_origin(origin)
+    }
+
     pub fn apply_headers_from_origin(&self, origin: Option<&str>, response: &mut Response) {
         let Some(origin) = origin.map(str::trim).filter(|value| !value.is_empty()) else {
             return;
@@ -340,6 +362,7 @@ impl CorsPolicy {
                 HeaderName::from_static("access-control-allow-origin"),
                 value,
             );
+            merge_vary_origin(response);
         }
         if self.allow_credentials {
             response.headers_mut().insert(
@@ -389,6 +412,18 @@ fn origin_matches_allowed(allowed: &str, origin: &str) -> bool {
         return true;
     }
 
+    if matches!(
+        allowed,
+        DEVELOPMENT_PRIVATE_NETWORK_HTTP_ORIGIN | DEVELOPMENT_PRIVATE_NETWORK_HTTPS_ORIGIN
+    ) {
+        let required_scheme = if allowed == DEVELOPMENT_PRIVATE_NETWORK_HTTP_ORIGIN {
+            "http"
+        } else {
+            "https"
+        };
+        return is_development_private_network_origin_with_scheme(origin, required_scheme);
+    }
+
     let Some(base) = allowed.strip_suffix(":*") else {
         return false;
     };
@@ -411,6 +446,64 @@ fn origin_matches_allowed(allowed: &str, origin: &str) -> bool {
         return origin == base;
     };
     !port.is_empty() && port.bytes().all(|value| value.is_ascii_digit())
+}
+
+/// Returns whether an Origin is an HTTP(S) loopback/private-network IP origin.
+/// Hostnames and public IP addresses are intentionally excluded.
+pub fn is_development_private_network_origin(origin: &str) -> bool {
+    is_development_private_network_origin_with_scheme(origin, "http")
+        || is_development_private_network_origin_with_scheme(origin, "https")
+}
+
+fn is_development_private_network_origin_with_scheme(origin: &str, scheme: &str) -> bool {
+    let Ok(uri) = origin.parse::<Uri>() else {
+        return false;
+    };
+    if uri.scheme_str() != Some(scheme)
+        || uri.authority().is_none()
+        || uri.path() != "/"
+        || uri.query().is_some()
+    {
+        return false;
+    }
+    let Some(host) = uri.host() else {
+        return false;
+    };
+    let normalized_host = host.trim_start_matches('[').trim_end_matches(']');
+    let Ok(ip) = normalized_host.parse::<IpAddr>() else {
+        return false;
+    };
+    match ip {
+        IpAddr::V4(address) => address.is_private() || address.is_loopback(),
+        IpAddr::V6(address) => address.is_unique_local() || address.is_loopback(),
+    }
+}
+
+fn merge_vary_origin(response: &mut Response) {
+    let headers = response.headers_mut();
+    let Some(existing) = headers.get("vary") else {
+        headers.insert(
+            HeaderName::from_static("vary"),
+            HeaderValue::from_static("Origin"),
+        );
+        return;
+    };
+    let Ok(existing_text) = existing.to_str() else {
+        headers.insert(
+            HeaderName::from_static("vary"),
+            HeaderValue::from_static("Origin"),
+        );
+        return;
+    };
+    if existing_text
+        .split(',')
+        .any(|value| value.trim().eq_ignore_ascii_case("origin"))
+    {
+        return;
+    }
+    if let Ok(value) = HeaderValue::from_str(&format!("{existing_text}, Origin")) {
+        headers.insert(HeaderName::from_static("vary"), value);
+    }
 }
 
 impl RequestSecurityPolicy for SecurityPolicy {
@@ -888,10 +981,62 @@ mod tests {
     }
 
     #[test]
+    fn development_private_network_accepts_dynamic_private_ip_origins() {
+        let policy = CorsPolicy::development_private_network();
+        for origin in [
+            "http://10.20.30.40:5173",
+            "https://172.16.20.5:8443",
+            "http://192.168.50.12:3901",
+            "https://[fd12:3456:789a::12]:3901",
+            "http://127.0.0.2:3901",
+        ] {
+            policy
+                .validate_origin_value(origin)
+                .expect("private-network origin should be accepted");
+        }
+    }
+
+    #[test]
+    fn development_private_network_rejects_public_ip_and_host_origins() {
+        let policy = CorsPolicy::development_private_network();
+        for origin in [
+            "http://203.0.113.10:3901",
+            "https://evil.example.com:3901",
+            "http://192.168.50.12:3901/path",
+            "http://172.32.0.1:3901",
+        ] {
+            policy
+                .validate_origin_value(origin)
+                .expect_err("untrusted origin should be rejected");
+        }
+    }
+
+    #[test]
+    fn cors_response_headers_vary_by_origin() {
+        let policy = CorsPolicy::development_private_network();
+        let mut response = Response::new(Body::empty());
+        policy.apply_headers_from_origin(Some("http://192.168.50.12:3901"), &mut response);
+        assert_eq!(
+            Some("http://192.168.50.12:3901"),
+            response
+                .headers()
+                .get("access-control-allow-origin")
+                .and_then(|value| value.to_str().ok()),
+        );
+        assert_eq!(
+            Some("Origin"),
+            response
+                .headers()
+                .get("vary")
+                .and_then(|value| value.to_str().ok()),
+        );
+    }
+
+    #[test]
     fn production_rejects_loopback_port_wildcards() {
-        let error = CorsPolicy::development_loopback()
+        let error = CorsPolicy::development_private_network()
             .validate_for_production()
-            .expect_err("port wildcards must be development-only");
+            .expect_err("loopback and private-network directives must be development-only");
         assert!(error.contains("port wildcard"));
     }
 

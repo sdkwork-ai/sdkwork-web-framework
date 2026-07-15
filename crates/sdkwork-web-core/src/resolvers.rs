@@ -226,16 +226,27 @@ where
             auth.subject_type.as_deref(),
             access.subject_type.as_deref(),
         )?;
-        if auth.login_scope != access.login_scope {
+        if auth.login_scope != access.login_scope
+            && auth.organization_id.is_some() == access.organization_id.is_some()
+        {
             return Err(WebFrameworkError::forbidden(
                 "auth token and access token login_scope contexts do not match",
             ));
         }
 
+        let tenant_id = auth
+            .tenant_id
+            .clone()
+            .unwrap_or_else(|| access.tenant_id.clone());
+        let (organization_id, login_scope) = match auth.organization_id.clone() {
+            Some(organization_id) => (Some(organization_id), auth.login_scope),
+            None => (access.organization_id.clone(), access.login_scope),
+        };
+
         Ok(WebRequestPrincipal::builder()
-            .tenant_id(access.tenant_id)
-            .login_scope(access.login_scope)
-            .organization_id(access.organization_id.or(auth.organization_id))
+            .tenant_id(tenant_id)
+            .login_scope(login_scope)
+            .organization_id(organization_id)
             .user_id(auth.user_id)
             .session_id(auth.session_id.or(access.session_id))
             .app_id(access.app_id)

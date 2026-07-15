@@ -36,7 +36,7 @@ pub fn security_policy_for_environment(
 ) -> SecurityPolicy {
     let mut policy = SecurityPolicy::default();
     if matches!(environment, WebEnvironment::Dev | WebEnvironment::Test) {
-        policy.cors = CorsPolicy::development_loopback();
+        policy.cors = CorsPolicy::development_private_network();
     }
     for origin in configured_origins {
         if !policy.cors.allowed_origins.contains(&origin) {
@@ -44,6 +44,16 @@ pub fn security_policy_for_environment(
         }
     }
     policy
+}
+
+pub fn application_cors_layer_from_env(
+    environment_keys: &[&str],
+    allowed_origin_keys: &[&str],
+) -> tower_http::cors::CorsLayer {
+    let environment = web_environment_from_env(environment_keys);
+    let origins = cors_allowed_origins_from_env(allowed_origin_keys);
+    let policy = security_policy_for_environment(&environment, origins);
+    sdkwork_web_axum::cors_layer_from_policy(policy.cors)
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -77,5 +87,40 @@ impl WebFrameworkEnv {
             otel_exporter_endpoint: env::var("OTEL_EXPORTER_OTLP_ENDPOINT").ok(),
             deployment_environment: env::var("SDKWORK_WEB_FRAMEWORK_ENV").ok(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::security_policy_for_environment;
+    use sdkwork_web_core::WebEnvironment;
+
+    #[test]
+    fn development_bootstrap_uses_shared_private_network_cors_policy() {
+        let policy = security_policy_for_environment(&WebEnvironment::Dev, Vec::new());
+        policy
+            .cors
+            .validate_origin_value("http://192.168.50.12:5173")
+            .expect("private-network development origin");
+        policy
+            .cors
+            .validate_origin_value("https://evil.example.com")
+            .expect_err("public hostname must remain rejected");
+    }
+
+    #[test]
+    fn production_bootstrap_keeps_exact_origin_allowlist() {
+        let policy = security_policy_for_environment(
+            &WebEnvironment::Prod,
+            ["https://console.example.com".to_owned()],
+        );
+        policy
+            .cors
+            .validate_origin_value("https://console.example.com")
+            .expect("configured production origin");
+        policy
+            .cors
+            .validate_origin_value("http://192.168.50.12:5173")
+            .expect_err("private-network development origin must not leak into production");
     }
 }

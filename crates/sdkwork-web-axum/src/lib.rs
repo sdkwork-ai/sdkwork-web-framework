@@ -1,10 +1,12 @@
 pub mod correlation;
+pub mod cors;
 pub mod extractors;
 pub mod middleware;
 pub mod timeout;
 pub mod websocket;
 
 pub use correlation::{problem_response_for_request, OwnedProblemCorrelation};
+pub use cors::{cors_layer_from_policy, CanonicalCorsLayer};
 pub use extractors::{RequireOpenApi, RequirePrincipal, WebRequestContextExtractor};
 pub use middleware::{
     with_server_request_identity, with_web_request_context, AppRequestContextLayer,

@@ -229,6 +229,64 @@ async fn default_dual_token_resolver_rejects_mismatched_tenant() {
 }
 
 #[tokio::test]
+async fn default_dual_token_resolver_prefers_auth_tenant_and_organization_context() {
+    let resolver = DefaultWebRequestContextResolver::default();
+    let auth_token = encode_unsigned_test_jwt(serde_json::json!({
+        "token_type": "auth",
+        "tenant_id": "100001",
+        "organization_id": "200001",
+        "login_scope": "ORGANIZATION",
+        "user_id": "1",
+        "session_id": "session-1",
+        "app_id": "appbase",
+        "auth_level": "password"
+    }));
+    let access_token = access_token_jwt("100001", "1", "session-1", "appbase");
+
+    let principal = resolver
+        .resolve_dual_token(&auth_token, &access_token)
+        .await
+        .expect("auth token context should fill access token omissions");
+
+    assert_eq!("100001", principal.tenant_id());
+    assert_eq!(Some("200001"), principal.organization_id());
+    assert_eq!(WebLoginScope::Organization, principal.login_scope());
+}
+
+#[tokio::test]
+async fn default_dual_token_resolver_falls_back_to_access_tenancy_context() {
+    let resolver = DefaultWebRequestContextResolver::default();
+    let auth_token = encode_unsigned_test_jwt(serde_json::json!({
+        "token_type": "auth",
+        "login_scope": "TENANT",
+        "user_id": "1",
+        "session_id": "session-1",
+        "app_id": "appbase",
+        "auth_level": "password"
+    }));
+    let access_token = encode_unsigned_test_jwt(serde_json::json!({
+        "token_type": "access",
+        "tenant_id": "100001",
+        "organization_id": "200001",
+        "login_scope": "ORGANIZATION",
+        "user_id": "1",
+        "session_id": "session-1",
+        "app_id": "appbase",
+        "environment": "prod",
+        "deployment_mode": "saas"
+    }));
+
+    let principal = resolver
+        .resolve_dual_token(&auth_token, &access_token)
+        .await
+        .expect("access token context should fill auth token omissions");
+
+    assert_eq!("100001", principal.tenant_id());
+    assert_eq!(Some("200001"), principal.organization_id());
+    assert_eq!(WebLoginScope::Organization, principal.login_scope());
+}
+
+#[tokio::test]
 async fn custom_api_key_lookup_service_can_resolve_raw_key() {
     #[derive(Clone)]
     struct StaticApiKeyLookupService;

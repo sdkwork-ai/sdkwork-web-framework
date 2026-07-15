@@ -208,9 +208,13 @@ Route crates for **business** capabilities `MUST NOT` live in `sdkwork-web-frame
 ## 9. Secure Defaults
 
 - CORS: deny-by-default.
-- Development and test runtimes may explicitly use the framework loopback-origin policy to allow
-  `localhost`, `127.0.0.1`, and `[::1]` on arbitrary numeric dev-server ports. Loopback port
-  wildcards are invalid in production; production CORS remains an exact-origin allowlist.
+- Development and test runtimes use the framework private-network-origin policy to allow
+  loopback, RFC 1918 IPv4, and IPv6 unique-local-address origins on arbitrary numeric dev-server
+  ports. The framework evaluates each request Origin, so DHCP address changes require no copied
+  application allowlist. Development origin directives are invalid in production; production
+  CORS remains an exact-origin allowlist.
+- Responses that echo an allowed Origin must merge `Origin` into `Vary`, preserve existing `Vary`
+  values, and may emit `Access-Control-Allow-Credentials: true` only with a concrete echoed Origin.
 - A CORS preflight is an `OPTIONS` request carrying both `Origin` and
   `Access-Control-Request-Method`. The standard interceptor chain validates the origin, requested
   method, and requested headers, then short-circuits an accepted preflight with `204 No Content`

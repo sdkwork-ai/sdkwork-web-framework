@@ -135,9 +135,10 @@ pub use crate::resolvers::{
 pub use crate::route_manifest::{route_path_matches, HttpRouteManifest};
 pub use crate::runtime_options::WebFrameworkOptionalFeatures;
 pub use crate::security::{
-    CorsPolicy, CrossSiteRequestPolicy, HeaderSecurityPolicy, IdempotencyPolicy,
-    JsonContentTypePolicy, MethodGuardPolicy, RateLimitPolicy, RequestSecurityPolicy,
-    RequestSizeLimitPolicy, SecurityPolicy, SqlInjectionGuardPolicy,
+    is_development_private_network_origin, CorsPolicy, CrossSiteRequestPolicy,
+    HeaderSecurityPolicy, IdempotencyPolicy, JsonContentTypePolicy, MethodGuardPolicy,
+    RateLimitPolicy, RequestSecurityPolicy, RequestSizeLimitPolicy, SecurityPolicy,
+    SqlInjectionGuardPolicy,
 };
 pub use crate::stores::{
     memory_concurrent_admission_store, memory_idempotency_store, memory_rate_limit_store,

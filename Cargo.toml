@@ -32,6 +32,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.48", features = ["macros", "rt-multi-thread", "sync", "signal"] }
 tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.6", features = ["cors"] }
 tracing = "0.1"
 rsa = { version = "0.9", features = ["sha2", "pkcs8"] }
 
