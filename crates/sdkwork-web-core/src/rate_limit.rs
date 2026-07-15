@@ -78,6 +78,7 @@ mod tests {
             principal: None,
             path: "/app/v3/api/auth/login".to_owned(),
             method: "POST".to_owned(),
+            cors_preflight: false,
             origin: None,
             public_path: false,
             operation_id: None,

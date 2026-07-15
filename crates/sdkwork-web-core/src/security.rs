@@ -233,7 +233,35 @@ impl CorsPolicy {
                     .into(),
             );
         }
+        if self
+            .allowed_origins
+            .iter()
+            .any(|origin| origin.ends_with(":*"))
+        {
+            return Err(
+                "production CORS policy must not use port wildcard origins; configure exact origins"
+                    .into(),
+            );
+        }
         Ok(())
+    }
+
+    /// Development policy for browser apps running on arbitrary local dev-server ports.
+    ///
+    /// The wildcard syntax is intentionally restricted to loopback hosts and is rejected
+    /// by `validate_for_production`.
+    pub fn development_loopback() -> Self {
+        Self {
+            allowed_origins: vec![
+                "http://localhost:*".to_owned(),
+                "http://127.0.0.1:*".to_owned(),
+                "http://[::1]:*".to_owned(),
+                "https://localhost:*".to_owned(),
+                "https://127.0.0.1:*".to_owned(),
+                "https://[::1]:*".to_owned(),
+            ],
+            ..Self::default()
+        }
     }
 
     pub fn validate_origin(&self, request: &Request) -> Result<(), WebFrameworkError> {
@@ -249,9 +277,50 @@ impl CorsPolicy {
         self.validate_origin_value(origin)
     }
 
+    /// Validates the method and headers requested by a browser CORS preflight.
+    pub fn validate_preflight(&self, request: &Request) -> Result<(), WebFrameworkError> {
+        let requested_method = request
+            .headers()
+            .get("access-control-request-method")
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.trim().parse::<Method>().ok())
+            .ok_or_else(|| {
+                WebFrameworkError::forbidden("CORS preflight request method is invalid or missing")
+            })?;
+        if !self.allowed_methods.contains(&requested_method) {
+            return Err(WebFrameworkError::forbidden(
+                "CORS preflight request method is not allowed by API policy",
+            ));
+        }
+
+        let Some(requested_headers) = request.headers().get("access-control-request-headers")
+        else {
+            return Ok(());
+        };
+        let requested_headers = requested_headers.to_str().map_err(|_| {
+            WebFrameworkError::forbidden("CORS preflight request headers are invalid")
+        })?;
+        for requested in requested_headers
+            .split(',')
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        {
+            if !self
+                .allowed_headers
+                .iter()
+                .any(|allowed| allowed.eq_ignore_ascii_case(requested))
+            {
+                return Err(WebFrameworkError::forbidden(
+                    "CORS preflight request header is not allowed by API policy",
+                ));
+            }
+        }
+        Ok(())
+    }
+
     /// Validates a browser origin value against this policy (CORS allowlist).
     pub fn validate_origin_value(&self, origin: &str) -> Result<(), WebFrameworkError> {
-        if self.allow_all_origins || self.allowed_origins.iter().any(|allowed| allowed == origin) {
+        if self.allows_origin(origin) {
             return Ok(());
         }
         Err(WebFrameworkError::forbidden(
@@ -263,8 +332,7 @@ impl CorsPolicy {
         let Some(origin) = origin.map(str::trim).filter(|value| !value.is_empty()) else {
             return;
         };
-        if !(self.allow_all_origins || self.allowed_origins.iter().any(|allowed| allowed == origin))
-        {
+        if !self.allows_origin(origin) {
             return;
         }
         if let Ok(value) = HeaderValue::from_str(origin) {
@@ -306,6 +374,43 @@ impl CorsPolicy {
             );
         }
     }
+
+    fn allows_origin(&self, origin: &str) -> bool {
+        self.allow_all_origins
+            || self
+                .allowed_origins
+                .iter()
+                .any(|allowed| origin_matches_allowed(allowed, origin))
+    }
+}
+
+fn origin_matches_allowed(allowed: &str, origin: &str) -> bool {
+    if allowed == origin {
+        return true;
+    }
+
+    let Some(base) = allowed.strip_suffix(":*") else {
+        return false;
+    };
+    if !matches!(
+        base,
+        "http://localhost"
+            | "http://127.0.0.1"
+            | "http://[::1]"
+            | "https://localhost"
+            | "https://127.0.0.1"
+            | "https://[::1]"
+    ) {
+        return false;
+    }
+
+    let Some(port) = origin
+        .strip_prefix(base)
+        .and_then(|suffix| suffix.strip_prefix(':'))
+    else {
+        return origin == base;
+    };
+    !port.is_empty() && port.bytes().all(|value| value.is_ascii_digit())
 }
 
 impl RequestSecurityPolicy for SecurityPolicy {
@@ -750,6 +855,44 @@ mod tests {
         policy
             .validate_for_production()
             .expect("explicit allowlist is production-safe");
+    }
+
+    #[test]
+    fn development_loopback_accepts_any_numeric_port() {
+        let policy = CorsPolicy::development_loopback();
+        for origin in [
+            "http://localhost:3000",
+            "http://127.0.0.1:3901",
+            "http://[::1]:5173",
+            "https://localhost:8443",
+        ] {
+            policy
+                .validate_origin_value(origin)
+                .expect("loopback origin should be accepted");
+        }
+    }
+
+    #[test]
+    fn development_loopback_rejects_lookalike_and_non_numeric_ports() {
+        let policy = CorsPolicy::development_loopback();
+        for origin in [
+            "http://localhost.example:3000",
+            "http://127.0.0.2:3901",
+            "http://localhost:dev",
+            "http://localhost:3000/path",
+        ] {
+            policy
+                .validate_origin_value(origin)
+                .expect_err("untrusted origin should be rejected");
+        }
+    }
+
+    #[test]
+    fn production_rejects_loopback_port_wildcards() {
+        let error = CorsPolicy::development_loopback()
+            .validate_for_production()
+            .expect_err("port wildcards must be development-only");
+        assert!(error.contains("port wildcard"));
     }
 
     #[test]

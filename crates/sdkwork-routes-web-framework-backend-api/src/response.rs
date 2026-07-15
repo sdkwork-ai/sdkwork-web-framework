@@ -179,6 +179,7 @@ mod tests {
             client_kind: None,
             operation: None,
             trace_id: Some("trace-from-context-abc".to_owned()),
+            idempotency_key: None,
         }
     }
 

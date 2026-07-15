@@ -169,6 +169,10 @@ pub struct WebRequestContext {
     /// W3C trace id extracted from `traceparent` at the framework boundary (OBSERVABILITY_SPEC §1).
     #[serde(rename = "traceId", skip_serializing_if = "Option::is_none")]
     pub trace_id: Option<String>,
+    /// Idempotency key normalized by the framework request pipeline. This is intentionally not
+    /// serialized because downstream audit/log projections must not expose raw client keys.
+    #[serde(skip)]
+    pub idempotency_key: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -359,6 +363,10 @@ impl WebRequestPrincipalBuilder {
 }
 
 impl WebRequestContext {
+    pub fn idempotency_key(&self) -> Option<&str> {
+        self.idempotency_key.as_deref()
+    }
+
     pub fn tenant_id(&self) -> Option<&str> {
         self.principal.as_ref().map(WebRequestPrincipal::tenant_id)
     }

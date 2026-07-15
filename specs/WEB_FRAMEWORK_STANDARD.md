@@ -208,6 +208,16 @@ Route crates for **business** capabilities `MUST NOT` live in `sdkwork-web-frame
 ## 9. Secure Defaults
 
 - CORS: deny-by-default.
+- Development and test runtimes may explicitly use the framework loopback-origin policy to allow
+  `localhost`, `127.0.0.1`, and `[::1]` on arbitrary numeric dev-server ports. Loopback port
+  wildcards are invalid in production; production CORS remains an exact-origin allowlist.
+- A CORS preflight is an `OPTIONS` request carrying both `Origin` and
+  `Access-Control-Request-Method`. The standard interceptor chain validates the origin, requested
+  method, and requested headers, then short-circuits an accepted preflight with `204 No Content`
+  and the standard CORS/security/trace response headers. Business routers must not add ad hoc
+  `OPTIONS` routes for preflight handling.
+- Multi-surface gateways must apply the same environment-derived CORS policy to every merged API
+  surface so router merge order cannot change preflight behavior.
 - Request ID: server-generated UUID v4.
 - Unauthenticated protected paths: 401 Problem+json.
 - Oversized body: 413.

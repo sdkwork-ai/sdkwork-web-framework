@@ -2,6 +2,50 @@
 
 use std::env;
 
+use sdkwork_web_core::{CorsPolicy, SecurityPolicy, WebEnvironment};
+
+pub fn web_environment_from_env(keys: &[&str]) -> WebEnvironment {
+    let value = keys
+        .iter()
+        .find_map(|key| env::var(key).ok())
+        .unwrap_or_else(|| "development".to_owned());
+    match value.trim().to_ascii_lowercase().as_str() {
+        "development" | "dev" | "local" => WebEnvironment::Dev,
+        "test" | "testing" => WebEnvironment::Test,
+        _ => WebEnvironment::Prod,
+    }
+}
+
+pub fn cors_allowed_origins_from_env(keys: &[&str]) -> Vec<String> {
+    keys.iter()
+        .find_map(|key| env::var(key).ok())
+        .map(|value| {
+            value
+                .split(',')
+                .map(str::trim)
+                .filter(|origin| !origin.is_empty())
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+pub fn security_policy_for_environment(
+    environment: &WebEnvironment,
+    configured_origins: impl IntoIterator<Item = String>,
+) -> SecurityPolicy {
+    let mut policy = SecurityPolicy::default();
+    if matches!(environment, WebEnvironment::Dev | WebEnvironment::Test) {
+        policy.cors = CorsPolicy::development_loopback();
+    }
+    for origin in configured_origins {
+        if !policy.cors.allowed_origins.contains(&origin) {
+            policy.cors.allowed_origins.push(origin);
+        }
+    }
+    policy
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct WebFrameworkEnv {
     pub store_url: Option<String>,

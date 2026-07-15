@@ -98,6 +98,7 @@ pub struct WebCallState {
     pub principal: Option<WebRequestPrincipal>,
     pub path: String,
     pub method: String,
+    pub cors_preflight: bool,
     pub origin: Option<String>,
     pub public_path: bool,
     pub operation_id: Option<String>,
@@ -416,6 +417,9 @@ impl WebCallState {
             principal: None,
             path: request.uri().path().to_owned(),
             method: request.method().as_str().to_owned(),
+            cors_preflight: request.method() == axum::http::Method::OPTIONS
+                && headers.contains_key("origin")
+                && headers.contains_key("access-control-request-method"),
             origin: request
                 .headers()
                 .get("origin")
@@ -513,6 +517,7 @@ impl WebCallState {
                 .as_deref()
                 .and_then(crate::trace::trace_id_from_traceparent)
                 .map(str::to_owned),
+            idempotency_key: self.idempotency_key.clone(),
         })
     }
 

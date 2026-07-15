@@ -59,6 +59,7 @@ fn web_request_context_json_matches_schema_vocabulary() {
             idempotent: false,
         }),
         trace_id: None,
+        idempotency_key: Some("idempotency-test-1".to_owned()),
     };
     let json = serde_json::to_value(&ctx).expect("serialize context");
     assert!(json.get("requestId").is_some());
@@ -72,6 +73,7 @@ fn web_request_context_json_matches_schema_vocabulary() {
     assert!(transport.contains_key("oauthBearerPresent"));
     assert!(json.get("clientKind").is_some());
     assert!(json.get("operation").is_some());
+    assert!(json.get("idempotencyKey").is_none());
 }
 
 #[test]
@@ -131,12 +133,32 @@ fn production_runtime_enables_rate_limit_and_deny_all_auth() {
         client_kind: None,
         operation: None,
         trace_id: None,
+        idempotency_key: None,
     };
     let error = runtime
         .authorization
         .authorize(&ctx, Some("listUsers"))
         .expect_err("deny all");
     assert_eq!(WebFrameworkErrorKind::Forbidden, error.kind);
+}
+
+#[test]
+fn framework_context_propagates_normalized_idempotency_key() {
+    use axum::{body::Body, http::Request};
+
+    let request = Request::builder()
+        .uri("/app/v3/api/group_launches/consume")
+        .header(
+            crate::constants::IDEMPOTENCY_KEY_HEADER,
+            "idempotency-key-1",
+        )
+        .body(Body::empty())
+        .expect("request");
+    let mut state = WebCallState::from_request(&request);
+    state.request_id = Some(ServerRequestId("request-1".to_owned()));
+
+    let context = state.to_context().expect("framework context");
+    assert_eq!(context.idempotency_key(), Some("idempotency-key-1"));
 }
 
 #[tokio::test]

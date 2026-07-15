@@ -11,11 +11,128 @@ use sdkwork_web_axum::{
     run_websocket_session, with_web_request_context, WebFrameworkLayer, WebSocketUpgradeLayer,
 };
 use sdkwork_web_core::{
-    DefaultWebRequestContextResolver, WebRequestContext, WebRequestContextProfile,
-    WebSocketCallInterceptorChain, WebSocketCallRuntime, WebSocketSession, SDKWORK_TRACE_ID_HEADER,
+    CorsPolicy, DefaultWebRequestContextResolver, SecurityPolicy, WebRequestContext,
+    WebRequestContextProfile, WebSocketCallInterceptorChain, WebSocketCallRuntime,
+    WebSocketSession, SDKWORK_TRACE_ID_HEADER,
 };
 use std::sync::Arc;
 use tower::ServiceExt;
+
+fn development_cors_layer() -> WebFrameworkLayer<DefaultWebRequestContextResolver> {
+    let mut security = SecurityPolicy::default();
+    security.cors = CorsPolicy::development_loopback();
+    WebFrameworkLayer::new(DefaultWebRequestContextResolver::default())
+        .with_security_policy(security)
+}
+
+#[tokio::test]
+async fn valid_cors_preflight_short_circuits_with_204_and_headers() {
+    use axum::routing::post;
+
+    let app = with_web_request_context(
+        Router::new().route(
+            "/app/v3/api/memberships/orders",
+            post(|| async { "created" }),
+        ),
+        development_cors_layer(),
+    );
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("OPTIONS")
+                .uri("/app/v3/api/memberships/orders")
+                .header("origin", "http://localhost:45678")
+                .header("access-control-request-method", "POST")
+                .header(
+                    "access-control-request-headers",
+                    "authorization,access-token,content-type,idempotency-key",
+                )
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("response");
+
+    assert_eq!(axum::http::StatusCode::NO_CONTENT, response.status());
+    assert_eq!(
+        Some("http://localhost:45678"),
+        response
+            .headers()
+            .get("access-control-allow-origin")
+            .and_then(|value| value.to_str().ok())
+    );
+    assert!(response
+        .headers()
+        .get("access-control-allow-methods")
+        .is_some());
+    assert!(response
+        .headers()
+        .get("access-control-allow-headers")
+        .is_some());
+}
+
+#[tokio::test]
+async fn cors_preflight_rejects_disallowed_origin_method_and_header() {
+    use axum::routing::post;
+
+    for (origin, method, headers) in [
+        ("https://evil.example", "POST", "content-type"),
+        ("http://127.0.0.1:45679", "TRACE", "content-type"),
+        (
+            "http://127.0.0.1:45679",
+            "POST",
+            "content-type,x-not-allowed",
+        ),
+    ] {
+        let app = with_web_request_context(
+            Router::new().route(
+                "/app/v3/api/memberships/orders",
+                post(|| async { "created" }),
+            ),
+            development_cors_layer(),
+        );
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("OPTIONS")
+                    .uri("/app/v3/api/memberships/orders")
+                    .header("origin", origin)
+                    .header("access-control-request-method", method)
+                    .header("access-control-request-headers", headers)
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(axum::http::StatusCode::FORBIDDEN, response.status());
+    }
+}
+
+#[tokio::test]
+async fn ordinary_options_request_does_not_bypass_authentication() {
+    use axum::routing::options;
+
+    let app = with_web_request_context(
+        Router::new().route(
+            "/app/v3/api/memberships/orders",
+            options(|| async { "options" }),
+        ),
+        development_cors_layer(),
+    );
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("OPTIONS")
+                .uri("/app/v3/api/memberships/orders")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("response");
+
+    assert_eq!(axum::http::StatusCode::UNAUTHORIZED, response.status());
+}
 
 #[tokio::test]
 async fn handler_receives_injected_web_request_context() {

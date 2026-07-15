@@ -1,8 +1,8 @@
 use crate::correlation::OwnedProblemCorrelation;
 use axum::extract::{DefaultBodyLimit, Request, State};
-use axum::http::HeaderValue;
+use axum::http::{HeaderValue, StatusCode};
 use axum::middleware::{from_fn, from_fn_with_state, Next};
-use axum::response::Response;
+use axum::response::{IntoResponse, Response};
 use axum::Router;
 use futures_util::FutureExt;
 use sdkwork_web_core::{
@@ -223,6 +223,7 @@ fn anonymous_context_from_request(request: &Request, request_id: &str) -> WebReq
         )),
         operation: None,
         trace_id: trace_id_from_traceparent(&trace.traceparent).map(str::to_string),
+        idempotency_key: None,
     }
 }
 
@@ -385,6 +386,10 @@ where
             .after(&state, &mut response, &layer.runtime)
             .await;
         return finalize_response(&layer, &state, response).await;
+    }
+
+    if state.cors_preflight {
+        return finalize_response(&layer, &state, StatusCode::NO_CONTENT.into_response()).await;
     }
 
     if let Some(replay) = state.idempotency_replay.clone() {

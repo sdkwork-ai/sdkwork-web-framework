@@ -210,7 +210,7 @@ where
                     }
                 }
                 let cors = runtime.effective_cors(state);
-                if !state.public_path && !is_cors_preflight(state) {
+                if !state.public_path || is_cors_preflight(state) {
                     if let Err(error) = SecurityPolicy::validate_cors_policy(cors, request) {
                         emit_security_event(
                             runtime,
@@ -220,6 +220,18 @@ where
                         )
                         .await?;
                         return Err(error);
+                    }
+                    if is_cors_preflight(state) {
+                        if let Err(error) = cors.validate_preflight(request) {
+                            emit_security_event(
+                                runtime,
+                                state,
+                                SecurityEventKind::CorsDenied,
+                                error.message.clone(),
+                            )
+                            .await?;
+                            return Err(error);
+                        }
                     }
                 }
             }
@@ -710,7 +722,7 @@ where
 }
 
 fn is_cors_preflight(state: &WebCallState) -> bool {
-    state.method.eq_ignore_ascii_case("OPTIONS")
+    state.cors_preflight
 }
 
 fn skips_access_token_for_tenant_isolation(

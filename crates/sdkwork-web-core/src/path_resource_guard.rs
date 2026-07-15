@@ -167,6 +167,7 @@ mod tests {
             client_kind: None,
             operation: None,
             trace_id: None,
+            idempotency_key: None,
         }
     }
 
