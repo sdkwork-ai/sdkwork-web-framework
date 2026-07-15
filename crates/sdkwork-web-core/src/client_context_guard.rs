@@ -18,6 +18,13 @@ fn normalize_selector_key(key: &str) -> String {
         .to_ascii_lowercase()
 }
 
+fn allows_login_context_organization_selector(path: &str, key: &str) -> bool {
+    // Organization login selection is bound to and checked against the one-time continuation token.
+    let normalized_path = path.split('?').next().unwrap_or(path).to_ascii_lowercase();
+    normalized_path == "/app/v3/api/auth/sessions/login_context_selection"
+        && normalize_selector_key(key) == "organizationid"
+}
+
 fn forbidden_query_keys() -> &'static [String] {
     use std::sync::OnceLock;
     static KEYS: OnceLock<Vec<String>> = OnceLock::new();
@@ -131,7 +138,23 @@ pub async fn inspect_json_body_context_selectors(
             "request body exceeds {limit} byte limit"
         )));
     }
-    reject_forbidden_context_body_json(&bytes)?;
+    let path = parts.uri.path();
+    if allows_login_context_organization_selector(path, "organizationId") {
+        let value = serde_json::from_slice::<serde_json::Value>(&bytes).ok();
+        if let Some(object) = value.as_ref().and_then(serde_json::Value::as_object) {
+            for key in object.keys() {
+                if is_forbidden_context_selector_key(key)
+                    && !allows_login_context_organization_selector(path, key)
+                {
+                    return Err(WebFrameworkError::bad_request(format!(
+                        "client must not supply context selector body field `{key}`"
+                    )));
+                }
+            }
+        }
+    } else {
+        reject_forbidden_context_body_json(&bytes)?;
+    }
     *request = Request::from_parts(parts, Body::from(bytes));
     Ok(())
 }
@@ -236,5 +259,38 @@ mod tests {
         inspect_json_body_context_selectors(&mut request, 1024, WebApiSurface::BackendApi)
             .await
             .expect("backend platform routes may target tenant resources");
+    }
+
+    #[tokio::test]
+    async fn allows_organization_selector_for_login_context_selection_only() {
+        let mut request = Request::builder()
+            .method("POST")
+            .uri("/app/v3/api/auth/sessions/login_context_selection")
+            .header("content-type", "application/json")
+            .header("content-length", "98")
+            .body(Body::from(
+                r#"{"continuationToken":"continuation","loginScope":"ORGANIZATION","organizationId":"200001"}"#,
+            ))
+            .expect("request");
+        inspect_json_body_context_selectors(&mut request, 1024, WebApiSurface::AppApi)
+            .await
+            .expect("organization selection is validated by the IAM continuation");
+    }
+
+    #[tokio::test]
+    async fn still_rejects_other_context_selectors_on_login_context_selection() {
+        let mut request = Request::builder()
+            .method("POST")
+            .uri("/app/v3/api/auth/sessions/login_context_selection")
+            .header("content-type", "application/json")
+            .header("content-length", "94")
+            .body(Body::from(
+                r#"{"continuationToken":"continuation","loginScope":"ORGANIZATION","tenantId":"100001"}"#,
+            ))
+            .expect("request");
+        let error = inspect_json_body_context_selectors(&mut request, 1024, WebApiSurface::AppApi)
+            .await
+            .expect_err("tenant selector");
+        assert!(error.message.contains("tenantId"));
     }
 }
