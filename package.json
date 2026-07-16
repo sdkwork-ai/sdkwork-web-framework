@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "db:materialize:contract": "node ../sdkwork-specs/tools/materialize-database-contract-from-baseline.mjs --root . --baseline database/ddl/baseline/postgres/0001_webstore_baseline.sql --module-id webstore --owner web-framework-platform --prefixes web_ --engines postgres",
+    "stop": "node ../sdkwork-specs/tools/stop-sdkwork-workspace-processes.mjs --workspace .",    "db:materialize:contract": "node ../sdkwork-specs/tools/materialize-database-contract-from-baseline.mjs --root . --baseline database/ddl/baseline/postgres/0001_webstore_baseline.sql --module-id webstore --owner web-framework-platform --prefixes web_ --engines postgres",
     "db:validate": "node ../sdkwork-specs/tools/check-database-framework-standard.mjs --root .",
     "schema-registry:test": "python -m pytest tools/schema_registry/tests -q",
     "schema-registry:compose:tables": "cargo run -p sdkwork-web-schema-registry -- compose tables --app-root . --registry docs/schema-registry/sdkwork-web-framework.tables.yaml --output generated/schema/registry/sdkwork-web-framework.tables.effective.yaml",
