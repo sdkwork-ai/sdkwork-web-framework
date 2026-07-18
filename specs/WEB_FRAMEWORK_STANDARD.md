@@ -222,6 +222,10 @@ Route crates for **business** capabilities `MUST NOT` live in `sdkwork-web-frame
   `OPTIONS` routes for preflight handling.
 - Multi-surface gateways must apply the same environment-derived CORS policy to every merged API
   surface so router merge order cannot change preflight behavior.
+- The standard Web Framework interceptor is the only CORS authority for a mounted API router.
+  Process hosts must not add a second Tower/Axum CORS layer around routers already wrapped with
+  `WebFrameworkLayer`; environment and exact production origins are injected into each framework
+  layer before router merge.
 - Request ID: server-generated UUID v4.
 - Unauthenticated protected paths: 401 Problem+json.
 - Oversized body: 413.
@@ -237,6 +241,11 @@ Route crates for **business** capabilities `MUST NOT` live in `sdkwork-web-frame
 - Metrics and logs `SHOULD` include locale as diagnostic context when it is available, but machine names and audit action codes remain non-localized.
 - All framework Problem+json error surfaces (pipeline, extractors, handlers, contract fallback, timeouts) `MUST` include `traceId` when available via `WebRequestContext` or inbound W3C `traceparent`, and `SHOULD` include safe `i18nKey`/`locale` metadata when message mapping exists.
 - Raw URL paths with identifiers `MUST NOT` be logged; use route templates.
+- `HttpMetricsRegistry` uses hard framework ceilings of 4,096 labeled request series and 128 pipeline-stage series. Public construction may lower but must not raise those ceilings.
+- A request-series key over 2,048 bytes or pipeline-stage label over 128 bytes is dropped and counted; metric recording must not allocate the rejected series.
+- Unresolved routes use the fixed metric label `unmatched`. Redacting individual path segments is not sufficient to bound metric cardinality.
+- Series saturation must increment `sdkwork_http_metric_series_dropped_total{kind=...}` without rejecting the business request or preventing updates to already registered series.
+- Infrastructure paths `/health`, `/healthz`, `/livez`, `/readyz`, and `/metrics` must not inflate application request counters.
 
 ## 11. Verification
 

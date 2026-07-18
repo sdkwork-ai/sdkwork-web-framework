@@ -46,13 +46,21 @@ pub fn security_policy_for_environment(
     policy
 }
 
+pub fn application_security_policy_from_env(
+    environment_keys: &[&str],
+    allowed_origin_keys: &[&str],
+) -> (WebEnvironment, SecurityPolicy) {
+    let environment = web_environment_from_env(environment_keys);
+    let origins = cors_allowed_origins_from_env(allowed_origin_keys);
+    let policy = security_policy_for_environment(&environment, origins);
+    (environment, policy)
+}
+
 pub fn application_cors_layer_from_env(
     environment_keys: &[&str],
     allowed_origin_keys: &[&str],
 ) -> tower_http::cors::CorsLayer {
-    let environment = web_environment_from_env(environment_keys);
-    let origins = cors_allowed_origins_from_env(allowed_origin_keys);
-    let policy = security_policy_for_environment(&environment, origins);
+    let (_, policy) = application_security_policy_from_env(environment_keys, allowed_origin_keys);
     sdkwork_web_axum::cors_layer_from_policy(policy.cors)
 }
 
@@ -92,7 +100,7 @@ impl WebFrameworkEnv {
 
 #[cfg(test)]
 mod tests {
-    use super::security_policy_for_environment;
+    use super::{application_security_policy_from_env, security_policy_for_environment};
     use sdkwork_web_core::WebEnvironment;
 
     #[test]
@@ -122,5 +130,35 @@ mod tests {
             .cors
             .validate_origin_value("http://192.168.50.12:5173")
             .expect_err("private-network development origin must not leak into production");
+    }
+
+    #[test]
+    fn application_bootstrap_resolves_environment_and_origins_from_env() {
+        const ENVIRONMENT_KEY: &str = "SDKWORK_WEB_BOOTSTRAP_TEST_ENVIRONMENT";
+        const ORIGINS_KEY: &str = "SDKWORK_WEB_BOOTSTRAP_TEST_CORS_ALLOWED_ORIGINS";
+        std::env::set_var(ENVIRONMENT_KEY, "production");
+        std::env::set_var(
+            ORIGINS_KEY,
+            "https://manager.sdkwork.com, https://admin.sdkwork.com",
+        );
+
+        let (environment, policy) =
+            application_security_policy_from_env(&[ENVIRONMENT_KEY], &[ORIGINS_KEY]);
+
+        std::env::remove_var(ENVIRONMENT_KEY);
+        std::env::remove_var(ORIGINS_KEY);
+        assert_eq!(WebEnvironment::Prod, environment);
+        policy
+            .cors
+            .validate_origin_value("https://manager.sdkwork.com")
+            .expect("configured production origin");
+        policy
+            .cors
+            .validate_origin_value("https://admin.sdkwork.com")
+            .expect("second configured production origin");
+        policy
+            .cors
+            .validate_origin_value("https://evil.example.com")
+            .expect_err("unconfigured production origin");
     }
 }

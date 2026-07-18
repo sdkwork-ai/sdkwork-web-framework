@@ -36,6 +36,8 @@ Run `scripts/verify.ps1` or `scripts/verify.sh` — commands mirror `specs/compo
 
 ### Added
 
+- **Bounded HTTP metric series:** request and pipeline-stage registries now enforce hard series and label-byte ceilings, collapse unresolved routes to `unmatched`, exclude `/livez`, and export dropped-series counters instead of retaining unbounded label cardinality.
+
 - **Manifest-driven PC Admin SDK (K14):** `scripts/generate-pc-admin-operations.mjs` generates `operations.ts` from `routes.manifest.json`; verify gate runs `--check`.
 - **PC admin build smoke (K15):** `tests/contract/pc-admin-build.smoke.test.mjs` validates Vite dist shell and SDK transport markers.
 - **PC admin Playwright E2E (K16):** `apps/sdkwork-web-framework-pc/e2e/console.smoke.spec.ts` loads preview shell with mocked backend and permission-gated tabs.

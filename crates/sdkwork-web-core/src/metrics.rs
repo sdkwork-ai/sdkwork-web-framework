@@ -1,10 +1,14 @@
 use crate::api_chain::WebCallState;
-use crate::problem::redact_path_template;
 use crate::request_context::WebEnvironment;
 use crate::surface::api_surface_contract_label;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
+
+const DEFAULT_MAX_LABELED_REQUEST_SERIES: usize = 4_096;
+const DEFAULT_MAX_STAGE_SERIES: usize = 128;
+const MAX_METRIC_SERIES_KEY_BYTES: usize = 2_048;
+const MAX_STAGE_LABEL_BYTES: usize = 128;
 
 /// Process-wide Prometheus dimensions (`OBSERVABILITY_SPEC.md` §3).
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -119,7 +123,7 @@ pub fn http_request_labels_from_state(
         .as_deref()
         .filter(|value| !value.is_empty())
         .map(str::to_owned)
-        .unwrap_or_else(|| redact_path_template(&state.path));
+        .unwrap_or_else(|| "unmatched".to_owned());
     HttpRequestLabels {
         dimensions: dimensions.clone(),
         api_surface: api_surface_contract_label(&state.api_surface).to_owned(),
@@ -135,12 +139,30 @@ fn escape_prometheus_label(value: &str) -> String {
     value.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
-#[derive(Default)]
 pub struct HttpMetricsRegistry {
     dimensions: Mutex<HttpMetricsDimensions>,
     requests_total: AtomicU64,
     labeled_requests: Mutex<HashMap<String, u64>>,
     stage_durations: Mutex<HashMap<String, StageDurationStats>>,
+    max_labeled_request_series: usize,
+    max_stage_series: usize,
+    dropped_labeled_request_series_total: AtomicU64,
+    dropped_stage_series_total: AtomicU64,
+}
+
+impl Default for HttpMetricsRegistry {
+    fn default() -> Self {
+        Self {
+            dimensions: Mutex::new(HttpMetricsDimensions::default()),
+            requests_total: AtomicU64::new(0),
+            labeled_requests: Mutex::new(HashMap::new()),
+            stage_durations: Mutex::new(HashMap::new()),
+            max_labeled_request_series: DEFAULT_MAX_LABELED_REQUEST_SERIES,
+            max_stage_series: DEFAULT_MAX_STAGE_SERIES,
+            dropped_labeled_request_series_total: AtomicU64::new(0),
+            dropped_stage_series_total: AtomicU64::new(0),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -151,13 +173,32 @@ struct StageDurationStats {
 
 impl HttpMetricsRegistry {
     pub fn new() -> Arc<Self> {
-        Arc::new(Self::default())
+        Self::with_dimensions(HttpMetricsDimensions::default())
     }
 
     pub fn with_dimensions(dimensions: HttpMetricsDimensions) -> Arc<Self> {
+        Self::with_dimensions_and_series_limits(
+            dimensions,
+            DEFAULT_MAX_LABELED_REQUEST_SERIES,
+            DEFAULT_MAX_STAGE_SERIES,
+        )
+    }
+
+    pub fn with_dimensions_and_series_limits(
+        dimensions: HttpMetricsDimensions,
+        max_labeled_request_series: usize,
+        max_stage_series: usize,
+    ) -> Arc<Self> {
         Arc::new(Self {
             dimensions: Mutex::new(dimensions),
-            ..Self::default()
+            requests_total: AtomicU64::new(0),
+            labeled_requests: Mutex::new(HashMap::new()),
+            stage_durations: Mutex::new(HashMap::new()),
+            max_labeled_request_series: max_labeled_request_series
+                .min(DEFAULT_MAX_LABELED_REQUEST_SERIES),
+            max_stage_series: max_stage_series.min(DEFAULT_MAX_STAGE_SERIES),
+            dropped_labeled_request_series_total: AtomicU64::new(0),
+            dropped_stage_series_total: AtomicU64::new(0),
         })
     }
 
@@ -180,32 +221,55 @@ impl HttpMetricsRegistry {
         } else {
             normalized.trim_end_matches('/')
         };
-        !matches!(normalized, "/health" | "/healthz" | "/readyz" | "/metrics")
+        !matches!(
+            normalized,
+            "/health" | "/healthz" | "/livez" | "/readyz" | "/metrics"
+        )
     }
 
     pub fn inc_requests(&self) {
-        self.requests_total.fetch_add(1, Ordering::Relaxed);
+        saturating_increment(&self.requests_total);
     }
 
     pub fn record_request(&self, labels: &HttpRequestLabels) {
         self.inc_requests();
         let key = labels.prometheus_key();
+        if key.len() > MAX_METRIC_SERIES_KEY_BYTES {
+            saturating_increment(&self.dropped_labeled_request_series_total);
+            return;
+        }
         let mut labeled = self
             .labeled_requests
             .lock()
             .expect("metrics labeled map mutex");
-        *labeled.entry(key).or_insert(0) += 1;
+        if let Some(count) = labeled.get_mut(&key) {
+            *count = count.saturating_add(1);
+        } else if labeled.len() < self.max_labeled_request_series {
+            labeled.insert(key, 1);
+        } else {
+            saturating_increment(&self.dropped_labeled_request_series_total);
+        }
     }
 
     /// Records interceptor `before` duration for catalog E2 stage timing.
     pub fn record_pipeline_stage_duration(&self, stage: &str, elapsed: std::time::Duration) {
+        if stage.len() > MAX_STAGE_LABEL_BYTES {
+            saturating_increment(&self.dropped_stage_series_total);
+            return;
+        }
         let mut stages = self
             .stage_durations
             .lock()
             .expect("metrics stage duration mutex");
+        if !stages.contains_key(stage) && stages.len() >= self.max_stage_series {
+            saturating_increment(&self.dropped_stage_series_total);
+            return;
+        }
         let entry = stages.entry(stage.to_owned()).or_default();
-        entry.count += 1;
-        entry.sum_micros += elapsed.as_micros().min(u64::MAX as u128) as u64;
+        entry.count = entry.count.saturating_add(1);
+        entry.sum_micros = entry
+            .sum_micros
+            .saturating_add(elapsed.as_micros().min(u64::MAX as u128) as u64);
     }
 
     pub fn render_prometheus(&self) -> String {
@@ -232,6 +296,19 @@ impl HttpMetricsRegistry {
                 &dimensions.runtime_profile
             }),
         ));
+        output.push_str(
+            "# HELP sdkwork_http_metric_series_dropped_total Metric observations dropped because the bounded series registry was full or a label key exceeded its byte limit.\n\
+             # TYPE sdkwork_http_metric_series_dropped_total counter\n",
+        );
+        output.push_str(&format!(
+            "sdkwork_http_metric_series_dropped_total{{kind=\"request\"}} {}\n",
+            self.dropped_labeled_request_series_total
+                .load(Ordering::Relaxed)
+        ));
+        output.push_str(&format!(
+            "sdkwork_http_metric_series_dropped_total{{kind=\"pipeline_stage\"}} {}\n",
+            self.dropped_stage_series_total.load(Ordering::Relaxed)
+        ));
         let labeled = self
             .labeled_requests
             .lock()
@@ -257,6 +334,7 @@ impl HttpMetricsRegistry {
                  # TYPE sdkwork_pipeline_stage_duration_microseconds_sum counter\n",
             );
             for (stage, stats) in stages.iter() {
+                let stage = escape_prometheus_label(stage);
                 output.push_str(&format!(
                     "sdkwork_pipeline_stage_duration_microseconds_sum{{stage=\"{stage}\"}} {}\n",
                     stats.sum_micros
@@ -271,6 +349,12 @@ impl HttpMetricsRegistry {
     }
 }
 
+fn saturating_increment(counter: &AtomicU64) {
+    let _ = counter.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+        Some(current.saturating_add(1))
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -279,6 +363,7 @@ mod tests {
     #[test]
     fn skips_infra_paths() {
         assert!(!HttpMetricsRegistry::should_record_path("/healthz"));
+        assert!(!HttpMetricsRegistry::should_record_path("/livez"));
         assert!(!HttpMetricsRegistry::should_record_path("/metrics"));
         assert!(HttpMetricsRegistry::should_record_path("/app/v3/api/users"));
     }
@@ -347,5 +432,59 @@ mod tests {
         let labels = http_request_labels_from_state(&state, &HttpMetricsDimensions::default(), 200);
         assert_eq!("app-api", labels.api_surface);
         assert_eq!("/app/v3/api/users/{userId}", labels.route);
+    }
+
+    #[test]
+    fn unmatched_paths_share_one_bounded_series() {
+        let registry = HttpMetricsRegistry::with_dimensions_and_series_limits(
+            HttpMetricsDimensions::default(),
+            4,
+            2,
+        );
+        for path in ["/arbitrary-alpha", "/arbitrary-beta", "/users/alice"] {
+            let request = axum::http::Request::builder()
+                .method("GET")
+                .uri(path)
+                .body(axum::body::Body::empty())
+                .expect("request");
+            let state = WebCallState::from_request(&request);
+            registry.record_request(&http_request_labels_from_state(
+                &state,
+                &registry.dimensions(),
+                404,
+            ));
+        }
+        let rendered = registry.render_prometheus();
+        assert!(rendered.contains("route=\"unmatched\""));
+        assert!(!rendered.contains("arbitrary-alpha"));
+        assert!(!rendered.contains("arbitrary-beta"));
+    }
+
+    #[test]
+    fn series_limits_drop_new_cardinality_without_losing_existing_counters() {
+        let registry = HttpMetricsRegistry::with_dimensions_and_series_limits(
+            HttpMetricsDimensions::default(),
+            1,
+            1,
+        );
+        for route in ["/known-a", "/known-a", "/known-b"] {
+            registry.record_request(&HttpRequestLabels {
+                dimensions: registry.dimensions(),
+                api_surface: "app-api".to_owned(),
+                route: route.to_owned(),
+                method: "GET".to_owned(),
+                status: 200,
+                operation_id: None,
+                backend_layer: "handler".to_owned(),
+            });
+        }
+        registry.record_pipeline_stage_duration("cors", std::time::Duration::from_micros(1));
+        registry.record_pipeline_stage_duration("auth", std::time::Duration::from_micros(1));
+        let rendered = registry.render_prometheus();
+        assert!(rendered.contains("route=\"/known-a\""));
+        assert!(!rendered.contains("route=\"/known-b\""));
+        assert!(rendered.contains("sdkwork_http_metric_series_dropped_total{kind=\"request\"} 1"));
+        assert!(rendered
+            .contains("sdkwork_http_metric_series_dropped_total{kind=\"pipeline_stage\"} 1"));
     }
 }
