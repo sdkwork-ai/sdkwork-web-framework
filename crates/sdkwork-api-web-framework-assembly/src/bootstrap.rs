@@ -12,6 +12,8 @@ pub struct ApiAssembly {
 
 pub fn assemble_api_router(pool: AdminStorePool) -> ApiAssembly {
     let mut router = Router::new();
-    router = router.merge(sdkwork_routes_web_framework_backend_api::gateway_mount(pool));
+    router = router.merge(sdkwork_routes_web_framework_backend_api::gateway_mount(
+        pool,
+    ));
     ApiAssembly { router }
 }
