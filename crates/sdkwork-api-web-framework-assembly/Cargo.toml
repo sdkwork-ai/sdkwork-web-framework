@@ -1,0 +1,15 @@
+[package]
+name = "sdkwork-api-web-framework-assembly"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+description = "Generated API assembly for sdkwork-web-framework application HTTP plane."
+
+[lib]
+name = "sdkwork_api_web_framework_assembly"
+path = "src/lib.rs"
+
+[dependencies]
+axum.workspace = true
+tokio.workspace = true
+sdkwork-routes-web-framework-backend-api.workspace = true

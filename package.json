@@ -17,8 +17,8 @@
     "db:drift:check": "cargo run --manifest-path ../sdkwork-database/Cargo.toml -p sdkwork-database-cli -- --app-root . drift-check",
     "db:bootstrap": "cargo run --manifest-path ../sdkwork-database/Cargo.toml -p sdkwork-database-cli -- --app-root . bootstrap",
     "test": "node ../sdkwork-specs/tools/check-database-framework-standard.mjs --root . && cargo test -p sdkwork-web-schema-registry && python -m pytest tools/schema_registry/tests -q",
-    "api:assembly:materialize": "node scripts/gateway/assembly-materialize.mjs",
-    "api:assembly:validate": "node scripts/gateway/assembly-validate.mjs",
+    "api:assembly:materialize": "node ../sdkwork-specs/tools/materialize-api-assembly.mjs --root .",
+    "api:assembly:validate": "node ../sdkwork-specs/tools/validate-api-assembly.mjs --root .",
     "check:app-composition": "node ../sdkwork-specs/tools/verify-repo.mjs --root ."
   },
   "exports": {

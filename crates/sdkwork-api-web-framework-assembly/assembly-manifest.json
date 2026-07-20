@@ -1,0 +1,21 @@
+{
+  "kind": "sdkwork.api.assembly",
+  "schemaVersion": 1,
+  "applicationCode": "web-framework",
+  "apiMode": "served",
+  "packageName": "sdkwork-api-web-framework-assembly",
+  "crateDir": "crates/sdkwork-api-web-framework-assembly",
+  "routeCrates": [
+    {
+      "packageName": "sdkwork-routes-web-framework-backend-api",
+      "memberDir": "crates/sdkwork-routes-web-framework-backend-api",
+      "libName": "sdkwork_routes_web_framework_backend_api",
+      "surface": "backend-api",
+      "pathPrefix": null,
+      "mountOrder": 0,
+      "componentRef": "crates/sdkwork-routes-web-framework-backend-api/specs/component.spec.json",
+      "routeManifestRef": "crates/sdkwork-routes-web-framework-backend-api/sdks/_route-manifests/backend-api/sdkwork-routes-web-framework-backend-api.route-manifest.json",
+      "sourceRef": "crates/sdkwork-routes-web-framework-backend-api/Cargo.toml"
+    }
+  ]
+}

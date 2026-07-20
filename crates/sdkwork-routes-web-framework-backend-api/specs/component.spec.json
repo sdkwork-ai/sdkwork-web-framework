@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.component.spec",
+  "component": {
+    "name": "sdkwork-routes-web-framework-backend-api",
+    "displayName": "SDKWork WEB Framework Backend API Routes",
+    "version": "0.1.0",
+    "type": "rust-route-crate",
+    "root": "crates/sdkwork-routes-web-framework-backend-api",
+    "domain": "platform",
+    "capability": "web-framework",
+    "surface": "backend-api",
+    "languages": [
+      "rust"
+    ],
+    "generated": false,
+    "manifests": [
+      "Cargo.toml"
+    ]
+  },
+  "canonicalSpecs": [
+    {
+      "file": "CODE_STYLE_SPEC.md",
+      "path": "../../../sdkwork-specs/CODE_STYLE_SPEC.md",
+      "purpose": "Authored source structure and generated code boundaries."
+    },
+    {
+      "file": "NAMING_SPEC.md",
+      "path": "../../../sdkwork-specs/NAMING_SPEC.md",
+      "purpose": "Canonical SDKWork naming rules."
+    },
+    {
+      "file": "API_SPEC.md",
+      "path": "../../../sdkwork-specs/API_SPEC.md",
+      "purpose": "OpenAPI authority and route manifest rules."
+    },
+    {
+      "file": "WEB_FRAMEWORK_SPEC.md",
+      "path": "../../../sdkwork-specs/WEB_FRAMEWORK_SPEC.md",
+      "purpose": "Mandatory Web Framework integration for HTTP surfaces."
+    },
+    {
+      "file": "WEB_BACKEND_SPEC.md",
+      "path": "../../../sdkwork-specs/WEB_BACKEND_SPEC.md",
+      "purpose": "HTTP backend route boundary rules."
+    },
+    {
+      "file": "SDK_WORKSPACE_GENERATION_SPEC.md",
+      "path": "../../../sdkwork-specs/SDK_WORKSPACE_GENERATION_SPEC.md",
+      "purpose": "Route manifest and SDK generation ownership."
+    },
+    {
+      "file": "RUST_CODE_SPEC.md",
+      "path": "../../../sdkwork-specs/RUST_CODE_SPEC.md",
+      "purpose": "Rust crate rules."
+    },
+    {
+      "file": "TEST_SPEC.md",
+      "path": "../../../sdkwork-specs/TEST_SPEC.md",
+      "purpose": "Route contract and composition verification."
+    }
+  ],
+  "contracts": {
+    "layerRole": "backend-route",
+    "publicExports": [
+      "."
+    ],
+    "providedPorts": [],
+    "requiredPorts": [],
+    "runtimeEntrypoints": [
+      "build_admin_router",
+      "build_admin_router_with_options",
+      "gateway_mount",
+      "internal_server_error"
+    ],
+    "routeManifest": "sdks/_route-manifests/backend-api/sdkwork-routes-web-framework-backend-api.route-manifest.json",
+    "sdkClients": [],
+    "sdkDependencies": [],
+    "dependencyApiExports": [],
+    "dependencyApiSurfaces": [],
+    "events": [],
+    "configKeys": []
+  },
+  "verification": {
+    "commands": [
+      "cargo test -p sdkwork-routes-web-framework-backend-api"
+    ]
+  }
+}
