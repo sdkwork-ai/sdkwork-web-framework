@@ -12,4 +12,5 @@ path = "src/lib.rs"
 [dependencies]
 axum.workspace = true
 tokio.workspace = true
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
 sdkwork-routes-web-framework-backend-api.workspace = true
