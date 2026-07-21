@@ -8,6 +8,7 @@ pub enum WebApiSurface {
     OpenApi,
     AppApi,
     BackendApi,
+    InternalApi,
     GatewayApi,
     Unknown,
 }
@@ -17,6 +18,7 @@ pub enum WebApiSurface {
 pub enum WebAuthMode {
     Public,
     ApiKey,
+    IngressToken,
     OAuth,
     DualToken,
 }

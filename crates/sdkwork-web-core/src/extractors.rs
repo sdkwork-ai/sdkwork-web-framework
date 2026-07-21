@@ -1,5 +1,6 @@
 use crate::constants::{
     ACCESS_TOKEN_HEADER, AGENT_TOKEN_HEADER, API_KEY_HEADER, AUTHORIZATION_HEADER,
+    SDKWORK_ACCESS_TOKEN_HEADER,
 };
 use axum::http::HeaderMap;
 
@@ -19,6 +20,11 @@ pub fn bearer_token(headers: &HeaderMap) -> Option<String> {
 
 pub fn api_key(headers: &HeaderMap) -> Option<String> {
     header_value(headers, API_KEY_HEADER)
+}
+
+/// Extracts the internal-api ingress-token alias used by application hosts.
+pub fn sdkwork_access_token(headers: &HeaderMap) -> Option<String> {
+    header_value(headers, SDKWORK_ACCESS_TOKEN_HEADER)
 }
 
 /// Extracts the backend agent bootstrap token (`X-SDKWork-Agent-Token`) for `RouteAuth::AgentToken` routes (C8-C9).

@@ -26,6 +26,10 @@ fn fixture_bootstrap_access_header() -> String {
     bootstrap_access_token_jwt("100001", "app_tenant-bootstrap")
 }
 
+fn fixture_ingress_token() -> &'static str {
+    "api_key_id=internal-1;tenant_id=100001;user_id=service-drive;app_id=knowledgebase"
+}
+
 fn security_with_idempotency(
     idempotency: crate::security::IdempotencyPolicy,
 ) -> crate::security::SecurityPolicy {
@@ -122,6 +126,81 @@ async fn authorization_policy_is_invoked_for_protected_routes() {
         .await
         .expect("pipeline");
     assert_eq!(1, calls.load(Ordering::SeqCst));
+}
+
+#[tokio::test]
+async fn internal_api_accepts_all_ingress_token_header_aliases() {
+    use crate::request_context::WebApiSurface;
+    use sdkwork_web_contract::{HttpMethod, HttpRoute};
+
+    const ROUTES: &[HttpRoute] = &[HttpRoute::ingress_token(
+        HttpMethod::Get,
+        "/internal/v3/api/drive/resources/example",
+        "drive",
+        "driveResources.retrieve",
+    )];
+
+    for (header_name, header_value) in [
+        ("X-API-Key", fixture_ingress_token().to_string()),
+        (
+            "Authorization",
+            format!("Bearer {}", fixture_ingress_token()),
+        ),
+        (
+            "X-SDKWork-Access-Token",
+            fixture_ingress_token().to_string(),
+        ),
+    ] {
+        let runtime = WebCallRuntime::new(DefaultWebRequestContextResolver::default())
+            .with_route_manifest(HttpRouteManifest::new(ROUTES));
+        let chain = WebCallInterceptorChain::standard();
+        let mut request = Request::builder()
+            .method("GET")
+            .uri("/internal/v3/api/drive/resources/example")
+            .header(header_name, header_value)
+            .body(Body::empty())
+            .expect("internal-api request");
+        let mut state = WebCallState::from_request(&request);
+        chain
+            .before(&mut state, &mut request, &runtime)
+            .await
+            .unwrap_or_else(|error| panic!("{header_name} should authenticate: {error}"));
+        assert_eq!(WebApiSurface::InternalApi, state.api_surface);
+        assert_eq!(WebAuthMode::IngressToken, state.auth_mode);
+        assert_eq!(
+            Some("100001"),
+            state
+                .principal
+                .as_ref()
+                .map(|principal| principal.tenant_id())
+        );
+    }
+}
+
+#[tokio::test]
+async fn internal_api_rejects_missing_ingress_token() {
+    use sdkwork_web_contract::{HttpMethod, HttpRoute};
+
+    const ROUTES: &[HttpRoute] = &[HttpRoute::ingress_token(
+        HttpMethod::Get,
+        "/internal/v3/api/drive/resources/example",
+        "drive",
+        "driveResources.retrieve",
+    )];
+    let runtime = WebCallRuntime::new(DefaultWebRequestContextResolver::default())
+        .with_route_manifest(HttpRouteManifest::new(ROUTES));
+    let chain = WebCallInterceptorChain::standard();
+    let mut request = Request::builder()
+        .method("GET")
+        .uri("/internal/v3/api/drive/resources/example")
+        .body(Body::empty())
+        .expect("internal-api request");
+    let mut state = WebCallState::from_request(&request);
+    let error = chain
+        .before(&mut state, &mut request, &runtime)
+        .await
+        .expect_err("missing ingress token must fail closed");
+    assert_eq!(WebFrameworkErrorKind::MissingCredentials, error.kind);
 }
 
 #[tokio::test]

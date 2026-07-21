@@ -16,6 +16,10 @@ fn classifies_standard_api_surfaces() {
         classify_api_surface("/backend/v3/api/iam/users", &profile)
     );
     assert_eq!(
+        WebApiSurface::InternalApi,
+        classify_api_surface("/internal/v3/api/drive/resources/resolve", &profile)
+    );
+    assert_eq!(
         WebApiSurface::OpenApi,
         classify_api_surface("/open/v3/api/messages", &profile)
     );

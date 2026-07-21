@@ -7,6 +7,7 @@ impl From<ApiSurface> for WebApiSurface {
             ApiSurface::OpenApi => Self::OpenApi,
             ApiSurface::AppApi => Self::AppApi,
             ApiSurface::BackendApi => Self::BackendApi,
+            ApiSurface::InternalApi => Self::InternalApi,
             ApiSurface::GatewayApi => Self::GatewayApi,
             ApiSurface::Unknown => Self::Unknown,
         }
@@ -19,6 +20,7 @@ impl From<WebApiSurface> for ApiSurface {
             WebApiSurface::OpenApi => Self::OpenApi,
             WebApiSurface::AppApi => Self::AppApi,
             WebApiSurface::BackendApi => Self::BackendApi,
+            WebApiSurface::InternalApi => Self::InternalApi,
             WebApiSurface::GatewayApi => Self::GatewayApi,
             WebApiSurface::Unknown => Self::Unknown,
         }

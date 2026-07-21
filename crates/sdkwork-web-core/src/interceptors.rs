@@ -667,6 +667,30 @@ where
             state.auth_mode = auth_mode;
             state.principal = Some(principal);
         }
+        WebApiSurface::InternalApi => {
+            if state.public_path {
+                state.auth_mode = WebAuthMode::Public;
+                state.principal = None;
+                return Ok(());
+            }
+            if state.route_auth != Some(RouteAuth::IngressToken) {
+                return Err(WebFrameworkError::missing_credentials(
+                    "protected internal-api routes require ingress-token auth",
+                ));
+            }
+            let ingress_token = state
+                .credentials
+                .api_key
+                .as_deref()
+                .or(state.credentials.auth_token.as_deref())
+                .ok_or_else(|| {
+                    WebFrameworkError::missing_credentials(
+                        "internal-api requests require X-API-Key, Authorization: Bearer, or X-SDKWork-Access-Token",
+                    )
+                })?;
+            state.principal = Some(runtime.resolver.resolve_api_key(ingress_token).await?);
+            state.auth_mode = WebAuthMode::IngressToken;
+        }
         WebApiSurface::AppApi | WebApiSurface::BackendApi | WebApiSurface::GatewayApi => {
             if state.public_path
                 && skips_access_token_for_tenant_isolation(

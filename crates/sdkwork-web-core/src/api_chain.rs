@@ -3,6 +3,7 @@ use crate::cors_policy::{DynamicCorsPolicySource, NoOpDynamicCorsPolicySource};
 use crate::error::WebFrameworkError;
 use crate::extractors::{
     access_token, agent_token, api_key, bearer_token, header_value, idempotency_key,
+    sdkwork_access_token,
 };
 use crate::idempotency::IdempotencyResponseRecord;
 use crate::open_api_auth::{default_open_api_scheme_detector, DynOpenApiCredentialSchemeDetector};
@@ -435,7 +436,7 @@ impl WebCallState {
             credentials: WebCallCredentials {
                 auth_token: bearer,
                 access_token,
-                api_key: api_key(headers),
+                api_key: api_key(headers).or_else(|| sdkwork_access_token(headers)),
                 oauth_bearer,
                 agent_token: agent_token(headers),
             },

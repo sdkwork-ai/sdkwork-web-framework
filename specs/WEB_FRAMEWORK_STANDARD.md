@@ -119,7 +119,7 @@ No duplicate `public_path_prefixes` entry is required for manifest-declared publ
 
 | Type | Responsibility |
 | --- | --- |
-| `WebApiSurface` | `OpenApi` \| `AppApi` \| `BackendApi` \| `GatewayApi` \| `Unknown` |
+| `WebApiSurface` | `OpenApi` \| `AppApi` \| `BackendApi` \| `InternalApi` \| `GatewayApi` \| `Unknown` |
 | `TenantAppContext` | Service-layer view of tenant + app + subject ids |
 | `WebFrameworkError` | Framework boundary errors → `application/problem+json` |
 | `HttpRoute` | Route manifest row for OpenAPI materialization |
@@ -158,7 +158,7 @@ Protected routers `MUST` use `WebCallInterceptorChain::standard()` or a document
 | `AuthorizationPolicy` | Stage 12 |
 | `TenantIsolationPolicy` | Stage 13 |
 | `DomainContextInjector` | Stage 14 |
-| `ApiKeyLookupService` | Stage 10 (open-api api-key) |
+| `ApiKeyLookupService` | Stage 10 (open-api api-key and internal-api ingress token) |
 | `OAuthTokenLookupService` | Stage 10 (open-api oauth) |
 | `OpenApiCredentialSchemeDetector` | Stage 10 (open-api flexible) |
 | `LocaleResolver` | Stage 10 |
@@ -185,7 +185,7 @@ Production SaaS assembly `MUST` use `tenant_bound_saas_verifying_web_request_res
 
 - Handlers `MUST` take `WebRequestContext` as a function parameter (auto-injected via `FromRequestParts`).
 - Handlers `MUST NOT` use `Extension<WebRequestContext>` as the only pattern when `FromRequestParts` is available.
-- Handlers `MUST NOT` parse `Authorization`, `Access-Token`, `X-API-Key`, SDKWork identity projection headers, locale headers, cookies, query parameters, or user-agent language values to resolve context.
+- Handlers `MUST NOT` parse `Authorization`, `Access-Token`, `X-API-Key`, `X-SDKWork-Access-Token`, SDKWork identity projection headers, locale headers, cookies, query parameters, or user-agent language values to resolve context.
 - Handlers `MUST` consume locale, timezone, numbering system, and message bundle version from `WebRequestContext.locale`.
 - Services `MUST` accept `&WebRequestContext` or `TenantAppContext` for tenant/app scoping.
 - Services `MUST NOT` depend on Axum request types.
@@ -197,6 +197,7 @@ Production SaaS assembly `MUST` use `tenant_bound_saas_verifying_web_request_res
 | --- | --- | --- |
 | app-api | `/app/v3/api` | Dual token (`Authorization` JWT + `Access-Token` JWT) |
 | backend-api | `/backend/v3/api` | Dual token |
+| internal-api | `/internal/v3/api` | Ingress token through `X-API-Key`, `Authorization: Bearer`, or `X-SDKWork-Access-Token`; resolved server-side through `ApiKeyLookupService` |
 | open-api | configured prefixes | API key, OAuth bearer, or header-driven flexible (`RouteAuth::OpenApiFlexible`) |
 | public / refresh-token | manifest `RouteAuth::Public` / `RefreshToken` | `Access-Token` JWT required for tenant isolation; session `Authorization` optional |
 | infra | `public_path_prefixes` (`/healthz`, `/metrics`, …) | none |

@@ -11,7 +11,8 @@ pub use crate::api_chain::{
     WebCallState as ApiCallState, WebFrameworkRuntime, STANDARD_STAGE_ORDER,
 };
 pub use crate::axum_integration::{
-    RequireAppApi, RequireDualToken, RequireOpenApi, RequirePrincipal, RequireTenantApp,
+    RequireAppApi, RequireDualToken, RequireInternalApi, RequireOpenApi, RequirePrincipal,
+    RequireTenantApp,
 };
 pub use crate::client_context_guard::{
     inspect_json_body_context_selectors, is_forbidden_context_selector_key,
@@ -22,9 +23,10 @@ pub use crate::client_context_guard::{
 pub use crate::constants::{
     ACCESS_TOKEN_HEADER, API_KEY_HEADER, APP_API_PREFIX, AUTHORIZATION_HEADER, BACKEND_API_PREFIX,
     CONTENT_SHA256_HEADER, DYNAMIC_POLICY_CACHE_TTL_SECS, GATEWAY_API_PREFIX,
-    IDEMPOTENCY_FINGERPRINT_HEADER, IDEMPOTENCY_KEY_HEADER, OPEN_API_PREFIX, OPERATION_ID_HEADER,
-    PRODUCTION_DEFAULT_REQUEST_TIMEOUT_SECS, PRODUCTION_DEFAULT_SHUTDOWN_GRACE_SECS,
-    REQUEST_ID_HEADER, SDKWORK_TRACE_ID_HEADER, WS_APP_API_SUFFIX, X_IDEMPOTENCY_KEY_HEADER,
+    IDEMPOTENCY_FINGERPRINT_HEADER, IDEMPOTENCY_KEY_HEADER, INTERNAL_API_PREFIX, OPEN_API_PREFIX,
+    OPERATION_ID_HEADER, PRODUCTION_DEFAULT_REQUEST_TIMEOUT_SECS,
+    PRODUCTION_DEFAULT_SHUTDOWN_GRACE_SECS, REQUEST_ID_HEADER, SDKWORK_ACCESS_TOKEN_HEADER,
+    SDKWORK_TRACE_ID_HEADER, WS_APP_API_SUFFIX, X_IDEMPOTENCY_KEY_HEADER,
 };
 pub use crate::context_injection::{inject_web_request_context, DomainContextInjector};
 pub use crate::cors_policy::{

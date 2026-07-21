@@ -107,6 +107,19 @@ impl HttpRouteManifest {
                         ));
                     }
                 }
+                WebApiSurface::InternalApi => {
+                    if route.auth.skips_credential_resolution() {
+                        continue;
+                    }
+                    if !route.auth.is_ingress_token_credential_mode() {
+                        return Err(format!(
+                            "internal-api route {} {} must declare RouteAuth::IngressToken (found {})",
+                            http_method_label(route.method),
+                            route.path,
+                            route_auth_label(route.auth),
+                        ));
+                    }
+                }
                 WebApiSurface::OpenApi => {
                     if route.auth.skips_credential_resolution() {
                         continue;
@@ -170,6 +183,7 @@ fn route_auth_label(auth: RouteAuth) -> &'static str {
         RouteAuth::RefreshToken => "refresh-token",
         RouteAuth::DualToken => "dualToken",
         RouteAuth::ApiKey => "apiKey",
+        RouteAuth::IngressToken => "ingressToken",
         RouteAuth::OAuth => "oauth",
         RouteAuth::OpenApiFlexible => "openApiFlexible",
         RouteAuth::AgentToken => "agentToken",
@@ -369,6 +383,32 @@ mod tests {
             .validate_route_auth_for_surfaces(&WebRequestContextProfile::default())
             .expect_err("open-api must not use dual token");
         assert!(error.contains("open-api route"));
+    }
+
+    #[test]
+    fn internal_api_requires_ingress_token_auth() {
+        use crate::request_context::WebRequestContextProfile;
+
+        const VALID: &[HttpRoute] = &[HttpRoute::ingress_token(
+            HttpMethod::Get,
+            "/internal/v3/api/drive/resources/{resourceId}",
+            "drive",
+            "driveResources.retrieve",
+        )];
+        HttpRouteManifest::new(VALID)
+            .validate_route_auth_for_surfaces(&WebRequestContextProfile::default())
+            .expect("internal-api ingress-token route should be valid");
+
+        const INVALID: &[HttpRoute] = &[HttpRoute::api_key(
+            HttpMethod::Get,
+            "/internal/v3/api/drive/resources/{resourceId}",
+            "drive",
+            "driveResources.retrieve",
+        )];
+        let error = HttpRouteManifest::new(INVALID)
+            .validate_route_auth_for_surfaces(&WebRequestContextProfile::default())
+            .expect_err("internal-api api-key route must not bypass ingress-token semantics");
+        assert!(error.contains("RouteAuth::IngressToken"));
     }
 
     #[test]

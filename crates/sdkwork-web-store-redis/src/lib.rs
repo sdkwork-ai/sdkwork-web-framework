@@ -47,7 +47,8 @@ return count
 /// ARGV[1] = max_requests (integer)
 /// ARGV[2] = window_secs (integer) — TTL for the key
 /// ARGV[3] = now_millis (integer) — current epoch in milliseconds
-/// Returns: >= 0 = current count (allowed); -1 = rate limited
+/// ARGV[4] = request_member (unique 128-bit nonce)
+/// Returns: >= 0 = current count (allowed); -1 = rate limited; -2 = member collision
 const RATE_LIMIT_SCRIPT: &str = r#"
 	local key = KEYS[1]
 	local max_requests = tonumber(ARGV[1])
@@ -64,8 +65,12 @@ const RATE_LIMIT_SCRIPT: &str = r#"
 		return -1
 	end
 
-	-- Add current request timestamp
-	redis.call('ZADD', key, now_ms, now_ms)
+	-- The score orders requests by time; the member must remain unique when
+	-- multiple replicas admit requests during the same millisecond.
+	local inserted = redis.call('ZADD', key, 'NX', now_ms, ARGV[4])
+	if inserted ~= 1 then
+		return -2
+	end
 	redis.call('EXPIRE', key, window_secs)
 	return current_count + 1
 	"#;
@@ -145,6 +150,45 @@ impl RedisRateLimitStore {
     fn key(&self, logical_key: &str) -> String {
         format!("{}:rl:{}", self.key_prefix, logical_key)
     }
+
+    async fn check_and_record_at(
+        &self,
+        key: &str,
+        max_requests: u32,
+        window: Duration,
+        now_ms: i64,
+        request_member: &str,
+    ) -> Result<(), WebFrameworkError> {
+        let mut conn = self
+            .client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(redis_error)?;
+        let redis_key = self.key(key);
+        let result: i64 = self
+            .rate_limit_script
+            .key(redis_key)
+            .arg(max_requests)
+            .arg(window.as_secs().max(1) as i64)
+            .arg(now_ms)
+            .arg(request_member)
+            .invoke_async(&mut conn)
+            .await
+            .map_err(redis_error)?;
+        match result {
+            -1 => Err(WebFrameworkError::rate_limit_exceeded(
+                "rate limit exceeded",
+                window.as_secs().max(1),
+            )),
+            -2 => Err(WebFrameworkError::dependency_unavailable(
+                "redis rate-limit request member collision",
+            )),
+            value if value >= 0 => Ok(()),
+            value => Err(WebFrameworkError::dependency_unavailable(format!(
+                "redis rate-limit script returned unexpected result {value}",
+            ))),
+        }
+    }
 }
 
 #[async_trait]
@@ -159,28 +203,9 @@ impl RateLimitStore for RedisRateLimitStore {
         max_requests: u32,
         window: Duration,
     ) -> Result<(), WebFrameworkError> {
-        let mut conn = self
-            .client
-            .get_multiplexed_async_connection()
+        let request_member = new_rate_limit_request_member()?;
+        self.check_and_record_at(key, max_requests, window, now_epoch_ms(), &request_member)
             .await
-            .map_err(redis_error)?;
-        let redis_key = self.key(key);
-        let result: i64 = self
-            .rate_limit_script
-            .key(redis_key)
-            .arg(max_requests)
-            .arg(window.as_secs().max(1) as i64)
-            .arg(now_epoch_ms())
-            .invoke_async(&mut conn)
-            .await
-            .map_err(redis_error)?;
-        if result < 0 {
-            return Err(WebFrameworkError::rate_limit_exceeded(
-                "rate limit exceeded",
-                window.as_secs().max(1),
-            ));
-        }
-        Ok(())
     }
 }
 
@@ -448,9 +473,28 @@ fn now_epoch_ms() -> i64 {
         .as_millis() as i64
 }
 
+fn new_rate_limit_request_member() -> Result<String, WebFrameworkError> {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+
+    let mut bytes = [0_u8; 16];
+    getrandom::getrandom(&mut bytes).map_err(|error| {
+        WebFrameworkError::dependency_unavailable(format!(
+            "secure random source unavailable for Redis rate limiting: {error}",
+        ))
+    })?;
+    let mut member = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        member.push(HEX[usize::from(byte >> 4)] as char);
+        member.push(HEX[usize::from(byte & 0x0f)] as char);
+    }
+    Ok(member)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sdkwork_web_core::WebFrameworkErrorKind;
+    use tokio::sync::Barrier;
 
     #[test]
     fn redis_keys_are_namespaced() {
@@ -498,5 +542,69 @@ mod tests {
         let store =
             RedisIdempotencyStore::new("redis://127.0.0.1/", "sdkwork").expect("idempotency store");
         assert_eq!("sdkwork:idem:order-42", store.key("order-42"));
+    }
+
+    #[tokio::test]
+    async fn redis_rate_limit_tracks_same_millisecond_requests_exactly() {
+        let Some(redis_url) = std::env::var("SDKWORK_REDIS_TEST_URL")
+            .ok()
+            .filter(|value| !value.trim().is_empty())
+        else {
+            eprintln!("skip: SDKWORK_REDIS_TEST_URL not set; live Redis test bypassed");
+            return;
+        };
+        let store = Arc::new(
+            RedisRateLimitStore::new(&redis_url, "sdkwork:test:rl-exact")
+                .expect("create Redis rate-limit store"),
+        );
+        let key = format!("same-ms:{}", now_epoch_ms());
+        let fixed_now_ms = now_epoch_ms();
+        let request_count = 256_usize;
+        let max_requests = 64_u32;
+        let barrier = Arc::new(Barrier::new(request_count));
+        let mut tasks = Vec::with_capacity(request_count);
+
+        for index in 0..request_count {
+            let store = store.clone();
+            let barrier = barrier.clone();
+            let key = key.clone();
+            tasks.push(tokio::spawn(async move {
+                barrier.wait().await;
+                store
+                    .check_and_record_at(
+                        &key,
+                        max_requests,
+                        Duration::from_secs(60),
+                        fixed_now_ms,
+                        &format!("request-{index}"),
+                    )
+                    .await
+            }));
+        }
+
+        let mut allowed = 0_usize;
+        let mut rejected = 0_usize;
+        for task in tasks {
+            match task.await.expect("rate-limit task must join") {
+                Ok(()) => allowed += 1,
+                Err(error) if error.kind == WebFrameworkErrorKind::RateLimitExceeded => {
+                    rejected += 1;
+                }
+                Err(error) => panic!("unexpected Redis rate-limit error: {error}"),
+            }
+        }
+
+        assert_eq!(allowed, max_requests as usize);
+        assert_eq!(rejected, request_count - max_requests as usize);
+        let mut conn = store
+            .client
+            .get_multiplexed_async_connection()
+            .await
+            .expect("connect to Redis for exactness assertion");
+        let stored_count: usize = conn
+            .zcard(store.key(&key))
+            .await
+            .expect("read Redis rate-limit member count");
+        assert_eq!(stored_count, max_requests as usize);
     }
 }

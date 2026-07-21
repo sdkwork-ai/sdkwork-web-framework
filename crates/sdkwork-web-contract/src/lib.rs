@@ -19,6 +19,7 @@ pub enum ApiSurface {
     OpenApi,
     AppApi,
     BackendApi,
+    InternalApi,
     GatewayApi,
     Unknown,
 }
@@ -47,6 +48,8 @@ pub enum RouteAuth {
     Public,
     DualToken,
     ApiKey,
+    /// Application-ingress token for protected internal-api routes.
+    IngressToken,
     /// OAuth 2.0 bearer token (`Authorization: Bearer`) for open-api.
     OAuth,
     /// Header-driven open-api auth: API key or OAuth bearer (detector chooses).
@@ -173,6 +176,15 @@ impl HttpRoute {
         Self::new(method, path, tag, operation_id, RouteAuth::ApiKey)
     }
 
+    pub const fn ingress_token(
+        method: HttpMethod,
+        path: &'static str,
+        tag: &'static str,
+        operation_id: &'static str,
+    ) -> Self {
+        Self::new(method, path, tag, operation_id, RouteAuth::IngressToken)
+    }
+
     pub const fn oauth(
         method: HttpMethod,
         path: &'static str,
@@ -231,6 +243,11 @@ impl RouteAuth {
     /// Resolves through `resolve_api_key` without dual-token or `Access-Token` JWT.
     pub const fn is_agent_token_credential_mode(self) -> bool {
         matches!(self, Self::AgentToken)
+    }
+
+    /// Internal-api routes authenticate with an application ingress token.
+    pub const fn is_ingress_token_credential_mode(self) -> bool {
+        matches!(self, Self::IngressToken)
     }
 }
 

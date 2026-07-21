@@ -48,7 +48,10 @@ pub fn is_forbidden_context_selector_key(key: &str) -> bool {
 pub fn requires_client_context_selector_guard(api_surface: WebApiSurface) -> bool {
     matches!(
         api_surface,
-        WebApiSurface::AppApi | WebApiSurface::OpenApi | WebApiSurface::GatewayApi
+        WebApiSurface::AppApi
+            | WebApiSurface::OpenApi
+            | WebApiSurface::InternalApi
+            | WebApiSurface::GatewayApi
     )
 }
 

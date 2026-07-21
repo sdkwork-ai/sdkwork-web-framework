@@ -131,6 +131,7 @@ impl Default for CorsPolicy {
                 "content-type".to_owned(),
                 "idempotency-key".to_owned(),
                 "x-api-key".to_owned(),
+                "x-sdkwork-access-token".to_owned(),
             ],
             allow_credentials: true,
         }
@@ -212,6 +213,7 @@ impl Default for SqlInjectionGuardPolicy {
             // SECURITY_SPEC §5.1 / OWASP API8。
             inspected_headers: vec![
                 "x-api-key".to_owned(),
+                "x-sdkwork-access-token".to_owned(),
                 "authorization".to_owned(),
                 "access-token".to_owned(),
                 "idempotency-key".to_owned(),

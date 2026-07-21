@@ -12,11 +12,14 @@ pub const SDKWORK_TRACE_ID_HEADER_LOWER: &str = "x-sdkwork-trace-id";
 pub const AUTHORIZATION_HEADER: &str = "Authorization";
 pub const ACCESS_TOKEN_HEADER: &str = "Access-Token";
 pub const API_KEY_HEADER: &str = "X-Api-Key";
+/// Internal-api ingress token alias used by application hosts.
+pub const SDKWORK_ACCESS_TOKEN_HEADER: &str = "X-SDKWork-Access-Token";
 /// Backend agent bootstrap token header (C8-C9). Maps to `RouteAuth::AgentToken`.
 pub const AGENT_TOKEN_HEADER: &str = "X-SDKWork-Agent-Token";
 
 pub const APP_API_PREFIX: &str = "/app/v3/api";
 pub const BACKEND_API_PREFIX: &str = "/backend/v3/api";
+pub const INTERNAL_API_PREFIX: &str = "/internal/v3/api";
 pub const OPEN_API_PREFIX: &str = "/open/v3/api";
 pub const GATEWAY_API_PREFIX: &str = "/v1";
 
@@ -90,5 +93,9 @@ pub const IAM_CANONICAL_CONTEXT_RESOURCE_PREFIXES: &[&str] =
 /// Bootstrap `Access-Token` JWT is EXCLUDED because it remains required for tenant isolation
 /// on credential-entry routes — reject it would prevent tenant-context establishment
 /// for login/register flows (see WEB_FRAMEWORK_SPEC §7 / API_SPEC §10.2).
-pub const FORBIDDEN_CREDENTIAL_ENTRY_HEADERS: &[&str] =
-    &["authorization", "x-api-key", "x-sdkwork-agent-token"];
+pub const FORBIDDEN_CREDENTIAL_ENTRY_HEADERS: &[&str] = &[
+    "authorization",
+    "x-api-key",
+    "x-sdkwork-access-token",
+    "x-sdkwork-agent-token",
+];

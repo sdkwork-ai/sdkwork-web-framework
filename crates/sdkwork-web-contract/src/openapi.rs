@@ -16,6 +16,7 @@ pub const OPENAPI_REQUIRED_SURFACE_EXTENSION: &str = "x-sdkwork-required-surface
 
 const APP_API_PREFIX: &str = "/app/v3/api";
 const BACKEND_API_PREFIX: &str = "/backend/v3/api";
+const INTERNAL_API_PREFIX: &str = "/internal/v3/api";
 const OPEN_API_PREFIX: &str = "/open/v3/api";
 const GATEWAY_API_PREFIX: &str = "/v1";
 
@@ -48,6 +49,8 @@ pub fn infer_api_surface_from_path(path: &str) -> ApiSurface {
         ApiSurface::AppApi
     } else if path.starts_with(BACKEND_API_PREFIX) {
         ApiSurface::BackendApi
+    } else if path.starts_with(INTERNAL_API_PREFIX) {
+        ApiSurface::InternalApi
     } else if path.starts_with(OPEN_API_PREFIX) {
         ApiSurface::OpenApi
     } else if path.starts_with(GATEWAY_API_PREFIX) {
@@ -130,6 +133,11 @@ pub fn build_openapi_operation(route: &HttpRoute) -> Value {
         operation.insert("security".to_owned(), json!([{ "sdkworkDualToken": [] }]));
     } else if route.auth.is_agent_token_credential_mode() {
         operation.insert("security".to_owned(), json!([{ "sdkworkAgentToken": [] }]));
+    } else if route.auth.is_ingress_token_credential_mode() {
+        operation.insert(
+            "security".to_owned(),
+            json!([{ "sdkworkIngressToken": [] }]),
+        );
     }
     for (key, value) in openapi_extensions_for_route(route) {
         operation.insert(key, value);
@@ -186,6 +194,12 @@ pub fn build_openapi_document(title: &str, routes: &[HttpRoute]) -> Value {
                     "in": "header",
                     "name": "X-SDKWork-Agent-Token",
                     "description": "Backend agent bootstrap token for /backend/v3/api/agent/* routes. Resolves via api-key auth-mode without dual-token JWT."
+                },
+                "sdkworkIngressToken": {
+                    "type": "apiKey",
+                    "in": "header",
+                    "name": "X-API-Key",
+                    "description": "Application ingress token for protected internal-api routes. Runtime aliases are Authorization: Bearer and X-SDKWork-Access-Token."
                 }
             },
             "schemas": openapi_envelope_component_schemas()
@@ -200,7 +214,7 @@ pub fn build_openapi_document(title: &str, routes: &[HttpRoute]) -> Value {
 fn requires_context_selector_guard(surface: ApiSurface) -> bool {
     matches!(
         surface,
-        ApiSurface::AppApi | ApiSurface::OpenApi | ApiSurface::GatewayApi
+        ApiSurface::AppApi | ApiSurface::OpenApi | ApiSurface::InternalApi | ApiSurface::GatewayApi
     )
 }
 
@@ -763,6 +777,7 @@ fn api_surface_label(surface: ApiSurface) -> &'static str {
         ApiSurface::OpenApi => "open-api",
         ApiSurface::AppApi => "app-api",
         ApiSurface::BackendApi => "backend-api",
+        ApiSurface::InternalApi => "internal-api",
         ApiSurface::GatewayApi => "gateway-api",
         ApiSurface::Unknown => "unknown",
     }
@@ -774,6 +789,7 @@ fn route_auth_label(auth: RouteAuth) -> &'static str {
         RouteAuth::RefreshToken => "refresh-token",
         RouteAuth::DualToken => "dual-token",
         RouteAuth::ApiKey => "api-key",
+        RouteAuth::IngressToken => "ingress-token",
         RouteAuth::OAuth => "oauth",
         RouteAuth::OpenApiFlexible => "open-api-flexible",
         RouteAuth::AgentToken => "agent-token",
@@ -786,6 +802,7 @@ fn auth_mode_label(auth: RouteAuth) -> &'static str {
         RouteAuth::RefreshToken => "refresh-token",
         RouteAuth::DualToken => "dual-token",
         RouteAuth::ApiKey => "api-key",
+        RouteAuth::IngressToken => "ingress-token",
         RouteAuth::OAuth => "oauth",
         RouteAuth::OpenApiFlexible => "open-api-flexible",
         // AgentToken maps to canonical api-key auth-mode (API_SPEC §19).
@@ -981,6 +998,41 @@ mod tests {
                 .get(OPENAPI_API_SURFACE_EXTENSION)
                 .and_then(Value::as_str)
                 .expect("api surface extension")
+        );
+    }
+
+    #[test]
+    fn internal_api_materializes_ingress_token_contract() {
+        let route = HttpRoute::ingress_token(
+            HttpMethod::Get,
+            "/internal/v3/api/drive/resources/{resourceId}",
+            "drive",
+            "driveResources.retrieve",
+        );
+        let operation = build_openapi_operation(&route);
+        assert_eq!(
+            Some("internal-api"),
+            operation
+                .get(OPENAPI_API_SURFACE_EXTENSION)
+                .and_then(Value::as_str)
+        );
+        assert_eq!(
+            Some("ingress-token"),
+            operation
+                .get(OPENAPI_AUTH_MODE_EXTENSION)
+                .and_then(Value::as_str)
+        );
+        assert_eq!(
+            Some(&json!([{ "sdkworkIngressToken": [] }])),
+            operation.get("security")
+        );
+
+        let document = build_openapi_document("Drive Internal API", &[route]);
+        assert_eq!(
+            Some("X-API-Key"),
+            document
+                .pointer("/components/securitySchemes/sdkworkIngressToken/name")
+                .and_then(Value::as_str)
         );
     }
 

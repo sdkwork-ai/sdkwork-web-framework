@@ -10,6 +10,7 @@ fn is_sensitive_header_name(normalized: &str) -> bool {
             | "api-key"
             | "access-token"
             | "x-access-token"
+            | "x-sdkwork-access-token"
             | "cookie"
             | "set-cookie"
             | "x-idempotency-key"

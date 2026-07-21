@@ -9,6 +9,9 @@ pub fn classify_api_surface(path: &str, profile: &WebRequestContextProfile) -> W
     if matches_prefix(&normalized, &profile.backend_api_prefix) {
         return WebApiSurface::BackendApi;
     }
+    if matches_prefix(&normalized, crate::constants::INTERNAL_API_PREFIX) {
+        return WebApiSurface::InternalApi;
+    }
     if profile
         .gateway_api_prefixes
         .iter()
@@ -72,6 +75,7 @@ pub fn api_surface_metric_label(surface: &crate::request_context::WebApiSurface)
         WebApiSurface::OpenApi => "openApi",
         WebApiSurface::AppApi => "appApi",
         WebApiSurface::BackendApi => "backendApi",
+        WebApiSurface::InternalApi => "internalApi",
         WebApiSurface::GatewayApi => "gatewayApi",
         WebApiSurface::Unknown => "unknown",
     }
@@ -84,6 +88,7 @@ pub fn api_surface_contract_label(surface: &crate::request_context::WebApiSurfac
         WebApiSurface::OpenApi => "open-api",
         WebApiSurface::AppApi => "app-api",
         WebApiSurface::BackendApi => "backend-api",
+        WebApiSurface::InternalApi => "internal-api",
         WebApiSurface::GatewayApi => "gateway-api",
         WebApiSurface::Unknown => "unknown",
     }

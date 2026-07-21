@@ -121,11 +121,13 @@ pub enum WebApiSurface {
     OpenApi,
     AppApi,
     BackendApi,
+    InternalApi,
     GatewayApi,   // 如 /v1，策略可独立
     Unknown,
 }
 
 pub enum WebAuthMode {
+    IngressToken, // internal-api application ingress token
     Public,      // 无需 principal
     ApiKey,      // open-api（X-Api-Key）
     OAuth,       // open-api（Authorization: Bearer）
@@ -527,8 +529,8 @@ Response 返回（request_id 写入响应头）
     "required": ["requestId", "apiSurface", "authMode", "transport"],
     "properties": {
       "requestId": { "type": "string", "format": "uuid" },
-      "apiSurface": { "enum": ["openApi", "appApi", "backendApi", "gatewayApi", "unknown"] },
-      "authMode": { "enum": ["public", "apiKey", "oauth", "dualToken"] },
+      "apiSurface": { "enum": ["openApi", "appApi", "backendApi", "internalApi", "gatewayApi", "unknown"] },
+      "authMode": { "enum": ["public", "apiKey", "ingressToken", "oauth", "dualToken"] },
       "principal": { "$ref": "#/components/schemas/WebRequestPrincipal" }
     }
   },

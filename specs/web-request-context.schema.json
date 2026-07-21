@@ -11,11 +11,11 @@
     },
     "WebApiSurface": {
       "type": "string",
-      "enum": ["openApi", "appApi", "backendApi", "gatewayApi", "unknown"]
+      "enum": ["openApi", "appApi", "backendApi", "internalApi", "gatewayApi", "unknown"]
     },
     "WebAuthMode": {
       "type": "string",
-      "enum": ["public", "apiKey", "oauth", "dualToken"]
+      "enum": ["public", "apiKey", "ingressToken", "oauth", "dualToken"]
     },
     "WebLoginScope": {
       "type": "string",

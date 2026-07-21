@@ -97,6 +97,7 @@ impl OpenApiCredentialSchemeDetector for DefaultOpenApiCredentialSchemeDetector 
                 RouteAuth::Public
                 | RouteAuth::RefreshToken
                 | RouteAuth::DualToken
+                | RouteAuth::IngressToken
                 | RouteAuth::AgentToken,
             ) => {}
         }
@@ -167,7 +168,10 @@ pub fn allowed_open_api_schemes(route_auth: RouteAuth) -> &'static [OpenApiAuthS
         RouteAuth::ApiKey | RouteAuth::AgentToken => &[OpenApiAuthScheme::ApiKey],
         RouteAuth::OAuth => &[OpenApiAuthScheme::OAuthBearer],
         RouteAuth::OpenApiFlexible => &[OpenApiAuthScheme::ApiKey, OpenApiAuthScheme::OAuthBearer],
-        RouteAuth::Public | RouteAuth::RefreshToken | RouteAuth::DualToken => &[],
+        RouteAuth::Public
+        | RouteAuth::RefreshToken
+        | RouteAuth::DualToken
+        | RouteAuth::IngressToken => &[],
     }
 }
 

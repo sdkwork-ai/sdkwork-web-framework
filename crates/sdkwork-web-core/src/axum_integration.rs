@@ -36,6 +36,9 @@ pub struct RequireAppApi(pub WebRequestContext);
 /// Requires open-api surface with API key or OAuth bearer authentication.
 pub struct RequireOpenApi(pub WebRequestContext);
 
+/// Requires internal-api surface with ingress-token authentication.
+pub struct RequireInternalApi(pub WebRequestContext);
+
 impl<S> FromRequestParts<S> for RequirePrincipal
 where
     S: Send + Sync,
@@ -124,6 +127,34 @@ where
             return Err(WebFrameworkRejection::new(
                 WebFrameworkError::missing_credentials(
                     "handler requires open-api API key or OAuth bearer authentication",
+                ),
+                parts,
+            ));
+        }
+        ctx.require_principal()
+            .map_err(|error| WebFrameworkRejection::new(error, parts))?;
+        Ok(Self(ctx))
+    }
+}
+
+impl<S> FromRequestParts<S> for RequireInternalApi
+where
+    S: Send + Sync,
+{
+    type Rejection = WebFrameworkRejection;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let ctx = WebRequestContext::from_request_parts(parts, state).await?;
+        if !matches!(ctx.api_surface, WebApiSurface::InternalApi) {
+            return Err(WebFrameworkRejection::new(
+                WebFrameworkError::forbidden("handler requires internal-api surface"),
+                parts,
+            ));
+        }
+        if !matches!(ctx.auth_mode, WebAuthMode::IngressToken) {
+            return Err(WebFrameworkRejection::new(
+                WebFrameworkError::missing_credentials(
+                    "handler requires ingress-token authenticated context",
                 ),
                 parts,
             ));

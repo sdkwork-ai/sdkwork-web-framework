@@ -36,7 +36,7 @@
       "standardDocument": "specs/WEB_FRAMEWORK_STANDARD.md",
       "capabilityMatrix": "specs/web-framework-capability.matrix.json"
     },
-    "apiSurfaces": ["open-api", "app-api", "backend-api"],
+    "apiSurfaces": ["open-api", "app-api", "backend-api", "internal-api"],
     "extensionTraits": [
       "WebRequestContextResolver",
       "AuthorizationPolicy",
