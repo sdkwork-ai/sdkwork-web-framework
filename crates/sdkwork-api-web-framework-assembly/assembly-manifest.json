@@ -14,7 +14,7 @@
       "pathPrefix": null,
       "mountOrder": 0,
       "componentRef": "crates/sdkwork-routes-web-framework-backend-api/specs/component.spec.json",
-      "routeManifestRef": "crates/sdkwork-routes-web-framework-backend-api/sdks/_route-manifests/backend-api/sdkwork-routes-web-framework-backend-api.route-manifest.json",
+      "routeManifestRef": "apis/backend-api/web-framework/openapi.json",
       "sourceRef": "crates/sdkwork-routes-web-framework-backend-api/Cargo.toml"
     }
   ]

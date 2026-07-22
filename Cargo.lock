@@ -1864,7 +1864,7 @@ version = "0.1.0"
 dependencies = [
  "axum 0.8.9",
  "sdkwork-routes-web-framework-backend-api",
- "sqlx",
+ "sdkwork-web-framework-admin-repository-sqlx",
  "tokio",
 ]
 

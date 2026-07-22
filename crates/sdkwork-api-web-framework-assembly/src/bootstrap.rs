@@ -5,6 +5,7 @@
 //! so `/healthz`, `/livez`, `/readyz`, and `/metrics` are not duplicated per surface.
 
 use axum::Router;
+use sdkwork_web_framework_admin_repository_sqlx::AdminStorePool;
 
 pub struct ApiAssembly {
     pub router: Router,

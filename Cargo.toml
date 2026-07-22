@@ -2,7 +2,6 @@
 resolver = "2"
 members = [
     "crates/sdkwork-api-web-framework-assembly",
-    "crates/sdkwork-api-web-framework-assembly",
     "crates/sdkwork-web-contract",
     "crates/sdkwork-web-core",
     "crates/sdkwork-web-axum",

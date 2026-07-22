@@ -73,7 +73,7 @@
       "gateway_mount",
       "internal_server_error"
     ],
-    "routeManifest": "sdks/_route-manifests/backend-api/sdkwork-routes-web-framework-backend-api.route-manifest.json",
+    "routeManifest": "../../apis/backend-api/web-framework/openapi.json",
     "sdkClients": [],
     "sdkDependencies": [],
     "dependencyApiExports": [],
