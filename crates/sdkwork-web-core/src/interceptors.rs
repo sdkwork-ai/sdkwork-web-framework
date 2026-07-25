@@ -639,9 +639,14 @@ where
                     return Ok(());
                 }
                 Some(RouteAuth::RefreshToken) => {
-                    state.auth_mode = WebAuthMode::RefreshToken;
-                    state.principal = None;
-                    return Ok(());
+                    return finish_access_token_only_context(
+                        state,
+                        runtime,
+                        WebAuthMode::RefreshToken,
+                        "refresh-token requests require Access-Token JWT",
+                        "missing-refresh-access-token",
+                    )
+                    .await;
                 }
                 Some(RouteAuth::CredentialEntryBootstrap) => {
                     return finish_credential_entry_bootstrap_context(state, runtime).await;
@@ -701,11 +706,6 @@ where
             state.principal = Some(principal);
         }
         WebApiSurface::InternalApi => {
-            if state.route_auth == Some(RouteAuth::Public) {
-                state.auth_mode = WebAuthMode::Public;
-                state.principal = None;
-                return Ok(());
-            }
             if state.route_auth != Some(RouteAuth::IngressToken) {
                 return Err(WebFrameworkError::missing_credentials(
                     "protected internal-api routes require ingress-token auth",
@@ -717,44 +717,54 @@ where
                 )
                 .with_reason("missing-ingress-token")
             })?;
+            let access_token = required_non_open_api_access_token(state)?;
+            runtime.resolver.resolve_access_token(access_token).await?;
             state.principal = Some(runtime.resolver.resolve_api_key(ingress_token).await?);
             state.auth_mode = WebAuthMode::IngressToken;
         }
         WebApiSurface::AppApi | WebApiSurface::BackendApi | WebApiSurface::GatewayApi => {
             match state.route_auth {
                 Some(RouteAuth::Public) => {
-                    state.auth_mode = WebAuthMode::Public;
-                    state.principal = None;
-                    return Ok(());
+                    if state.api_surface == WebApiSurface::AppApi {
+                        state.auth_mode = WebAuthMode::Public;
+                        state.principal = None;
+                        return Ok(());
+                    }
+                    return Err(WebFrameworkError::missing_credentials(
+                        "backend-api and gateway-api routes must not declare public authentication",
+                    )
+                    .with_reason("invalid-non-open-api-public-route"));
                 }
                 Some(RouteAuth::CredentialEntryBootstrap) => {
                     return finish_credential_entry_bootstrap_context(state, runtime).await;
                 }
                 Some(RouteAuth::RefreshToken) => {
-                    state.auth_mode = WebAuthMode::RefreshToken;
-                    state.principal = None;
-                    return Ok(());
+                    return finish_access_token_only_context(
+                        state,
+                        runtime,
+                        WebAuthMode::RefreshToken,
+                        "refresh-token requests require Access-Token JWT",
+                        "missing-refresh-access-token",
+                    )
+                    .await;
                 }
                 _ => {}
             }
             // AgentToken routes resolve via api-key path using X-SDKWork-Agent-Token (C8-C9).
-            // The agent token provides both authentication and tenant isolation without
-            // requiring Access-Token or Authorization: Bearer JWTs.
+            // Agent token proves the agent identity; Access-Token still supplies app/tenant scope.
             if state.route_auth == Some(RouteAuth::AgentToken) {
                 let agent_token = state.credentials.agent_token.as_deref().ok_or_else(|| {
                     WebFrameworkError::missing_credentials(
                         "agent routes require X-SDKWork-Agent-Token header",
                     )
                 })?;
+                let access_token = required_non_open_api_access_token(state)?;
+                runtime.resolver.resolve_access_token(access_token).await?;
                 state.principal = Some(runtime.resolver.resolve_api_key(agent_token).await?);
                 state.auth_mode = WebAuthMode::AgentToken;
                 return Ok(());
             }
-            let access_token = state.credentials.access_token.as_deref().ok_or_else(|| {
-                WebFrameworkError::missing_credentials(
-                    "non-open-api requests require Access-Token JWT for tenant isolation",
-                )
-            })?;
+            let access_token = required_non_open_api_access_token(state)?;
             let auth_token = state.credentials.auth_token.as_deref().ok_or_else(|| {
                 WebFrameworkError::missing_credentials(
                     "app-api and backend-api requests require Authorization: Bearer <auth_token>",
@@ -861,15 +871,41 @@ async fn finish_credential_entry_bootstrap_context<R>(
 where
     R: WebRequestContextResolver + Clone,
 {
+    finish_access_token_only_context(
+        state,
+        runtime,
+        WebAuthMode::CredentialEntryBootstrap,
+        "credential-entry-bootstrap requests require bootstrap Access-Token JWT",
+        "missing-bootstrap-access-token",
+    )
+    .await
+}
+
+async fn finish_access_token_only_context<R>(
+    state: &mut WebCallState,
+    runtime: &WebCallRuntime<R>,
+    auth_mode: WebAuthMode,
+    missing_message: &'static str,
+    missing_reason: &'static str,
+) -> Result<(), WebFrameworkError>
+where
+    R: WebRequestContextResolver + Clone,
+{
     let access_token = state.credentials.access_token.as_deref().ok_or_else(|| {
-        WebFrameworkError::missing_credentials(
-            "credential-entry-bootstrap requests require bootstrap Access-Token JWT",
-        )
-        .with_reason("missing-bootstrap-access-token")
+        WebFrameworkError::missing_credentials(missing_message).with_reason(missing_reason)
     })?;
-    state.auth_mode = WebAuthMode::CredentialEntryBootstrap;
+    state.auth_mode = auth_mode;
     state.principal = Some(runtime.resolver.resolve_access_token(access_token).await?);
     Ok(())
+}
+
+fn required_non_open_api_access_token(state: &WebCallState) -> Result<&str, WebFrameworkError> {
+    state.credentials.access_token.as_deref().ok_or_else(|| {
+        WebFrameworkError::missing_credentials(
+            "non-open-api requests require Access-Token JWT for tenant isolation",
+        )
+        .with_reason("missing-access-token")
+    })
 }
 
 fn is_idempotent_command(method: &str) -> bool {

@@ -167,16 +167,18 @@ pub fn build_openapi_operation(route: &HttpRoute) -> Value {
     operation.insert(
         "security".to_owned(),
         match route.auth {
-            RouteAuth::Public | RouteAuth::RefreshToken => json!([]),
-            RouteAuth::CredentialEntryBootstrap => json!([{ "AccessToken": [] }]),
+            RouteAuth::Public => json!([]),
+            RouteAuth::CredentialEntryBootstrap | RouteAuth::RefreshToken => {
+                json!([{ "AccessToken": [] }])
+            }
             RouteAuth::DualToken => json!([{ "AuthToken": [], "AccessToken": [] }]),
             RouteAuth::ApiKey => json!([{ "ApiKey": [] }]),
             RouteAuth::OAuth => json!([{ "OAuthBearer": [] }]),
             RouteAuth::OpenApiFlexible => {
                 json!([{ "ApiKey": [] }, { "OAuthBearer": [] }])
             }
-            RouteAuth::IngressToken => json!([{ "IngressToken": [] }]),
-            RouteAuth::AgentToken => json!([{ "AgentToken": [] }]),
+            RouteAuth::IngressToken => json!([{ "IngressToken": [], "AccessToken": [] }]),
+            RouteAuth::AgentToken => json!([{ "AgentToken": [], "AccessToken": [] }]),
             RouteAuth::Compatibility => unreachable!("handled above"),
         },
     );
@@ -1263,7 +1265,7 @@ mod tests {
                 .and_then(Value::as_str)
         );
         assert_eq!(
-            Some(&json!([{ "IngressToken": [] }])),
+            Some(&json!([{ "IngressToken": [], "AccessToken": [] }])),
             operation.get("security")
         );
 

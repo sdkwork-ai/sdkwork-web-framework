@@ -63,7 +63,7 @@ pub enum RouteAuth {
     OAuth,
     /// Header-driven open-api auth: API key or OAuth bearer (detector chooses).
     OpenApiFlexible,
-    /// Refresh-token proof in request body; skips dual-token and open-api header auth.
+    /// Refresh-token proof in request body plus the mandatory non-open-api `Access-Token`.
     RefreshToken,
     /// Agent bootstrap token (`X-SDKWork-Agent-Token`) on backend-api agent routes.
     ///
@@ -445,15 +445,12 @@ impl HttpRoute {
 }
 
 impl RouteAuth {
-    /// Routes that bypass session authorization and dual-token resolution.
+    /// Routes that bypass all framework credential resolution.
     ///
-    /// Credential-entry still resolves its bootstrap access JWT. Refresh-token handlers validate
-    /// their declared body proof. The existing name remains for source compatibility.
+    /// Only explicit public routes qualify. Access-token-only profiles still resolve their
+    /// application credential before dispatching to a handler.
     pub const fn skips_credential_resolution(self) -> bool {
-        matches!(
-            self,
-            Self::Public | Self::CredentialEntryBootstrap | Self::RefreshToken
-        )
+        matches!(self, Self::Public)
     }
 
     pub const fn is_anonymous(self) -> bool {
@@ -462,6 +459,10 @@ impl RouteAuth {
 
     pub const fn requires_bootstrap_access_token(self) -> bool {
         matches!(self, Self::CredentialEntryBootstrap)
+    }
+
+    pub const fn requires_access_token_only(self) -> bool {
+        matches!(self, Self::CredentialEntryBootstrap | Self::RefreshToken)
     }
 
     /// Protected app-api / backend-api / gateway-api routes require both auth and access tokens.
@@ -506,7 +507,10 @@ impl RouteAuth {
 pub const fn non_open_api_surface_requires_access_token(surface: ApiSurface) -> bool {
     matches!(
         surface,
-        ApiSurface::AppApi | ApiSurface::BackendApi | ApiSurface::GatewayApi
+        ApiSurface::AppApi
+            | ApiSurface::BackendApi
+            | ApiSurface::InternalApi
+            | ApiSurface::GatewayApi
     )
 }
 

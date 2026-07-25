@@ -569,14 +569,14 @@ impl SecurityPolicy {
         headers: &axum::http::HeaderMap,
     ) -> Result<(), WebFrameworkError> {
         let allowed: &[&str] = match route_auth {
-            RouteAuth::Public | RouteAuth::RefreshToken => &[],
-            RouteAuth::CredentialEntryBootstrap => &["access-token"],
+            RouteAuth::Public => &[],
+            RouteAuth::CredentialEntryBootstrap | RouteAuth::RefreshToken => &["access-token"],
             RouteAuth::DualToken => &["authorization", "access-token"],
             RouteAuth::ApiKey => &["x-api-key"],
             RouteAuth::OAuth => &["authorization"],
             RouteAuth::OpenApiFlexible => &["authorization", "x-api-key"],
-            RouteAuth::IngressToken => &["x-sdkwork-ingress-token"],
-            RouteAuth::AgentToken => &["x-sdkwork-agent-token"],
+            RouteAuth::IngressToken => &["x-sdkwork-ingress-token", "access-token"],
+            RouteAuth::AgentToken => &["x-sdkwork-agent-token", "access-token"],
             RouteAuth::Compatibility => unreachable!("handled by route metadata validation"),
         };
         for name in crate::constants::STANDARD_CREDENTIAL_HEADERS {
@@ -999,13 +999,19 @@ mod tests {
         let cases: &[(RouteAuth, &[&str])] = &[
             (RouteAuth::Public, &[]),
             (RouteAuth::CredentialEntryBootstrap, &["access-token"]),
-            (RouteAuth::RefreshToken, &[]),
+            (RouteAuth::RefreshToken, &["access-token"]),
             (RouteAuth::DualToken, &["authorization", "access-token"]),
             (RouteAuth::ApiKey, &["x-api-key"]),
             (RouteAuth::OAuth, &["authorization"]),
             (RouteAuth::OpenApiFlexible, &["authorization", "x-api-key"]),
-            (RouteAuth::IngressToken, &["x-sdkwork-ingress-token"]),
-            (RouteAuth::AgentToken, &["x-sdkwork-agent-token"]),
+            (
+                RouteAuth::IngressToken,
+                &["x-sdkwork-ingress-token", "access-token"],
+            ),
+            (
+                RouteAuth::AgentToken,
+                &["x-sdkwork-agent-token", "access-token"],
+            ),
         ];
 
         for (auth, allowed_headers) in cases {

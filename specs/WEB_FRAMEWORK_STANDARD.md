@@ -117,9 +117,10 @@ No duplicate `public_path_prefixes` entry is required for manifest-declared publ
 
 ### 3.6 Credential-entry and refresh profiles
 
-Pre-session credential-entry operations are not public routes. Login, registration, OAuth session
-creation, QR authentication, and password-reset entrypoints `MUST` declare
-`RouteAuth::CredentialEntryBootstrap` through `HttpRoute::credential_entry_bootstrap(...)`.
+Pre-session operations use the auth profile declared by their owning API contract. Operations
+classified as credential-entry `MUST` declare `RouteAuth::CredentialEntryBootstrap` through
+`HttpRoute::credential_entry_bootstrap(...)`; operations classified as anonymous use
+`RouteAuth::Public`. The framework does not classify business operations by name or path.
 
 | Profile | Allowed proof | Runtime context | Forbidden credentials |
 | --- | --- | --- | --- |

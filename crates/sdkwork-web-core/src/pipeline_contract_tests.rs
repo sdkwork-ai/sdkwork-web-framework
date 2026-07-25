@@ -202,6 +202,7 @@ async fn internal_api_accepts_only_canonical_ingress_token_header() {
         .method("GET")
         .uri("/internal/v3/api/drive/resources/example")
         .header("X-SDKWork-Ingress-Token", fixture_ingress_token())
+        .header("Access-Token", fixture_access_header())
         .body(Body::empty())
         .expect("internal-api request");
     let mut state = WebCallState::from_request(&request);
@@ -372,7 +373,7 @@ async fn gateway_api_surface_skips_client_identity_projection_rejection_for_stri
         "/im/v3/api/realtime/ws",
         "realtime",
         "realtime.websocket.upgrade",
-        RouteAuth::Public,
+        RouteAuth::DualToken,
     )];
 
     let profile = WebRequestContextProfile {
@@ -387,6 +388,8 @@ async fn gateway_api_surface_skips_client_identity_projection_rejection_for_stri
         .method("GET")
         .uri("/im/v3/api/realtime/ws")
         .header("x-sdkwork-tenant-id", "evil-tenant")
+        .header("Authorization", fixture_auth_header())
+        .header("Access-Token", fixture_access_header())
         .body(Body::empty())
         .expect("request");
     let mut state = WebCallState::from_request(&request);
@@ -395,7 +398,7 @@ async fn gateway_api_surface_skips_client_identity_projection_rejection_for_stri
         .await
         .expect("gateway must strip projection headers downstream instead of rejecting");
     assert_eq!(WebApiSurface::GatewayApi, state.api_surface);
-    assert!(state.public_path);
+    assert!(!state.public_path);
 }
 
 #[tokio::test]
@@ -508,7 +511,7 @@ async fn public_route_emits_audit_fact() {
 async fn domain_injector_runs_at_context_injection() {
     use sdkwork_web_contract::{HttpMethod, HttpRoute};
 
-    const ROUTES: &[HttpRoute] = &[HttpRoute::public(
+    const ROUTES: &[HttpRoute] = &[HttpRoute::credential_entry_bootstrap(
         HttpMethod::Get,
         "/app/v3/api/public/ping",
         "system",
@@ -520,6 +523,7 @@ async fn domain_injector_runs_at_context_injection() {
     let chain = WebCallInterceptorChain::standard();
     let mut request = Request::builder()
         .uri("/app/v3/api/public/ping")
+        .header("Access-Token", fixture_bootstrap_access_header())
         .body(Body::empty())
         .expect("request");
     let mut state = WebCallState::from_request(&request);
@@ -597,7 +601,7 @@ async fn manifest_credential_entry_route_rejects_authorization_header() {
 }
 
 #[tokio::test]
-async fn manifest_refresh_route_accepts_missing_access_token_header() {
+async fn manifest_refresh_route_rejects_missing_access_token_header() {
     use sdkwork_web_contract::{HttpMethod, HttpRoute, RouteAuth};
 
     const ROUTES: &[HttpRoute] = &[HttpRoute::new(
@@ -617,16 +621,16 @@ async fn manifest_refresh_route_accepts_missing_access_token_header() {
         .body(Body::empty())
         .expect("request");
     let mut state = WebCallState::from_request(&request);
-    chain
+    let error = chain
         .before(&mut state, &mut request, &runtime)
         .await
-        .expect("refresh proof is validated by the handler, not inherited headers");
-    assert_eq!(WebAuthMode::RefreshToken, state.auth_mode);
-    assert!(state.principal.is_none());
+        .expect_err("refresh body proof does not replace Access-Token");
+    assert_eq!(WebFrameworkErrorKind::MissingCredentials, error.kind);
+    assert!(error.message.contains("Access-Token"));
 }
 
 #[tokio::test]
-async fn manifest_public_infra_route_allows_missing_access_token() {
+async fn manifest_app_api_public_route_skips_credentials() {
     use sdkwork_web_contract::{HttpMethod, HttpRoute};
 
     const ROUTES: &[HttpRoute] = &[HttpRoute::public(
@@ -647,9 +651,10 @@ async fn manifest_public_infra_route_allows_missing_access_token() {
     chain
         .before(&mut state, &mut request, &runtime)
         .await
-        .expect("infra public route accepts unauthenticated probes");
+        .expect("manifest-declared app-api public route skips credentials");
     assert_eq!(WebAuthMode::Public, state.auth_mode);
     assert!(state.principal.is_none());
+    assert!(state.public_path);
 }
 
 #[tokio::test]
@@ -714,7 +719,7 @@ async fn manifest_protected_route_still_requires_credentials() {
 }
 
 #[tokio::test]
-async fn manifest_public_route_with_path_parameter_skips_auth() {
+async fn manifest_app_api_public_route_with_path_parameter_skips_credentials() {
     use sdkwork_web_contract::{HttpMethod, HttpRoute, RouteAuth};
 
     const ROUTES: &[HttpRoute] = &[HttpRoute::new(
@@ -738,8 +743,10 @@ async fn manifest_public_route_with_path_parameter_skips_auth() {
     chain
         .before(&mut state, &mut request, &runtime)
         .await
-        .expect("parameterized public route must skip auth and cors rejection");
+        .expect("parameterized app-api public route skips credentials");
     assert!(state.public_path);
+    assert_eq!(WebAuthMode::Public, state.auth_mode);
+    assert!(state.principal.is_none());
 }
 
 #[tokio::test]
@@ -838,16 +845,17 @@ async fn manifest_refresh_token_route_skips_dual_token_requirement() {
         .method("POST")
         .uri("/app/v3/api/auth/sessions/refresh")
         .header("content-type", "application/json")
+        .header("Access-Token", fixture_bootstrap_access_header())
         .body(Body::from(r#"{"refreshToken":"rt-1"}"#))
         .expect("request");
     let mut state = WebCallState::from_request(&request);
     chain
         .before(&mut state, &mut request, &runtime)
         .await
-        .expect("refresh-token route must skip header credential requirements");
-    assert!(state.public_path);
+        .expect("refresh-token route requires Access-Token but not Authorization");
+    assert!(!state.public_path);
     assert_eq!(WebAuthMode::RefreshToken, state.auth_mode);
-    assert!(state.principal.is_none());
+    assert!(state.principal.is_some());
 }
 
 #[tokio::test]

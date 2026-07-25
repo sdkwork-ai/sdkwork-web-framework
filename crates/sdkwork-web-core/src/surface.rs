@@ -123,7 +123,7 @@ mod tests {
     }
 
     #[test]
-    fn resolve_public_path_treats_refresh_token_routes_as_credential_optional() {
+    fn resolve_public_path_treats_refresh_token_routes_as_access_token_protected() {
         const ROUTES: &[HttpRoute] = &[HttpRoute::new(
             HttpMethod::Post,
             "/app/v3/api/auth/sessions/refresh",
@@ -132,7 +132,7 @@ mod tests {
             RouteAuth::RefreshToken,
         )];
         let profile = WebRequestContextProfile::default();
-        assert!(resolve_public_path(
+        assert!(!resolve_public_path(
             "POST",
             "/app/v3/api/auth/sessions/refresh",
             &profile,

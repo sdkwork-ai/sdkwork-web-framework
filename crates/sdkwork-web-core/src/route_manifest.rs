@@ -78,10 +78,9 @@ impl HttpRouteManifest {
 
     /// Ensures manifest `RouteAuth` matches the API surface inferred from each route path.
     ///
-    /// Non-open-api routes (app-api, backend-api, gateway-api) that are not public or
-    /// refresh-token entrypoints must declare `RouteAuth::DualToken` so materialized OpenAPI
-    /// and runtime credential rules stay aligned. Backend-api additionally permits
-    /// `RouteAuth::AgentToken` for `/backend/v3/api/agent/*` routes (C8-C9).
+    /// App API routes may be public or use an Access-Token-bearing profile. Gateway routes use
+    /// dual-token or access-token-only entry profiles; backend additionally permits agent-token
+    /// plus `Access-Token`; internal routes use ingress-token plus `Access-Token`.
     pub fn validate_route_auth_for_surfaces(
         &self,
         profile: &WebRequestContextProfile,
@@ -90,13 +89,27 @@ impl HttpRouteManifest {
             route.validate_compatibility_contract()?;
             let surface = classify_api_surface(route.path, profile);
             match surface {
-                WebApiSurface::AppApi | WebApiSurface::GatewayApi => {
-                    if route.auth.skips_credential_resolution() {
+                WebApiSurface::AppApi => {
+                    if route.auth.is_anonymous() {
                         continue;
                     }
-                    if !route.auth.requires_dual_token_headers() {
+                    if !route.auth.requires_dual_token_headers()
+                        && !route.auth.requires_access_token_only()
+                    {
                         return Err(format!(
-                            "non-open-api route {} {} must declare RouteAuth::DualToken (found {})",
+                            "app-api route {} {} must declare RouteAuth::Public or an Access-Token-bearing auth profile: RouteAuth::DualToken, RouteAuth::CredentialEntryBootstrap, or RouteAuth::RefreshToken (found {})",
+                            http_method_label(route.method),
+                            route.path,
+                            route_auth_label(route.auth),
+                        ));
+                    }
+                }
+                WebApiSurface::GatewayApi => {
+                    if !route.auth.requires_dual_token_headers()
+                        && !route.auth.requires_access_token_only()
+                    {
+                        return Err(format!(
+                            "gateway-api route {} {} must declare an Access-Token-bearing auth profile (found {})",
                             http_method_label(route.method),
                             route.path,
                             route_auth_label(route.auth),
@@ -104,15 +117,13 @@ impl HttpRouteManifest {
                     }
                 }
                 WebApiSurface::BackendApi => {
-                    if route.auth.skips_credential_resolution() {
-                        continue;
-                    }
-                    // Backend-api permits DualToken (standard) or AgentToken (C8-C9 agent routes).
+                    // Backend-api permits access-token-only entry profiles and agent bootstrap.
                     if !route.auth.requires_dual_token_headers()
+                        && !route.auth.requires_access_token_only()
                         && !route.auth.is_agent_token_credential_mode()
                     {
                         return Err(format!(
-                            "backend-api route {} {} must declare RouteAuth::DualToken or RouteAuth::AgentToken (found {})",
+                            "backend-api route {} {} must declare an Access-Token-bearing auth profile (found {})",
                             http_method_label(route.method),
                             route.path,
                             route_auth_label(route.auth),
@@ -120,9 +131,6 @@ impl HttpRouteManifest {
                     }
                 }
                 WebApiSurface::InternalApi => {
-                    if route.auth.skips_credential_resolution() {
-                        continue;
-                    }
                     if !route.auth.is_ingress_token_credential_mode() {
                         return Err(format!(
                             "internal-api route {} {} must declare RouteAuth::IngressToken (found {})",
@@ -133,7 +141,7 @@ impl HttpRouteManifest {
                     }
                 }
                 WebApiSurface::OpenApi => {
-                    if route.auth.skips_credential_resolution() {
+                    if route.auth.is_anonymous() {
                         continue;
                     }
                     if route.auth == RouteAuth::Compatibility {
@@ -375,11 +383,17 @@ mod tests {
     }
 
     #[test]
-    fn accepts_non_open_api_public_and_dual_token_routes() {
+    fn accepts_app_api_public_and_non_open_api_access_token_profiles() {
         use crate::request_context::WebRequestContextProfile;
 
         const ROUTES: &[HttpRoute] = &[
             HttpRoute::public(
+                HttpMethod::Get,
+                "/app/v3/api/system/runtime",
+                "system",
+                "runtime.retrieve",
+            ),
+            HttpRoute::credential_entry_bootstrap(
                 HttpMethod::Post,
                 "/app/v3/api/auth/sessions",
                 "Auth",
@@ -395,7 +409,23 @@ mod tests {
         let manifest = HttpRouteManifest::new(ROUTES);
         manifest
             .validate_route_auth_for_surfaces(&WebRequestContextProfile::default())
-            .expect("public and dual-token routes are valid");
+            .expect("app-api public, access-token-only, and dual-token routes are valid");
+    }
+
+    #[test]
+    fn rejects_backend_api_public_routes() {
+        use crate::request_context::WebRequestContextProfile;
+
+        const ROUTES: &[HttpRoute] = &[HttpRoute::public(
+            HttpMethod::Get,
+            "/backend/v3/api/system/runtime",
+            "system",
+            "runtime.retrieve",
+        )];
+        let error = HttpRouteManifest::new(ROUTES)
+            .validate_route_auth_for_surfaces(&WebRequestContextProfile::default())
+            .expect_err("backend-api public routes must be rejected");
+        assert!(error.contains("Access-Token"));
     }
 
     #[test]
