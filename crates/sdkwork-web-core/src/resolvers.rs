@@ -25,6 +25,13 @@ pub enum ResolverProductionProfile {
     TenantBoundSaaS,
 }
 
+/// Credential value extracted by the framework from a compatibility route's declared scheme.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CompatibilityCredential {
+    pub scheme_name: String,
+    pub value: String,
+}
+
 #[async_trait]
 pub trait WebRequestContextResolver: Clone + Send + Sync + 'static {
     fn resolver_production_profile(&self) -> ResolverProductionProfile {
@@ -72,6 +79,19 @@ pub trait WebRequestContextResolver: Clone + Send + Sync + 'static {
         Err(WebFrameworkError::dependency_unavailable(
             "oauth bearer resolution is not configured; wire OAuthTokenLookupService or override resolve_oauth_bearer",
         ))
+    }
+
+    /// Resolves a vendor-compatibility credential through an approved protocol adapter.
+    async fn resolve_compatibility(
+        &self,
+        external_protocol_id: &str,
+        credentials: &[CompatibilityCredential],
+    ) -> Result<WebRequestPrincipal, WebFrameworkError> {
+        let _ = (external_protocol_id, credentials);
+        Err(WebFrameworkError::dependency_unavailable(
+            "compatibility authentication adapter is not configured",
+        )
+        .with_reason("compatibility-adapter-unavailable"))
     }
 }
 
@@ -674,6 +694,16 @@ where
         raw_bearer_token: &str,
     ) -> Result<WebRequestPrincipal, WebFrameworkError> {
         self.inner.resolve_oauth_bearer(raw_bearer_token).await
+    }
+
+    async fn resolve_compatibility(
+        &self,
+        external_protocol_id: &str,
+        credentials: &[CompatibilityCredential],
+    ) -> Result<WebRequestPrincipal, WebFrameworkError> {
+        self.inner
+            .resolve_compatibility(external_protocol_id, credentials)
+            .await
     }
 }
 

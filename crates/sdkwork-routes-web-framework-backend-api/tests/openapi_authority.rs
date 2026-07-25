@@ -399,13 +399,16 @@ fn auth_mode_label(auth: sdkwork_web_contract::RouteAuth) -> &'static str {
     use sdkwork_web_contract::RouteAuth;
     match auth {
         RouteAuth::Public => "anonymous",
+        RouteAuth::CredentialEntryBootstrap => "credential-entry-bootstrap",
         RouteAuth::DualToken => "dual-token",
         RouteAuth::ApiKey => "api-key",
         RouteAuth::OAuth => "oauth",
         RouteAuth::OpenApiFlexible => "open-api-flexible",
         RouteAuth::RefreshToken => "refresh-token",
         // AgentToken maps to canonical api-key auth-mode (API_SPEC §19).
-        RouteAuth::AgentToken => "api-key",
+        RouteAuth::AgentToken => "agent-token",
+        RouteAuth::IngressToken => "ingress-token",
+        RouteAuth::Compatibility => "compatibility",
     }
 }
 

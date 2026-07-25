@@ -67,7 +67,7 @@ async fn enable_admin_api_auto_manifest_contract_fallback_returns_501() {
         .expect("body");
     let payload: serde_json::Value = serde_json::from_slice(&body).expect("json");
     assert_eq!(
-        "https://sdkwork.dev/problems/not-implemented",
+        "https://docs.sdkwork.com/problems/50001",
         payload["type"].as_str().expect("type")
     );
     assert!(payload.get("requestId").is_none());

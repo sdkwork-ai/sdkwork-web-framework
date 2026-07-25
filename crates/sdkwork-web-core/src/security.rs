@@ -3,6 +3,7 @@ use axum::extract::Request;
 use axum::http::{HeaderName, HeaderValue, Method, Uri};
 use axum::response::Response;
 use percent_encoding::percent_decode_str;
+use sdkwork_web_contract::RouteAuth;
 use std::net::IpAddr;
 
 const DEVELOPMENT_PRIVATE_NETWORK_HTTP_ORIGIN: &str = "http://private-network:*";
@@ -519,6 +520,77 @@ impl RequestSecurityPolicy for SecurityPolicy {
 }
 
 impl SecurityPolicy {
+    /// Enforces the credential-header allowlist selected by the matched route profile.
+    pub fn validate_route_auth_credentials(
+        route: &sdkwork_web_contract::HttpRoute,
+        headers: &axum::http::HeaderMap,
+    ) -> Result<(), WebFrameworkError> {
+        let route_auth = route.auth;
+        if route_auth == RouteAuth::Compatibility {
+            let compatibility = route.compatibility_auth.as_ref().ok_or_else(|| {
+                WebFrameworkError::bad_request(
+                    "compatibility route is missing external authentication metadata",
+                )
+                .with_reason("invalid-compatibility-auth-contract")
+            })?;
+            compatibility.validate().map_err(|message| {
+                WebFrameworkError::bad_request(message)
+                    .with_reason("invalid-compatibility-auth-contract")
+            })?;
+            for name in crate::constants::STANDARD_CREDENTIAL_HEADERS {
+                if headers.contains_key(*name)
+                    && !compatibility
+                        .schemes
+                        .iter()
+                        .any(|scheme| {
+                            match scheme.kind {
+                        sdkwork_web_contract::CompatibilitySecuritySchemeKind::ApiKeyHeader {
+                            header_name,
+                        } => header_name.eq_ignore_ascii_case(name),
+                        sdkwork_web_contract::CompatibilitySecuritySchemeKind::HttpBearer {
+                            ..
+                        } => *name == "authorization",
+                    }
+                        })
+                {
+                    return Err(WebFrameworkError::bad_request(format!(
+                        "compatibility routes must not receive undeclared credential header {name}"
+                    ))
+                    .with_reason("credential-profile-contamination"));
+                }
+            }
+            return Ok(());
+        }
+        Self::validate_standard_route_auth_credentials(route_auth, headers)
+    }
+
+    fn validate_standard_route_auth_credentials(
+        route_auth: RouteAuth,
+        headers: &axum::http::HeaderMap,
+    ) -> Result<(), WebFrameworkError> {
+        let allowed: &[&str] = match route_auth {
+            RouteAuth::Public | RouteAuth::RefreshToken => &[],
+            RouteAuth::CredentialEntryBootstrap => &["access-token"],
+            RouteAuth::DualToken => &["authorization", "access-token"],
+            RouteAuth::ApiKey => &["x-api-key"],
+            RouteAuth::OAuth => &["authorization"],
+            RouteAuth::OpenApiFlexible => &["authorization", "x-api-key"],
+            RouteAuth::IngressToken => &["x-sdkwork-ingress-token"],
+            RouteAuth::AgentToken => &["x-sdkwork-agent-token"],
+            RouteAuth::Compatibility => unreachable!("handled by route metadata validation"),
+        };
+        for name in crate::constants::STANDARD_CREDENTIAL_HEADERS {
+            if headers.contains_key(*name) && !allowed.contains(name) {
+                return Err(WebFrameworkError::bad_request(format!(
+                    "{} routes must not receive credential header {name}",
+                    route_auth.auth_profile_label(),
+                ))
+                .with_reason("credential-profile-contamination"));
+            }
+        }
+        Ok(())
+    }
+
     pub fn reject_client_identity_projection(
         &self,
         headers: &axum::http::HeaderMap,
@@ -537,13 +609,10 @@ impl SecurityPolicy {
     pub fn reject_credential_entry_headers(
         headers: &axum::http::HeaderMap,
     ) -> Result<(), WebFrameworkError> {
-        for name in crate::constants::FORBIDDEN_CREDENTIAL_ENTRY_HEADERS {
-            if headers.contains_key(*name) {
-                return Err(WebFrameworkError::bad_request(format!(
-                    "credential-entry routes must not receive inbound header {name}"
-                )));
-            }
-        }
+        Self::validate_standard_route_auth_credentials(
+            RouteAuth::CredentialEntryBootstrap,
+            headers,
+        )?;
         for name in crate::constants::FORBIDDEN_CLIENT_IDENTITY_HEADERS {
             if headers.contains_key(*name) {
                 return Err(WebFrameworkError::bad_request(format!(
@@ -919,6 +988,53 @@ mod tests {
     use super::*;
     use crate::error::WebFrameworkErrorKind;
     use axum::body::Body;
+    use sdkwork_web_contract::{HttpMethod, HttpRoute, RouteAuth};
+
+    fn route(auth: RouteAuth) -> HttpRoute {
+        HttpRoute::new(HttpMethod::Get, "/test", "test", "test.get", auth)
+    }
+
+    #[test]
+    fn route_auth_profile_allowlist_rejects_cross_profile_credentials() {
+        let cases: &[(RouteAuth, &[&str])] = &[
+            (RouteAuth::Public, &[]),
+            (RouteAuth::CredentialEntryBootstrap, &["access-token"]),
+            (RouteAuth::RefreshToken, &[]),
+            (RouteAuth::DualToken, &["authorization", "access-token"]),
+            (RouteAuth::ApiKey, &["x-api-key"]),
+            (RouteAuth::OAuth, &["authorization"]),
+            (RouteAuth::OpenApiFlexible, &["authorization", "x-api-key"]),
+            (RouteAuth::IngressToken, &["x-sdkwork-ingress-token"]),
+            (RouteAuth::AgentToken, &["x-sdkwork-agent-token"]),
+        ];
+
+        for (auth, allowed_headers) in cases {
+            for header in crate::constants::STANDARD_CREDENTIAL_HEADERS {
+                let mut headers = axum::http::HeaderMap::new();
+                headers.insert(
+                    axum::http::HeaderName::from_bytes(header.as_bytes()).expect("header"),
+                    axum::http::HeaderValue::from_static("credential"),
+                );
+                let result =
+                    SecurityPolicy::validate_route_auth_credentials(&route(*auth), &headers);
+                if allowed_headers.contains(header) {
+                    result.unwrap_or_else(|error| {
+                        panic!(
+                            "{} should allow {header}: {error}",
+                            auth.auth_profile_label()
+                        )
+                    });
+                } else {
+                    let error = result.unwrap_err();
+                    assert_eq!(WebFrameworkErrorKind::BadRequest, error.kind);
+                    assert_eq!(
+                        Some("credential-profile-contamination"),
+                        error.reason.as_deref()
+                    );
+                }
+            }
+        }
+    }
 
     #[test]
     fn extract_origin_from_referer_parses_https_authority() {

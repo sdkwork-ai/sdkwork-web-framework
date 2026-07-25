@@ -29,6 +29,16 @@ fn problem_type_uris_cover_all_framework_error_kinds() {
             "https://docs.sdkwork.com/problems/40103",
         ),
         (
+            WebFrameworkError::expired_credentials("expired"),
+            401,
+            "https://docs.sdkwork.com/problems/40102",
+        ),
+        (
+            WebFrameworkError::revoked_credentials("revoked"),
+            401,
+            "https://docs.sdkwork.com/problems/40104",
+        ),
+        (
             WebFrameworkError::forbidden("forbidden"),
             403,
             "https://docs.sdkwork.com/problems/40301",

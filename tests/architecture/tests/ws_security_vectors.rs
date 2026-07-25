@@ -23,6 +23,7 @@ fn ws_state_with_principal(principal: Option<WebRequestPrincipal>) -> WebSocketC
             auth_token_present: true,
             access_token_present: true,
             api_key_present: false,
+            ingress_token_present: false,
             oauth_bearer_present: false,
             agent_token_present: false,
         },
@@ -30,6 +31,7 @@ fn ws_state_with_principal(principal: Option<WebRequestPrincipal>) -> WebSocketC
         client_kind: None,
         operation: None,
         trace_id: None,
+        idempotency_key: None,
     };
     WebSocketCallState {
         session: sdkwork_web_core::websocket::WebSocketSession::new(ctx),

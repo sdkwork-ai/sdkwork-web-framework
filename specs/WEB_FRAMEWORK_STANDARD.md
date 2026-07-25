@@ -98,7 +98,7 @@ Business APIs that do not require login `MUST` declare `RouteAuth::Public` on th
 | P2 | Unmatched paths `MAY` fall back to `public_path_prefixes` (infra only). |
 | P3 | Protected manifest routes `MUST NOT` be covered by a `public_path_prefix` (`HttpRouteManifest::validate_public_path_prefixes`). |
 | P4 | Public routes `MUST` still run the full interceptor chain; only credential resolution, Authentication, Authorization, and TenantIsolation are skipped. |
-| P5 | Public routes `MUST` receive `WebRequestContext` with `auth_mode: Public` and tenant-isolation principal from `Access-Token` JWT claims including required `token_version`. Semicolon claim-string `Access-Token` values `MUST` be rejected. Credential-entry routes with `forbidCredentialHeaders` `MUST` accept bootstrap `Access-Token` JWT but keep session `principal: None`. |
+| P5 | Public routes `MUST` receive `WebRequestContext` with `auth_mode: Public` and `principal: None`. `Authorization`, `Access-Token`, API-key, OAuth, ingress-token, agent-token, and client context projection headers are rejected; anonymous never means optional session credentials. |
 | P6 | Public handlers `MUST NOT` use `RequirePrincipal` or call `require_tenant_id()` / `require_app_id()`. |
 | P7 | Auth-sensitive public operations (login, register, password reset) `SHOULD` set `rate_limit_tier: AuthCritical`. |
 | P8 | Materialized OpenAPI for public operations `MUST` include `security: []` and `x-sdkwork-route-auth: public`. |
@@ -114,6 +114,51 @@ WebFramework::builder(resolver)
 ```
 
 No duplicate `public_path_prefixes` entry is required for manifest-declared public business routes.
+
+### 3.6 Credential-entry and refresh profiles
+
+Pre-session credential-entry operations are not public routes. Login, registration, OAuth session
+creation, QR authentication, and password-reset entrypoints `MUST` declare
+`RouteAuth::CredentialEntryBootstrap` through `HttpRoute::credential_entry_bootstrap(...)`.
+
+| Profile | Allowed proof | Runtime context | Forbidden credentials |
+| --- | --- | --- | --- |
+| `CredentialEntryBootstrap` | Bootstrap `Access-Token` JWT only | `WebAuthMode::CredentialEntryBootstrap`; tenant/app isolation is resolved from the verified bootstrap JWT | Session `Authorization`, refresh proof, API key, OAuth bearer, ingress/agent token, and client context projection |
+| `RefreshToken` | The route-declared refresh proof only | `WebAuthMode::RefreshToken`; the IAM handler/adapter validates and projects the refresh session | `Authorization`, `Access-Token`, API key, OAuth bearer, ingress/agent token, and client context projection |
+
+Rules:
+
+- Missing bootstrap `Access-Token` fails with `40101` before handler dispatch.
+- Expired, invalid, and revoked bootstrap/session credentials use `40102`, `40103`, and `40104`
+  respectively when the resolver can distinguish them.
+- `HttpRoute::credential_entry_public(...)` is a migration alias only. It `MUST` construct the
+  first-class credential-entry profile and `MUST NOT` materialize anonymous OpenAPI metadata.
+- Profile selection comes only from the matched route manifest. Header presence never changes the
+  selected profile.
+- The stage-2 contamination guard validates the complete profile allowlist and rejects unexpected
+  credential or context headers before request-context resolution or handler execution.
+
+### 3.7 Vendor compatibility profile
+
+`RouteAuth::Compatibility` is reserved for operation-level external wire protocols governed by
+`API_SPEC.md` section 4.5.2. It is never an anonymous escape hatch.
+
+- A compatibility route `MUST` use `HttpRoute::compatibility(...)` and declare a lowercase
+  kebab-case external protocol id, named security schemes, and explicit security requirement rows.
+- Scheme names inside one requirement row are AND; multiple requirement rows are OR, matching
+  OpenAPI semantics exactly.
+- The route `MUST` provide the exact upstream OpenAPI operation JSON. The materializer preserves
+  its request/response/status shapes and adds `x-sdkwork-wire-protocol: external`,
+  `x-sdkwork-external-protocol-id`, canonical security, and framework context extensions.
+- Missing or invalid compatibility metadata fails framework assembly and OpenAPI materialization.
+  Compatibility `MUST NOT` materialize as `security: []`.
+- The framework extracts only credentials declared by the selected requirement and calls
+  `WebRequestContextResolver::resolve_compatibility(...)`. A missing adapter fails as dependency
+  unavailable; handlers never parse vendor credential headers themselves.
+- Undeclared standard credential headers fail the stage-2 contamination guard. Missing declared
+  credentials fail with `40101` before handler dispatch.
+- Compatibility is valid only on an approved open-api surface. SDKWork-owned app-api,
+  backend-api, internal-api, gateway-api, and business open-api routes use canonical profiles.
 
 ## 4. Other mandatory types
 
@@ -195,11 +240,13 @@ Production SaaS assembly `MUST` use `tenant_bound_saas_verifying_web_request_res
 
 | Surface | Prefix | Auth |
 | --- | --- | --- |
-| app-api | `/app/v3/api` | Dual token (`Authorization` JWT + `Access-Token` JWT) |
+| app-api | `/app/v3/api` | Anonymous, credential-entry-bootstrap, refresh-token, or dual token (`Authorization` JWT + `Access-Token` JWT) |
 | backend-api | `/backend/v3/api` | Dual token |
-| internal-api | `/internal/v3/api` | Ingress token through `X-API-Key`, `Authorization: Bearer`, or `X-SDKWork-Access-Token`; resolved server-side through `ApiKeyLookupService` |
+| internal-api | `/internal/v3/api` | `X-SDKWork-Ingress-Token`; resolved through the ingress-token resolver |
 | open-api | configured prefixes | API key, OAuth bearer, or header-driven flexible (`RouteAuth::OpenApiFlexible`) |
-| public / refresh-token | manifest `RouteAuth::Public` / `RefreshToken` | `Access-Token` JWT required for tenant isolation; session `Authorization` optional |
+| anonymous | manifest `RouteAuth::Public` | No credential; `principal: None` |
+| credential entry | manifest `RouteAuth::CredentialEntryBootstrap` | Bootstrap `Access-Token` JWT only |
+| refresh token | manifest `RouteAuth::RefreshToken` | Declared refresh proof only; no automatic credential headers |
 | infra | `public_path_prefixes` (`/healthz`, `/metrics`, …) | none |
 
 Route crates for **business** capabilities `MUST NOT` live in `sdkwork-web-framework`.
@@ -229,6 +276,9 @@ Route crates for **business** capabilities `MUST NOT` live in `sdkwork-web-frame
   layer before router merge.
 - Request ID: server-generated UUID v4.
 - Unauthenticated protected paths: 401 Problem+json.
+- Framework-generated auth, authorization, tenant-isolation, routing, and dependency problems
+  include `authProfile`, `failedStage`, and a stable non-secret `reason` whenever route metadata is
+  known. They never expose token contents, lookup keys, subject secrets, or upstream addresses.
 - Oversized body: 413.
 - Rate limit exceeded: 429 with `Retry-After` when applicable.
 - Rate-limit / idempotency / audit store errors: fail-closed (`503` Problem+json via `DependencyUnavailable`); applications `MUST NOT` bypass stores in production.

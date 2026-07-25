@@ -370,7 +370,7 @@ where
         #[cfg(not(feature = "admin-api"))]
         let route_manifest = self.route_manifest;
 
-        if let Some(manifest) = route_manifest {
+        if let Some(manifest) = route_manifest.as_ref() {
             if let Err(message) =
                 manifest.validate_public_path_prefixes(&self.profile.public_path_prefixes)
             {

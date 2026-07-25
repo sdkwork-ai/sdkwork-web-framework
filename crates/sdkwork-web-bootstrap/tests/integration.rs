@@ -408,7 +408,7 @@ async fn contract_fallback_returns_501_for_manifest_only_route() {
         .expect("body");
     let payload: serde_json::Value = serde_json::from_slice(&body).expect("json");
     assert_eq!(
-        "https://sdkwork.dev/problems/not-implemented",
+        "https://docs.sdkwork.com/problems/50001",
         payload["type"].as_str().unwrap()
     );
     assert!(payload["traceId"]
@@ -490,7 +490,7 @@ async fn mount_service_routes_contract_fallback_returns_501_for_unmounted_manife
         .expect("body");
     let payload: serde_json::Value = serde_json::from_slice(&body).expect("json");
     assert_eq!(
-        "https://sdkwork.dev/problems/not-implemented",
+        "https://docs.sdkwork.com/problems/50001",
         payload["type"].as_str().unwrap()
     );
 }
@@ -636,9 +636,9 @@ fn builder_rejects_non_open_api_route_without_dual_token_auth() {
 }
 
 #[tokio::test]
-async fn manifest_public_route_reaches_handler_with_access_token_jwt() {
+async fn manifest_credential_entry_route_reaches_handler_with_bootstrap_access_token() {
     let _env = IsolatedDeploymentEnv::enter();
-    const ROUTES: &[HttpRoute] = &[HttpRoute::credential_entry_public(
+    const ROUTES: &[HttpRoute] = &[HttpRoute::credential_entry_bootstrap(
         HttpMethod::Post,
         "/app/v3/api/auth/sessions",
         "Auth",
@@ -652,7 +652,10 @@ async fn manifest_public_route_reaches_handler_with_access_token_jwt() {
         Router::new().route(
             "/app/v3/api/auth/sessions",
             axum::routing::post(|ctx: sdkwork_web_core::WebRequestContext| async move {
-                assert_eq!(sdkwork_web_core::WebAuthMode::Public, ctx.auth_mode);
+                assert_eq!(
+                    sdkwork_web_core::WebAuthMode::CredentialEntryBootstrap,
+                    ctx.auth_mode
+                );
                 assert_eq!(
                     "100001",
                     ctx.principal

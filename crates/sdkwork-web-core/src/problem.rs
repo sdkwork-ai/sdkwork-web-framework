@@ -12,7 +12,9 @@ fn map_result_code(code: i32) -> SdkWorkResultCode {
     match code {
         40001 => SdkWorkResultCode::ValidationError,
         40101 => SdkWorkResultCode::AuthenticationRequired,
+        40102 => SdkWorkResultCode::TokenExpired,
         40103 => SdkWorkResultCode::InvalidToken,
+        40104 => SdkWorkResultCode::SessionRevoked,
         40301 => SdkWorkResultCode::PermissionRequired,
         40401 => SdkWorkResultCode::NotFound,
         40501 => SdkWorkResultCode::MethodNotAllowed,
@@ -190,10 +192,20 @@ pub fn problem_response(
         correlation.routing(),
     );
     problem.status = status.as_u16();
+    let mut payload = serde_json::to_value(problem).expect("problem detail is serializable");
+    if let Some(auth_profile) = error.auth_profile.as_deref() {
+        payload["authProfile"] = serde_json::Value::String(auth_profile.to_owned());
+    }
+    if let Some(failed_stage) = error.failed_stage.as_deref() {
+        payload["failedStage"] = serde_json::Value::String(failed_stage.to_owned());
+    }
+    if let Some(reason) = error.reason.as_deref() {
+        payload["reason"] = serde_json::Value::String(reason.to_owned());
+    }
     let mut response = (
         status,
         [(header::CONTENT_TYPE, "application/problem+json")],
-        Json(problem),
+        Json(payload),
     )
         .into_response();
     if let Ok(value) = HeaderValue::from_str(&trace_id) {
@@ -261,6 +273,50 @@ mod tests {
                 .and_then(|v| v.to_str().ok())
                 .unwrap_or_default()
         );
+    }
+
+    #[test]
+    fn auth_problem_codes_and_diagnostics_are_stable_and_redacted() {
+        let cases = [
+            (WebFrameworkError::missing_credentials("missing"), 40101),
+            (WebFrameworkError::expired_credentials("expired"), 40102),
+            (WebFrameworkError::invalid_credentials("invalid"), 40103),
+            (WebFrameworkError::revoked_credentials("revoked"), 40104),
+        ];
+        for (error, expected_code) in cases {
+            let error = error
+                .with_reason("credential-rejected")
+                .with_auth_diagnostics(
+                    Some("credential-entry-bootstrap"),
+                    "request-context-resolution",
+                );
+            let response = problem_response(
+                &error,
+                ProblemCorrelation::new(Some("req-auth"), Some("trace-auth")),
+            );
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("runtime");
+            let bytes = rt
+                .block_on(async { axum::body::to_bytes(response.into_body(), usize::MAX).await })
+                .expect("body");
+            let payload: serde_json::Value = serde_json::from_slice(&bytes).expect("problem json");
+            assert_eq!(expected_code, payload["code"].as_i64().unwrap());
+            assert_eq!(
+                "credential-entry-bootstrap",
+                payload["authProfile"].as_str().unwrap()
+            );
+            assert_eq!(
+                "request-context-resolution",
+                payload["failedStage"].as_str().unwrap()
+            );
+            assert_eq!("credential-rejected", payload["reason"].as_str().unwrap());
+            let encoded = String::from_utf8(bytes.to_vec()).expect("utf8");
+            for secret in ["eyJ", "lookup_key", "upstream.internal"] {
+                assert!(!encoded.contains(secret));
+            }
+        }
     }
 
     #[test]

@@ -82,7 +82,7 @@ async fn rate_limit_exceeded_maps_to_expected_error_kind() {
     use sdkwork_web_contract::{HttpMethod, HttpRoute, RateLimitTier};
     use sdkwork_web_core::{memory_rate_limit_store, HttpRouteManifest, RateLimitPolicy};
 
-    const ROUTES: &[HttpRoute] = &[HttpRoute::credential_entry_public(
+    const ROUTES: &[HttpRoute] = &[HttpRoute::credential_entry_bootstrap(
         HttpMethod::Post,
         "/app/v3/api/auth/sessions",
         "Auth",

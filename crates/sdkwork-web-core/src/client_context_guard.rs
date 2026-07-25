@@ -2,7 +2,6 @@
 
 use crate::constants::{
     FORBIDDEN_AMBIENT_CONTEXT_PATH_MARKERS, FORBIDDEN_CLIENT_CONTEXT_QUERY_KEYS,
-    IAM_CANONICAL_CONTEXT_RESOURCE_PREFIXES,
 };
 use crate::error::WebFrameworkError;
 use crate::idempotency::content_length_from_headers;
@@ -163,12 +162,7 @@ pub async fn inspect_json_body_context_selectors(
 }
 
 /// Returns `true` when the path addresses canonical IAM tenant/org resources (API_SPEC §11.3).
-pub fn is_canonical_iam_context_resource_path(path: &str) -> bool {
-    let lowered = path.split('?').next().unwrap_or(path).to_ascii_lowercase();
-    IAM_CANONICAL_CONTEXT_RESOURCE_PREFIXES
-        .iter()
-        .any(|prefix| lowered.contains(prefix))
-}
+pub use sdkwork_web_contract::is_canonical_iam_context_resource_path;
 
 pub fn reject_forbidden_ambient_context_path(path: &str) -> Result<(), WebFrameworkError> {
     if is_canonical_iam_context_resource_path(path) {

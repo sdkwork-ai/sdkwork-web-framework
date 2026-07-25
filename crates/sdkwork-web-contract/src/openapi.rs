@@ -1,6 +1,9 @@
 //! OpenAPI extension helpers for SDKWork route manifests (WEB_FRAMEWORK_STANDARD §3.3 I6).
 
-use crate::{ApiSurface, HttpMethod, HttpRoute, RateLimitTier, RouteAuth};
+use crate::{
+    ApiSurface, CompatibilityAuth, CompatibilitySecuritySchemeKind, HttpMethod, HttpRoute,
+    RateLimitTier, RouteAuth,
+};
 use serde_json::{json, Map, Value};
 
 pub const OPENAPI_REQUEST_CONTEXT_EXTENSION: &str = "x-sdkwork-request-context";
@@ -8,6 +11,8 @@ pub const OPENAPI_API_SURFACE_EXTENSION: &str = "x-sdkwork-api-surface";
 pub const OPENAPI_ROUTE_AUTH_EXTENSION: &str = "x-sdkwork-route-auth";
 pub const OPENAPI_AUTH_MODE_EXTENSION: &str = "x-sdkwork-auth-mode";
 pub const OPENAPI_FORBID_CREDENTIAL_HEADERS_EXTENSION: &str = "x-sdkwork-forbid-credential-headers";
+pub const OPENAPI_WIRE_PROTOCOL_EXTENSION: &str = "x-sdkwork-wire-protocol";
+pub const OPENAPI_EXTERNAL_PROTOCOL_ID_EXTENSION: &str = "x-sdkwork-external-protocol-id";
 pub const OPENAPI_RATE_LIMIT_TIER_EXTENSION: &str = "x-sdkwork-rate-limit-tier";
 
 pub const OPENAPI_PERMISSION_EXTENSION: &str = "x-sdkwork-permission";
@@ -17,7 +22,6 @@ pub const OPENAPI_REQUIRED_SURFACE_EXTENSION: &str = "x-sdkwork-required-surface
 const APP_API_PREFIX: &str = "/app/v3/api";
 const BACKEND_API_PREFIX: &str = "/backend/v3/api";
 const INTERNAL_API_PREFIX: &str = "/internal/v3/api";
-const OPEN_API_PREFIX: &str = "/open/v3/api";
 const GATEWAY_API_PREFIX: &str = "/v1";
 
 const FORBIDDEN_CONTEXT_SELECTOR_QUERY_KEYS: &[&str] = &[
@@ -43,6 +47,23 @@ const FORBIDDEN_CONTEXT_SELECTOR_QUERY_KEYS: &[&str] = &[
 
 const FORBIDDEN_AMBIENT_CONTEXT_PATH_MARKERS: &[&str] = &["/tenants/", "/organizations/"];
 
+/// Canonical IAM resource roots from API_SPEC section 11.3.
+pub const IAM_CANONICAL_CONTEXT_RESOURCE_PREFIXES: &[&str] =
+    &["/iam/organizations", "/iam/tenants"];
+
+/// Returns true only for canonical IAM tenant or organization resource roots.
+pub fn is_canonical_iam_context_resource_path(path: &str) -> bool {
+    let normalized = path.split('?').next().unwrap_or(path).to_ascii_lowercase();
+    IAM_CANONICAL_CONTEXT_RESOURCE_PREFIXES
+        .iter()
+        .any(|prefix| {
+            normalized.match_indices(prefix).any(|(index, _)| {
+                let suffix = &normalized[index + prefix.len()..];
+                suffix.is_empty() || suffix.starts_with('/')
+            })
+        })
+}
+
 /// Infer contract surface from a manifest path prefix.
 pub fn infer_api_surface_from_path(path: &str) -> ApiSurface {
     if path.starts_with(APP_API_PREFIX) {
@@ -51,10 +72,12 @@ pub fn infer_api_surface_from_path(path: &str) -> ApiSurface {
         ApiSurface::BackendApi
     } else if path.starts_with(INTERNAL_API_PREFIX) {
         ApiSurface::InternalApi
-    } else if path.starts_with(OPEN_API_PREFIX) {
-        ApiSurface::OpenApi
     } else if path.starts_with(GATEWAY_API_PREFIX) {
         ApiSurface::GatewayApi
+    } else if path.starts_with('/') {
+        // Domain prefixes such as `/im/v3/api` are open-api by exclusion from the reserved
+        // app/backend/internal surfaces; open-api does not require a literal `/open` segment.
+        ApiSurface::OpenApi
     } else {
         ApiSurface::Unknown
     }
@@ -85,6 +108,17 @@ pub fn openapi_extensions_for_route(route: &HttpRoute) -> Map<String, Value> {
             Value::Bool(true),
         );
     }
+    if route.auth == RouteAuth::Compatibility {
+        let compatibility = compatibility_auth(route);
+        extensions.insert(
+            OPENAPI_WIRE_PROTOCOL_EXTENSION.to_owned(),
+            Value::String("external".to_owned()),
+        );
+        extensions.insert(
+            OPENAPI_EXTERNAL_PROTOCOL_ID_EXTENSION.to_owned(),
+            Value::String(compatibility.external_protocol_id.to_owned()),
+        );
+    }
     if let Some(tier) = route.rate_limit_tier {
         extensions.insert(
             OPENAPI_RATE_LIMIT_TIER_EXTENSION.to_owned(),
@@ -113,6 +147,9 @@ pub fn openapi_extensions_for_route(route: &HttpRoute) -> Map<String, Value> {
 }
 
 pub fn build_openapi_operation(route: &HttpRoute) -> Value {
+    if route.auth == RouteAuth::Compatibility {
+        return build_compatibility_openapi_operation(route);
+    }
     let mut operation = Map::new();
     operation.insert(
         "operationId".to_owned(),
@@ -127,22 +164,66 @@ pub fn build_openapi_operation(route: &HttpRoute) -> Value {
     if let Some(parameters) = openapi_parameters_for_route(route) {
         operation.insert("parameters".to_owned(), parameters);
     }
-    if route.auth.skips_credential_resolution() {
-        operation.insert("security".to_owned(), json!([{ "sdkworkAccessToken": [] }]));
-    } else if route.auth.requires_dual_token_headers() {
-        operation.insert("security".to_owned(), json!([{ "sdkworkDualToken": [] }]));
-    } else if route.auth.is_agent_token_credential_mode() {
-        operation.insert("security".to_owned(), json!([{ "sdkworkAgentToken": [] }]));
-    } else if route.auth.is_ingress_token_credential_mode() {
-        operation.insert(
-            "security".to_owned(),
-            json!([{ "sdkworkIngressToken": [] }]),
-        );
-    }
+    operation.insert(
+        "security".to_owned(),
+        match route.auth {
+            RouteAuth::Public | RouteAuth::RefreshToken => json!([]),
+            RouteAuth::CredentialEntryBootstrap => json!([{ "AccessToken": [] }]),
+            RouteAuth::DualToken => json!([{ "AuthToken": [], "AccessToken": [] }]),
+            RouteAuth::ApiKey => json!([{ "ApiKey": [] }]),
+            RouteAuth::OAuth => json!([{ "OAuthBearer": [] }]),
+            RouteAuth::OpenApiFlexible => {
+                json!([{ "ApiKey": [] }, { "OAuthBearer": [] }])
+            }
+            RouteAuth::IngressToken => json!([{ "IngressToken": [] }]),
+            RouteAuth::AgentToken => json!([{ "AgentToken": [] }]),
+            RouteAuth::Compatibility => unreachable!("handled above"),
+        },
+    );
     for (key, value) in openapi_extensions_for_route(route) {
         operation.insert(key, value);
     }
     Value::Object(operation)
+}
+
+fn build_compatibility_openapi_operation(route: &HttpRoute) -> Value {
+    let compatibility = compatibility_auth(route);
+    let source = route.compatibility_openapi_operation.unwrap_or_else(|| {
+        panic!(
+            "compatibility route {} must provide exact upstream OpenAPI operation JSON",
+            route.operation_id
+        )
+    });
+    let mut operation = serde_json::from_str::<Value>(source).unwrap_or_else(|error| {
+        panic!(
+            "compatibility route {} has invalid OpenAPI operation JSON: {error}",
+            route.operation_id
+        )
+    });
+    let object = operation.as_object_mut().unwrap_or_else(|| {
+        panic!(
+            "compatibility route {} OpenAPI operation must be a JSON object",
+            route.operation_id
+        )
+    });
+    assert_eq!(
+        object.get("operationId").and_then(Value::as_str),
+        Some(route.operation_id),
+        "compatibility route operationId must match its exact upstream OpenAPI operation"
+    );
+    assert!(
+        object.get("responses").is_some_and(Value::is_object),
+        "compatibility route {} must preserve upstream response definitions",
+        route.operation_id
+    );
+    object.insert(
+        "security".to_owned(),
+        compatibility_security_requirements(compatibility),
+    );
+    for (key, value) in openapi_extensions_for_route(route) {
+        object.insert(key, value);
+    }
+    operation
 }
 
 pub fn build_openapi_path_item(routes: &[HttpRoute]) -> Value {
@@ -169,39 +250,70 @@ pub fn build_openapi_document(title: &str, routes: &[HttpRoute]) -> Value {
                 build_openapi_operation(route),
             );
     }
+    let mut security_schemes = json!({
+        "AuthToken": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+            "description": "Signed session auth_token JWT. Used with AccessToken on dual-token routes."
+        },
+        "AccessToken": {
+            "type": "apiKey",
+            "in": "header",
+            "name": "Access-Token",
+            "description": "Signed access_token JWT. Used alone only by credential-entry-bootstrap and together with AuthToken on dual-token routes."
+        },
+        "ApiKey": {
+            "type": "apiKey",
+            "in": "header",
+            "name": "X-API-Key"
+        },
+        "OAuthBearer": {
+            "type": "http",
+            "scheme": "bearer"
+        },
+        "AgentToken": {
+            "type": "apiKey",
+            "in": "header",
+            "name": "X-SDKWork-Agent-Token",
+            "description": "Trusted backend agent token."
+        },
+        "IngressToken": {
+            "type": "apiKey",
+            "in": "header",
+            "name": "X-SDKWork-Ingress-Token",
+            "description": "Trusted application ingress token for protected internal-api routes."
+        }
+    })
+    .as_object()
+    .expect("security schemes object")
+    .clone();
+    for route in routes
+        .iter()
+        .filter(|route| route.auth == RouteAuth::Compatibility)
+    {
+        let compatibility = compatibility_auth(route);
+        for scheme in compatibility.schemes {
+            let definition = compatibility_security_scheme_definition(scheme.kind);
+            if let Some(existing) = security_schemes.get(scheme.name) {
+                assert_eq!(
+                    existing, &definition,
+                    "compatibility security scheme {} conflicts with another definition",
+                    scheme.name
+                );
+            } else {
+                security_schemes.insert(scheme.name.to_owned(), definition);
+            }
+        }
+    }
     let document = json!({
-        "openapi": "3.1.0",
+        "openapi": "3.1.2",
         "info": {
             "title": title,
             "version": "0.1.0"
         },
         "components": {
-            "securitySchemes": {
-                "sdkworkAccessToken": {
-                    "type": "apiKey",
-                    "in": "header",
-                    "name": "Access-Token",
-                    "description": "Signed JWT access_token (`header.payload.signature`). Required on all non-open-api routes, including public and refresh-token entrypoints, for tenant isolation."
-                },
-                "sdkworkDualToken": {
-                    "type": "apiKey",
-                    "in": "header",
-                    "name": "Access-Token",
-                    "description": "Protected routes require Authorization: Bearer <auth_token JWT> and Access-Token: <access_token JWT>."
-                },
-                "sdkworkAgentToken": {
-                    "type": "apiKey",
-                    "in": "header",
-                    "name": "X-SDKWork-Agent-Token",
-                    "description": "Backend agent bootstrap token for /backend/v3/api/agent/* routes. Resolves via api-key auth-mode without dual-token JWT."
-                },
-                "sdkworkIngressToken": {
-                    "type": "apiKey",
-                    "in": "header",
-                    "name": "X-API-Key",
-                    "description": "Application ingress token for protected internal-api routes. Runtime aliases are Authorization: Bearer and X-SDKWork-Access-Token."
-                }
-            },
+            "securitySchemes": security_schemes,
             "schemas": openapi_envelope_component_schemas()
         },
         "paths": paths
@@ -209,6 +321,61 @@ pub fn build_openapi_document(title: &str, routes: &[HttpRoute]) -> Value {
     validate_openapi_document_context_selectors(&document)
         .expect("materialized OpenAPI violates client context selector rules");
     document
+}
+
+fn compatibility_auth(route: &HttpRoute) -> &CompatibilityAuth {
+    route
+        .validate_compatibility_contract()
+        .unwrap_or_else(|message| panic!("{message}"));
+    let compatibility = route.compatibility_auth.as_ref().unwrap_or_else(|| {
+        panic!(
+            "compatibility route {} must declare external authentication metadata",
+            route.operation_id
+        )
+    });
+    compatibility.validate().unwrap_or_else(|message| {
+        panic!(
+            "compatibility route {} has invalid authentication metadata: {message}",
+            route.operation_id
+        )
+    });
+    compatibility
+}
+
+fn compatibility_security_requirements(compatibility: &CompatibilityAuth) -> Value {
+    Value::Array(
+        compatibility
+            .requirements
+            .iter()
+            .map(|requirement| {
+                let mut object = Map::new();
+                for scheme_name in requirement.scheme_names {
+                    object.insert((*scheme_name).to_owned(), json!([]));
+                }
+                Value::Object(object)
+            })
+            .collect(),
+    )
+}
+
+fn compatibility_security_scheme_definition(kind: CompatibilitySecuritySchemeKind) -> Value {
+    match kind {
+        CompatibilitySecuritySchemeKind::ApiKeyHeader { header_name } => json!({
+            "type": "apiKey",
+            "in": "header",
+            "name": header_name,
+        }),
+        CompatibilitySecuritySchemeKind::HttpBearer { bearer_format } => {
+            let mut definition = json!({ "type": "http", "scheme": "bearer" });
+            if let Some(bearer_format) = bearer_format {
+                definition.as_object_mut().expect("security scheme").insert(
+                    "bearerFormat".to_owned(),
+                    Value::String(bearer_format.to_owned()),
+                );
+            }
+            definition
+        }
+    }
 }
 
 fn requires_context_selector_guard(surface: ApiSurface) -> bool {
@@ -251,6 +418,9 @@ pub fn validate_openapi_routes_context_selectors(routes: &[HttpRoute]) -> Result
             continue;
         }
         let normalized = route.path.to_ascii_lowercase();
+        if is_canonical_iam_context_resource_path(&normalized) {
+            continue;
+        }
         for marker in FORBIDDEN_AMBIENT_CONTEXT_PATH_MARKERS {
             if normalized.contains(marker) {
                 return Err(format!(
@@ -277,11 +447,13 @@ pub fn validate_openapi_document_context_selectors(document: &Value) -> Result<(
             continue;
         }
         let normalized = path.to_ascii_lowercase();
-        for marker in FORBIDDEN_AMBIENT_CONTEXT_PATH_MARKERS {
-            if normalized.contains(marker) {
-                return Err(format!(
-                    "OpenAPI path `{path}` uses forbidden ambient context path marker `{marker}`"
-                ));
+        if !is_canonical_iam_context_resource_path(&normalized) {
+            for marker in FORBIDDEN_AMBIENT_CONTEXT_PATH_MARKERS {
+                if normalized.contains(marker) {
+                    return Err(format!(
+                        "OpenAPI path `{path}` uses forbidden ambient context path marker `{marker}`"
+                    ));
+                }
             }
         }
 
@@ -786,6 +958,7 @@ fn api_surface_label(surface: ApiSurface) -> &'static str {
 fn route_auth_label(auth: RouteAuth) -> &'static str {
     match auth {
         RouteAuth::Public => "public",
+        RouteAuth::CredentialEntryBootstrap => "credential-entry-bootstrap",
         RouteAuth::RefreshToken => "refresh-token",
         RouteAuth::DualToken => "dual-token",
         RouteAuth::ApiKey => "api-key",
@@ -793,12 +966,14 @@ fn route_auth_label(auth: RouteAuth) -> &'static str {
         RouteAuth::OAuth => "oauth",
         RouteAuth::OpenApiFlexible => "open-api-flexible",
         RouteAuth::AgentToken => "agent-token",
+        RouteAuth::Compatibility => "compatibility",
     }
 }
 
 fn auth_mode_label(auth: RouteAuth) -> &'static str {
     match auth {
         RouteAuth::Public => "anonymous",
+        RouteAuth::CredentialEntryBootstrap => "credential-entry-bootstrap",
         RouteAuth::RefreshToken => "refresh-token",
         RouteAuth::DualToken => "dual-token",
         RouteAuth::ApiKey => "api-key",
@@ -806,7 +981,8 @@ fn auth_mode_label(auth: RouteAuth) -> &'static str {
         RouteAuth::OAuth => "oauth",
         RouteAuth::OpenApiFlexible => "open-api-flexible",
         // AgentToken maps to canonical api-key auth-mode (API_SPEC §19).
-        RouteAuth::AgentToken => "api-key",
+        RouteAuth::AgentToken => "agent-token",
+        RouteAuth::Compatibility => "compatibility",
     }
 }
 
@@ -838,6 +1014,22 @@ mod tests {
     use crate::{HttpMethod, HttpRoute, RateLimitTier, RouteAuth};
     use serde_json::Value;
 
+    const COMPATIBILITY_SCHEMES: &[crate::CompatibilitySecurityScheme] =
+        &[crate::CompatibilitySecurityScheme::api_key_header(
+            "OpenAIKey",
+            "X-OpenAI-Key",
+        )];
+    const COMPATIBILITY_REQUIREMENT_NAMES: &[&str] = &["OpenAIKey"];
+    const COMPATIBILITY_REQUIREMENTS: &[crate::CompatibilitySecurityRequirement] =
+        &[crate::CompatibilitySecurityRequirement::all_of(
+            COMPATIBILITY_REQUIREMENT_NAMES,
+        )];
+    const COMPATIBILITY_AUTH: crate::CompatibilityAuth = crate::CompatibilityAuth::new(
+        "openai-v1",
+        COMPATIBILITY_SCHEMES,
+        COMPATIBILITY_REQUIREMENTS,
+    );
+
     #[test]
     fn openapi_resource_mutation_declares_not_found_response() {
         let route = HttpRoute::dual_token(
@@ -854,6 +1046,54 @@ mod tests {
             .expect("responses");
         assert!(responses.contains_key("404"));
         assert!(responses.contains_key("503"));
+    }
+
+    #[test]
+    fn compatibility_operation_preserves_external_wire_and_explicit_security() {
+        let route = HttpRoute::compatibility(
+            HttpMethod::Post,
+            "/openai/v1/chat/completions",
+            "OpenAI",
+            "openai.chat.completions.create",
+            COMPATIBILITY_AUTH,
+            r#"{
+                "operationId":"openai.chat.completions.create",
+                "requestBody":{"required":true},
+                "responses":{"200":{"description":"OpenAI-compatible response"}}
+            }"#,
+        );
+        let document = build_openapi_document("OpenAI compatibility", &[route]);
+        let operation = document
+            .pointer("/paths/~1openai~1v1~1chat~1completions/post")
+            .expect("operation");
+        assert_eq!(
+            Some("external"),
+            operation
+                .get(OPENAPI_WIRE_PROTOCOL_EXTENSION)
+                .and_then(Value::as_str)
+        );
+        assert_eq!(
+            Some("openai-v1"),
+            operation
+                .get(OPENAPI_EXTERNAL_PROTOCOL_ID_EXTENSION)
+                .and_then(Value::as_str)
+        );
+        assert_eq!(
+            Some(&json!([{ "OpenAIKey": [] }])),
+            operation.get("security")
+        );
+        assert_eq!(
+            Some("OpenAI-compatible response"),
+            operation
+                .pointer("/responses/200/description")
+                .and_then(Value::as_str)
+        );
+        assert_eq!(
+            Some("X-OpenAI-Key"),
+            document
+                .pointer("/components/securitySchemes/OpenAIKey/name")
+                .and_then(Value::as_str)
+        );
     }
 
     #[test]
@@ -960,8 +1200,8 @@ mod tests {
     }
 
     #[test]
-    fn openapi_public_route_declares_anonymous_security() {
-        let route = HttpRoute::credential_entry_public(
+    fn openapi_credential_entry_route_declares_bootstrap_security() {
+        let route = HttpRoute::credential_entry_bootstrap(
             HttpMethod::Post,
             "/app/v3/api/auth/sessions",
             "Auth",
@@ -970,11 +1210,11 @@ mod tests {
         let operation = build_openapi_operation(&route);
         let object = operation.as_object().expect("operation object");
         assert_eq!(
-            Some(&json!([{ "sdkworkAccessToken": [] }])),
+            Some(&json!([{ "AccessToken": [] }])),
             object.get("security")
         );
         assert_eq!(
-            "anonymous",
+            "credential-entry-bootstrap",
             object
                 .get(OPENAPI_AUTH_MODE_EXTENSION)
                 .and_then(Value::as_str)
@@ -1023,15 +1263,15 @@ mod tests {
                 .and_then(Value::as_str)
         );
         assert_eq!(
-            Some(&json!([{ "sdkworkIngressToken": [] }])),
+            Some(&json!([{ "IngressToken": [] }])),
             operation.get("security")
         );
 
         let document = build_openapi_document("Drive Internal API", &[route]);
         assert_eq!(
-            Some("X-API-Key"),
+            Some("X-SDKWork-Ingress-Token"),
             document
-                .pointer("/components/securitySchemes/sdkworkIngressToken/name")
+                .pointer("/components/securitySchemes/IngressToken/name")
                 .and_then(Value::as_str)
         );
     }
@@ -1051,7 +1291,7 @@ mod tests {
         );
         assert!(!object.contains_key("x-sdkwork-extensions"));
         assert_eq!(
-            Some(&json!([{ "sdkworkDualToken": [] }])),
+            Some(&json!([{ "AuthToken": [], "AccessToken": [] }])),
             object.get("security")
         );
     }
@@ -1062,10 +1302,56 @@ mod tests {
             HttpRoute::dual_token(HttpMethod::Get, "/app/v3/api/users", "Users", "listUsers");
         let doc = build_openapi_document("Test", &[route]);
         let schemes = doc
-            .pointer("/components/securitySchemes/sdkworkDualToken/name")
+            .pointer("/components/securitySchemes/AccessToken/name")
             .and_then(Value::as_str)
             .expect("dual token security scheme");
         assert_eq!("Access-Token", schemes);
+    }
+
+    #[test]
+    fn route_validator_allows_canonical_iam_organization_resources_only() {
+        let canonical = HttpRoute::dual_token(
+            HttpMethod::Get,
+            "/app/v3/api/iam/organizations/tree",
+            "iam",
+            "organizations.tree.retrieve",
+        );
+        validate_openapi_routes_context_selectors(&[canonical])
+            .expect("canonical IAM organization resource");
+
+        let ambient = HttpRoute::dual_token(
+            HttpMethod::Get,
+            "/app/v3/api/organizations/{organizationId}/members",
+            "members",
+            "members.list",
+        );
+        let error = validate_openapi_routes_context_selectors(&[ambient])
+            .expect_err("ambient organization scope");
+        assert!(error.contains("/organizations/"));
+    }
+
+    #[test]
+    fn document_validator_allows_canonical_iam_tenant_resources_only() {
+        let canonical = json!({
+            "paths": {
+                "/app/v3/api/iam/tenants/current": {
+                    "get": {}
+                }
+            }
+        });
+        validate_openapi_document_context_selectors(&canonical)
+            .expect("canonical IAM tenant resource");
+
+        let ambient = json!({
+            "paths": {
+                "/app/v3/api/tenants/{tenantId}/orders": {
+                    "get": {}
+                }
+            }
+        });
+        let error = validate_openapi_document_context_selectors(&ambient)
+            .expect_err("ambient tenant scope");
+        assert!(error.contains("/tenants/"));
     }
 
     #[test]

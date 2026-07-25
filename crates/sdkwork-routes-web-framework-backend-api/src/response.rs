@@ -125,6 +125,9 @@ impl ApiProblem {
             kind,
             message: self.message.clone(),
             retry_after_seconds: None,
+            auth_profile: None,
+            failed_stage: None,
+            reason: None,
         }
     }
 
@@ -158,7 +161,9 @@ pub fn finish_api_response(
 mod tests {
     use super::*;
     use axum::body::to_bytes;
-    use sdkwork_web_core::{ServerRequestId, WebApiSurface, WebAuthMode, WebTransportFacts};
+    use sdkwork_web_core::{
+        ServerRequestId, WebApiSurface, WebAuthMode, WebOperationBinding, WebTransportFacts,
+    };
 
     fn test_context() -> WebRequestContext {
         WebRequestContext {
@@ -172,12 +177,18 @@ mod tests {
                 auth_token_present: true,
                 access_token_present: true,
                 api_key_present: false,
+                ingress_token_present: false,
                 oauth_bearer_present: false,
                 agent_token_present: false,
             },
             locale: None,
             client_kind: None,
-            operation: None,
+            operation: Some(WebOperationBinding {
+                operation_id: "webFramework.corsPolicies.list".to_owned(),
+                route_template: "/backend/v3/api/web-framework/cors_policies".to_owned(),
+                rate_limit_tier: None,
+                idempotent: false,
+            }),
             trace_id: Some("trace-from-context-abc".to_owned()),
             idempotency_key: None,
         }

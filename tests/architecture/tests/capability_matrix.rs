@@ -43,7 +43,7 @@ fn capability_matrix_has_no_stale_pending_for_implemented_modules() {
 }
 
 #[test]
-fn tracked_capabilities_are_implemented_or_documented() {
+fn tracked_capabilities_are_implemented_or_future_planned() {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("..")
         .join("..")
@@ -62,8 +62,18 @@ fn tracked_capabilities_are_implemented_or_documented() {
         let id = entry["id"].as_str().expect("capability id");
         let impl_status = entry["implStatus"].as_str().expect("implStatus");
         assert!(
-            matches!(impl_status, "implemented" | "documented" | "partial"),
+            matches!(
+                impl_status,
+                "implemented" | "documented" | "partial" | "planned"
+            ),
             "capability {id} has unexpected implStatus: {impl_status}"
         );
+        if impl_status == "planned" {
+            assert_eq!(
+                Some("M4"),
+                entry["targetM"].as_str(),
+                "planned capability {id} must target a future maturity level"
+            );
+        }
     }
 }

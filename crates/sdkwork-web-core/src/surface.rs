@@ -45,7 +45,7 @@ pub fn resolve_public_path(
     method: &str,
     path: &str,
     profile: &WebRequestContextProfile,
-    manifest: Option<HttpRouteManifest>,
+    manifest: Option<&HttpRouteManifest>,
 ) -> bool {
     if let Some(manifest) = manifest {
         if let Some(route) = manifest.match_route(method, path) {
@@ -118,7 +118,7 @@ mod tests {
             "POST",
             "/app/v3/api/auth/sessions",
             &profile,
-            Some(HttpRouteManifest::new(ROUTES)),
+            Some(&HttpRouteManifest::new(ROUTES)),
         ));
     }
 
@@ -136,7 +136,7 @@ mod tests {
             "POST",
             "/app/v3/api/auth/sessions/refresh",
             &profile,
-            Some(HttpRouteManifest::new(ROUTES)),
+            Some(&HttpRouteManifest::new(ROUTES)),
         ));
     }
 
@@ -157,7 +157,7 @@ mod tests {
             "GET",
             "/app/v3/api/users/me",
             &profile,
-            Some(HttpRouteManifest::new(ROUTES)),
+            Some(&HttpRouteManifest::new(ROUTES)),
         ));
     }
 }

@@ -1,15 +1,70 @@
 use crate::{
     access_token_jwt, auth_token_jwt, bootstrap_access_token_jwt, memory_idempotency_store,
-    AuditEmitter, AuditFact, AuthorizationPolicy, DefaultWebRequestContextResolver,
-    DomainContextInjector, HttpRouteManifest, WebAuthMode, WebCallInterceptorChain, WebCallRuntime,
-    WebCallState, WebFrameworkError, WebFrameworkErrorKind, WebRequestContext,
-    WebRequestContextProfile,
+    AuditEmitter, AuditFact, AuthorizationPolicy, DefaultOpenApiWebRequestContextResolver,
+    DefaultWebRequestContextResolver, DomainContextInjector, HttpRouteManifest, WebAuthMode,
+    WebCallInterceptorChain, WebCallRuntime, WebCallState, WebFrameworkError,
+    WebFrameworkErrorKind, WebRequestContext, WebRequestContextProfile, WebRequestContextResolver,
 };
 use axum::body::Body;
 use axum::extract::Request;
 use axum::response::Response;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+
+const COMPATIBILITY_SCHEMES: &[sdkwork_web_contract::CompatibilitySecurityScheme] = &[
+    sdkwork_web_contract::CompatibilitySecurityScheme::api_key_header("OpenAIKey", "X-OpenAI-Key"),
+];
+const COMPATIBILITY_REQUIREMENT_NAMES: &[&str] = &["OpenAIKey"];
+const COMPATIBILITY_REQUIREMENTS: &[sdkwork_web_contract::CompatibilitySecurityRequirement] = &[
+    sdkwork_web_contract::CompatibilitySecurityRequirement::all_of(COMPATIBILITY_REQUIREMENT_NAMES),
+];
+const COMPATIBILITY_AUTH: sdkwork_web_contract::CompatibilityAuth =
+    sdkwork_web_contract::CompatibilityAuth::new(
+        "openai-v1",
+        COMPATIBILITY_SCHEMES,
+        COMPATIBILITY_REQUIREMENTS,
+    );
+
+#[derive(Clone, Default)]
+struct CompatibilityTestResolver(DefaultWebRequestContextResolver);
+
+#[async_trait::async_trait]
+impl WebRequestContextResolver for CompatibilityTestResolver {
+    async fn resolve_api_key(
+        &self,
+        raw_api_key: &str,
+    ) -> Result<crate::WebRequestPrincipal, WebFrameworkError> {
+        self.0.resolve_api_key(raw_api_key).await
+    }
+
+    async fn resolve_dual_token(
+        &self,
+        raw_auth_token: &str,
+        raw_access_token: &str,
+    ) -> Result<crate::WebRequestPrincipal, WebFrameworkError> {
+        self.0
+            .resolve_dual_token(raw_auth_token, raw_access_token)
+            .await
+    }
+
+    async fn resolve_access_token(
+        &self,
+        raw_access_token: &str,
+    ) -> Result<crate::WebRequestPrincipal, WebFrameworkError> {
+        self.0.resolve_access_token(raw_access_token).await
+    }
+
+    async fn resolve_compatibility(
+        &self,
+        external_protocol_id: &str,
+        credentials: &[crate::CompatibilityCredential],
+    ) -> Result<crate::WebRequestPrincipal, WebFrameworkError> {
+        assert_eq!("openai-v1", external_protocol_id);
+        assert_eq!("OpenAIKey", credentials[0].scheme_name);
+        assert_eq!("external-secret", credentials[0].value);
+        self.0.resolve_api_key(fixture_ingress_token()).await
+    }
+}
 
 fn fixture_auth_header() -> String {
     format!(
@@ -129,7 +184,7 @@ async fn authorization_policy_is_invoked_for_protected_routes() {
 }
 
 #[tokio::test]
-async fn internal_api_accepts_all_ingress_token_header_aliases() {
+async fn internal_api_accepts_only_canonical_ingress_token_header() {
     use crate::request_context::WebApiSurface;
     use sdkwork_web_contract::{HttpMethod, HttpRoute};
 
@@ -139,6 +194,30 @@ async fn internal_api_accepts_all_ingress_token_header_aliases() {
         "drive",
         "driveResources.retrieve",
     )];
+
+    let runtime = WebCallRuntime::new(DefaultWebRequestContextResolver::default())
+        .with_route_manifest(HttpRouteManifest::new(ROUTES));
+    let chain = WebCallInterceptorChain::standard();
+    let mut request = Request::builder()
+        .method("GET")
+        .uri("/internal/v3/api/drive/resources/example")
+        .header("X-SDKWork-Ingress-Token", fixture_ingress_token())
+        .body(Body::empty())
+        .expect("internal-api request");
+    let mut state = WebCallState::from_request(&request);
+    chain
+        .before(&mut state, &mut request, &runtime)
+        .await
+        .expect("canonical ingress token should authenticate");
+    assert_eq!(WebApiSurface::InternalApi, state.api_surface);
+    assert_eq!(WebAuthMode::IngressToken, state.auth_mode);
+    assert_eq!(
+        Some("100001"),
+        state
+            .principal
+            .as_ref()
+            .map(|principal| principal.tenant_id())
+    );
 
     for (header_name, header_value) in [
         ("X-API-Key", fixture_ingress_token().to_string()),
@@ -151,9 +230,6 @@ async fn internal_api_accepts_all_ingress_token_header_aliases() {
             fixture_ingress_token().to_string(),
         ),
     ] {
-        let runtime = WebCallRuntime::new(DefaultWebRequestContextResolver::default())
-            .with_route_manifest(HttpRouteManifest::new(ROUTES));
-        let chain = WebCallInterceptorChain::standard();
         let mut request = Request::builder()
             .method("GET")
             .uri("/internal/v3/api/drive/resources/example")
@@ -161,18 +237,14 @@ async fn internal_api_accepts_all_ingress_token_header_aliases() {
             .body(Body::empty())
             .expect("internal-api request");
         let mut state = WebCallState::from_request(&request);
-        chain
+        let error = chain
             .before(&mut state, &mut request, &runtime)
             .await
-            .unwrap_or_else(|error| panic!("{header_name} should authenticate: {error}"));
-        assert_eq!(WebApiSurface::InternalApi, state.api_surface);
-        assert_eq!(WebAuthMode::IngressToken, state.auth_mode);
+            .unwrap_err();
+        assert_eq!(WebFrameworkErrorKind::BadRequest, error.kind);
         assert_eq!(
-            Some("100001"),
-            state
-                .principal
-                .as_ref()
-                .map(|principal| principal.tenant_id())
+            Some("credential-profile-contamination"),
+            error.reason.as_deref()
         );
     }
 }
@@ -393,7 +465,7 @@ async fn public_route_emits_audit_fact() {
 
     use sdkwork_web_contract::{HttpMethod, HttpRoute};
 
-    const ROUTES: &[HttpRoute] = &[HttpRoute::credential_entry_public(
+    const ROUTES: &[HttpRoute] = &[HttpRoute::credential_entry_bootstrap(
         HttpMethod::Post,
         "/app/v3/api/auth/sessions",
         "Auth",
@@ -434,16 +506,20 @@ async fn public_route_emits_audit_fact() {
 
 #[tokio::test]
 async fn domain_injector_runs_at_context_injection() {
+    use sdkwork_web_contract::{HttpMethod, HttpRoute};
+
+    const ROUTES: &[HttpRoute] = &[HttpRoute::public(
+        HttpMethod::Get,
+        "/app/v3/api/public/ping",
+        "system",
+        "system.ping",
+    )];
     let runtime = WebCallRuntime::new(DefaultWebRequestContextResolver::default())
-        .with_profile(WebRequestContextProfile {
-            public_path_prefixes: vec!["/app/v3/api/public".to_owned()],
-            ..Default::default()
-        })
+        .with_route_manifest(HttpRouteManifest::new(ROUTES))
         .with_domain_injector(Arc::new(MarkerDomainInjector));
     let chain = WebCallInterceptorChain::standard();
     let mut request = Request::builder()
         .uri("/app/v3/api/public/ping")
-        .header("Access-Token", fixture_bootstrap_access_header())
         .body(Body::empty())
         .expect("request");
     let mut state = WebCallState::from_request(&request);
@@ -459,7 +535,7 @@ async fn domain_injector_runs_at_context_injection() {
 async fn manifest_credential_entry_route_requires_access_token_jwt() {
     use sdkwork_web_contract::{HttpMethod, HttpRoute};
 
-    const ROUTES: &[HttpRoute] = &[HttpRoute::credential_entry_public(
+    const ROUTES: &[HttpRoute] = &[HttpRoute::credential_entry_bootstrap(
         HttpMethod::Post,
         "/app/v3/api/auth/sessions",
         "Auth",
@@ -494,7 +570,7 @@ async fn manifest_credential_entry_route_requires_access_token_jwt() {
 async fn manifest_credential_entry_route_rejects_authorization_header() {
     use sdkwork_web_contract::{HttpMethod, HttpRoute};
 
-    const ROUTES: &[HttpRoute] = &[HttpRoute::credential_entry_public(
+    const ROUTES: &[HttpRoute] = &[HttpRoute::credential_entry_bootstrap(
         HttpMethod::Post,
         "/app/v3/api/auth/sessions",
         "Auth",
@@ -521,7 +597,7 @@ async fn manifest_credential_entry_route_rejects_authorization_header() {
 }
 
 #[tokio::test]
-async fn manifest_public_route_rejects_missing_access_token() {
+async fn manifest_refresh_route_accepts_missing_access_token_header() {
     use sdkwork_web_contract::{HttpMethod, HttpRoute, RouteAuth};
 
     const ROUTES: &[HttpRoute] = &[HttpRoute::new(
@@ -541,12 +617,12 @@ async fn manifest_public_route_rejects_missing_access_token() {
         .body(Body::empty())
         .expect("request");
     let mut state = WebCallState::from_request(&request);
-    let error = chain
+    chain
         .before(&mut state, &mut request, &runtime)
         .await
-        .expect_err("public route without access token");
-    assert_eq!(WebFrameworkErrorKind::MissingCredentials, error.kind);
-    assert!(error.message.contains("Access-Token"));
+        .expect("refresh proof is validated by the handler, not inherited headers");
+    assert_eq!(WebAuthMode::RefreshToken, state.auth_mode);
+    assert!(state.principal.is_none());
 }
 
 #[tokio::test]
@@ -603,7 +679,11 @@ async fn manifest_public_route_rejects_malformed_optional_access_token() {
         .before(&mut state, &mut request, &runtime)
         .await
         .expect_err("semicolon claim-string access token");
-    assert_eq!(WebFrameworkErrorKind::InvalidCredentials, error.kind);
+    assert_eq!(WebFrameworkErrorKind::BadRequest, error.kind);
+    assert_eq!(
+        Some("credential-profile-contamination"),
+        error.reason.as_deref()
+    );
 }
 
 #[tokio::test]
@@ -652,7 +732,6 @@ async fn manifest_public_route_with_path_parameter_skips_auth() {
         .method("GET")
         .uri("/app/v3/api/oauth/device_authorizations/qr_session_abc")
         .header("origin", "https://chat.example.test")
-        .header("Access-Token", fixture_bootstrap_access_header())
         .body(Body::empty())
         .expect("request");
     let mut state = WebCallState::from_request(&request);
@@ -703,7 +782,7 @@ async fn manifest_open_api_public_route_skips_open_api_credentials() {
 }
 
 #[tokio::test]
-async fn open_api_protected_route_accepts_dual_token_credentials() {
+async fn open_api_flexible_route_accepts_oauth_bearer_credentials() {
     use sdkwork_web_contract::{HttpMethod, HttpRoute, RouteAuth};
 
     const ROUTES: &[HttpRoute] = &[HttpRoute::new(
@@ -718,25 +797,25 @@ async fn open_api_protected_route_accepts_dual_token_credentials() {
         open_api_prefixes: vec!["/im/v3/api".to_owned()],
         ..Default::default()
     };
-    let runtime = WebCallRuntime::new(DefaultWebRequestContextResolver::default())
+    let runtime = WebCallRuntime::new(DefaultOpenApiWebRequestContextResolver::default())
         .with_profile(profile)
         .with_route_manifest(HttpRouteManifest::new(ROUTES));
     let chain = WebCallInterceptorChain::standard();
-    let auth_value = fixture_auth_header();
-    let access_value = fixture_access_header();
     let mut request = Request::builder()
         .method("GET")
         .uri("/im/v3/api/chat/inbox")
-        .header("Authorization", auth_value)
-        .header("Access-Token", access_value)
+        .header(
+            "Authorization",
+            "Bearer token_id=tok-1;tenant_id=100001;user_id=user-oauth;app_id=appbase",
+        )
         .body(Body::empty())
         .expect("request");
     let mut state = WebCallState::from_request(&request);
     chain
         .before(&mut state, &mut request, &runtime)
         .await
-        .expect("open-api protected route must accept dual-token app credentials");
-    assert_eq!(WebAuthMode::DualToken, state.auth_mode);
+        .expect("open-api flexible route must accept OAuth bearer credentials");
+    assert_eq!(WebAuthMode::OAuth, state.auth_mode);
     assert!(state.principal.is_some());
 }
 
@@ -759,7 +838,6 @@ async fn manifest_refresh_token_route_skips_dual_token_requirement() {
         .method("POST")
         .uri("/app/v3/api/auth/sessions/refresh")
         .header("content-type", "application/json")
-        .header("Access-Token", fixture_bootstrap_access_header())
         .body(Body::from(r#"{"refreshToken":"rt-1"}"#))
         .expect("request");
     let mut state = WebCallState::from_request(&request);
@@ -768,4 +846,106 @@ async fn manifest_refresh_token_route_skips_dual_token_requirement() {
         .await
         .expect("refresh-token route must skip header credential requirements");
     assert!(state.public_path);
+    assert_eq!(WebAuthMode::RefreshToken, state.auth_mode);
+    assert!(state.principal.is_none());
+}
+
+#[tokio::test]
+async fn compatibility_route_uses_declared_adapter_and_rejects_profile_contamination() {
+    use sdkwork_web_contract::{HttpMethod, HttpRoute};
+
+    const ROUTES: &[HttpRoute] = &[HttpRoute::compatibility(
+        HttpMethod::Post,
+        "/openai/v1/chat/completions",
+        "OpenAI",
+        "openai.chat.completions.create",
+        COMPATIBILITY_AUTH,
+        r#"{"operationId":"openai.chat.completions.create","responses":{"200":{"description":"ok"}}}"#,
+    )];
+    let profile = WebRequestContextProfile {
+        open_api_prefixes: vec!["/openai/v1".to_owned()],
+        ..Default::default()
+    };
+    let runtime = WebCallRuntime::new(CompatibilityTestResolver::default())
+        .with_profile(profile)
+        .with_route_manifest(HttpRouteManifest::new(ROUTES));
+    let chain = WebCallInterceptorChain::standard();
+    let mut request = Request::builder()
+        .method("POST")
+        .uri("/openai/v1/chat/completions")
+        .header("X-OpenAI-Key", "external-secret")
+        .body(Body::empty())
+        .expect("compatibility request");
+    let mut state = WebCallState::from_request(&request);
+    chain
+        .before(&mut state, &mut request, &runtime)
+        .await
+        .expect("declared compatibility adapter");
+    assert_eq!(WebAuthMode::Compatibility, state.auth_mode);
+    assert!(state.principal.is_some());
+
+    let mut contaminated = Request::builder()
+        .method("POST")
+        .uri("/openai/v1/chat/completions")
+        .header("X-OpenAI-Key", "external-secret")
+        .header("X-API-Key", "undeclared")
+        .body(Body::empty())
+        .expect("contaminated request");
+    let mut state = WebCallState::from_request(&contaminated);
+    let error = chain
+        .before(&mut state, &mut contaminated, &runtime)
+        .await
+        .expect_err("undeclared standard credential must fail before adapter");
+    assert_eq!(WebFrameworkErrorKind::BadRequest, error.kind);
+    assert_eq!(Some("compatibility"), error.auth_profile.as_deref());
+    assert_eq!(
+        Some("surface-classification"),
+        error.failed_stage.as_deref()
+    );
+    assert_eq!(
+        Some("credential-profile-contamination"),
+        error.reason.as_deref()
+    );
+}
+
+#[tokio::test]
+async fn compatibility_route_missing_credentials_is_diagnostic_401() {
+    use sdkwork_web_contract::{HttpMethod, HttpRoute};
+
+    const ROUTES: &[HttpRoute] = &[HttpRoute::compatibility(
+        HttpMethod::Post,
+        "/openai/v1/chat/completions",
+        "OpenAI",
+        "openai.chat.completions.create",
+        COMPATIBILITY_AUTH,
+        r#"{"operationId":"openai.chat.completions.create","responses":{"200":{"description":"ok"}}}"#,
+    )];
+    let runtime = WebCallRuntime::new(CompatibilityTestResolver::default())
+        .with_profile(WebRequestContextProfile {
+            open_api_prefixes: vec!["/openai/v1".to_owned()],
+            ..Default::default()
+        })
+        .with_route_manifest(HttpRouteManifest::new(ROUTES));
+    let chain = WebCallInterceptorChain::standard();
+    let mut request = Request::builder()
+        .method("POST")
+        .uri("/openai/v1/chat/completions")
+        .body(Body::empty())
+        .expect("compatibility request");
+    let mut state = WebCallState::from_request(&request);
+    let error = chain
+        .before(&mut state, &mut request, &runtime)
+        .await
+        .expect_err("missing compatibility credential");
+    assert_eq!(WebFrameworkErrorKind::MissingCredentials, error.kind);
+    assert_eq!(40101, error.result_code());
+    assert_eq!(Some("compatibility"), error.auth_profile.as_deref());
+    assert_eq!(
+        Some("request-context-resolution"),
+        error.failed_stage.as_deref()
+    );
+    assert_eq!(
+        Some("missing-compatibility-credential"),
+        error.reason.as_deref()
+    );
 }

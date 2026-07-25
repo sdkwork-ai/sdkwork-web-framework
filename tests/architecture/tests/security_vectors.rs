@@ -180,7 +180,7 @@ async fn auth_critical_tier_limits_requests() {
     use sdkwork_web_contract::{HttpMethod, HttpRoute, RateLimitTier};
     use sdkwork_web_core::{memory_rate_limit_store, HttpRouteManifest, RateLimitPolicy};
 
-    const ROUTES: &[HttpRoute] = &[HttpRoute::credential_entry_public(
+    const ROUTES: &[HttpRoute] = &[HttpRoute::credential_entry_bootstrap(
         HttpMethod::Post,
         "/app/v3/api/auth/sessions",
         "Auth",
@@ -616,10 +616,10 @@ async fn open_api_without_credentials_is_rejected() {
 }
 
 #[tokio::test]
-async fn public_credential_entry_route_rejects_missing_access_token() {
+async fn credential_entry_route_rejects_missing_bootstrap_access_token_with_diagnostics() {
     use sdkwork_web_contract::{HttpMethod, HttpRoute};
 
-    const ROUTES: &[HttpRoute] = &[HttpRoute::credential_entry_public(
+    const ROUTES: &[HttpRoute] = &[HttpRoute::credential_entry_bootstrap(
         HttpMethod::Post,
         "/app/v3/api/auth/sessions",
         "Auth",
@@ -639,10 +639,23 @@ async fn public_credential_entry_route_rejects_missing_access_token() {
         .await
         .expect_err("credential-entry route without bootstrap access token");
     assert_eq!(WebFrameworkErrorKind::MissingCredentials, error.kind);
+    assert_eq!(40101, error.result_code());
+    assert_eq!(
+        Some("credential-entry-bootstrap"),
+        error.auth_profile.as_deref()
+    );
+    assert_eq!(
+        Some("request-context-resolution"),
+        error.failed_stage.as_deref()
+    );
+    assert_eq!(
+        Some("missing-bootstrap-access-token"),
+        error.reason.as_deref()
+    );
 }
 
 #[tokio::test]
-async fn public_app_api_rejects_semicolon_claim_string_access_token() {
+async fn refresh_route_rejects_access_token_profile_contamination() {
     use sdkwork_web_contract::{HttpMethod, HttpRoute, RouteAuth};
 
     const ROUTES: &[HttpRoute] = &[HttpRoute::new(
@@ -669,7 +682,16 @@ async fn public_app_api_rejects_semicolon_claim_string_access_token() {
         .before(&mut state, &mut request, &runtime)
         .await
         .expect_err("claim string access token");
-    assert_eq!(WebFrameworkErrorKind::InvalidCredentials, error.kind);
+    assert_eq!(WebFrameworkErrorKind::BadRequest, error.kind);
+    assert_eq!(Some("refresh-token"), error.auth_profile.as_deref());
+    assert_eq!(
+        Some("surface-classification"),
+        error.failed_stage.as_deref()
+    );
+    assert_eq!(
+        Some("credential-profile-contamination"),
+        error.reason.as_deref()
+    );
 }
 
 #[tokio::test]
@@ -898,7 +920,7 @@ async fn non_open_api_with_dual_tokens_resolves_principal() {
 async fn credential_entry_route_rejects_authorization_header() {
     use sdkwork_web_contract::{HttpMethod, HttpRoute};
 
-    const ROUTES: &[HttpRoute] = &[HttpRoute::credential_entry_public(
+    const ROUTES: &[HttpRoute] = &[HttpRoute::credential_entry_bootstrap(
         HttpMethod::Post,
         "/app/v3/api/auth/sessions",
         "Auth",
@@ -926,7 +948,7 @@ async fn credential_entry_route_rejects_authorization_header() {
 async fn credential_entry_route_accepts_bootstrap_access_token_jwt() {
     use sdkwork_web_contract::{HttpMethod, HttpRoute};
 
-    const ROUTES: &[HttpRoute] = &[HttpRoute::credential_entry_public(
+    const ROUTES: &[HttpRoute] = &[HttpRoute::credential_entry_bootstrap(
         HttpMethod::Post,
         "/app/v3/api/auth/sessions",
         "Auth",
@@ -956,7 +978,7 @@ async fn credential_entry_route_accepts_bootstrap_access_token_jwt() {
 async fn csrf_cookie_without_origin_is_rejected_on_public_auth_route() {
     use sdkwork_web_contract::{HttpMethod, HttpRoute};
 
-    const ROUTES: &[HttpRoute] = &[HttpRoute::credential_entry_public(
+    const ROUTES: &[HttpRoute] = &[HttpRoute::credential_entry_bootstrap(
         HttpMethod::Post,
         "/app/v3/api/auth/sessions",
         "Auth",
@@ -983,7 +1005,7 @@ async fn csrf_cookie_without_origin_is_rejected_on_public_auth_route() {
 async fn csrf_cookie_with_untrusted_origin_is_rejected_on_public_auth_route() {
     use sdkwork_web_contract::{HttpMethod, HttpRoute};
 
-    const ROUTES: &[HttpRoute] = &[HttpRoute::credential_entry_public(
+    const ROUTES: &[HttpRoute] = &[HttpRoute::credential_entry_bootstrap(
         HttpMethod::Post,
         "/app/v3/api/auth/sessions",
         "Auth",

@@ -21,7 +21,9 @@ use axum::extract::Request;
 use axum::http::HeaderMap;
 use axum::http::HeaderName;
 use axum::response::Response;
-use sdkwork_web_contract::RouteAuth;
+use sdkwork_web_contract::{
+    CompatibilityAuth, CompatibilitySecuritySchemeKind, HttpRoute, RouteAuth,
+};
 use std::time::Duration;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum StandardWebCallInterceptorKind {
@@ -146,9 +148,9 @@ where
                     &state.method,
                     &state.path,
                     &runtime.profile,
-                    runtime.route_manifest,
+                    runtime.route_manifest.as_ref(),
                 );
-                if let Some(manifest) = runtime.route_manifest {
+                if let Some(manifest) = runtime.route_manifest.as_ref() {
                     if let Some(route) = manifest.match_route(&state.method, &state.path) {
                         if state.operation_id.is_none() {
                             state.operation_id = Some(route.operation_id.to_owned());
@@ -160,15 +162,15 @@ where
                         state.forbid_credential_headers = route.forbid_credential_headers;
                     }
                 }
-                if state.forbid_credential_headers {
-                    SecurityPolicy::reject_credential_entry_headers(request.headers())?;
+                if let Some(manifest) = runtime.route_manifest.as_ref() {
+                    if let Some(route) = manifest.match_route(&state.method, &state.path) {
+                        SecurityPolicy::validate_route_auth_credentials(route, request.headers())?;
+                    }
                 }
-                if !state.forbid_credential_headers
-                    && !matches!(
-                        state.api_surface,
-                        WebApiSurface::Unknown | WebApiSurface::GatewayApi
-                    )
-                {
+                if !matches!(
+                    state.api_surface,
+                    WebApiSurface::Unknown | WebApiSurface::GatewayApi
+                ) {
                     runtime
                         .security_policy
                         .reject_client_identity_projection(request.headers())?;
@@ -402,7 +404,7 @@ where
             StandardWebCallInterceptorKind::TenantIsolation => {
                 if !state.public_path && !is_cors_preflight(state) {
                     let ctx = state.to_context()?;
-                    if let Some(manifest) = runtime.route_manifest {
+                    if let Some(manifest) = runtime.route_manifest.as_ref() {
                         if let Some(route) = manifest.match_route(&state.method, &state.path) {
                             if let Err(error) =
                                 crate::path_resource_guard::verify_path_resource_ids_match_principal(
@@ -630,13 +632,44 @@ where
 
     match state.api_surface {
         WebApiSurface::OpenApi => {
-            if state.public_path
-                && skips_access_token_for_tenant_isolation(
-                    state.route_auth,
-                    state.forbid_credential_headers,
-                )
-            {
-                return finish_optional_public_access_context(state, runtime).await;
+            match state.route_auth {
+                Some(RouteAuth::Public) => {
+                    state.auth_mode = WebAuthMode::Public;
+                    state.principal = None;
+                    return Ok(());
+                }
+                Some(RouteAuth::RefreshToken) => {
+                    state.auth_mode = WebAuthMode::RefreshToken;
+                    state.principal = None;
+                    return Ok(());
+                }
+                Some(RouteAuth::CredentialEntryBootstrap) => {
+                    return finish_credential_entry_bootstrap_context(state, runtime).await;
+                }
+                Some(RouteAuth::Compatibility) => {
+                    let route = matched_route(state, runtime).ok_or_else(|| {
+                        WebFrameworkError::bad_request(
+                            "compatibility authentication requires a matched route manifest",
+                        )
+                        .with_reason("invalid-compatibility-auth-contract")
+                    })?;
+                    let compatibility = route.compatibility_auth.as_ref().ok_or_else(|| {
+                        WebFrameworkError::bad_request(
+                            "compatibility route is missing external authentication metadata",
+                        )
+                        .with_reason("invalid-compatibility-auth-contract")
+                    })?;
+                    let credentials = extract_compatibility_credentials(compatibility, headers)?;
+                    state.principal = Some(
+                        runtime
+                            .resolver
+                            .resolve_compatibility(compatibility.external_protocol_id, &credentials)
+                            .await?,
+                    );
+                    state.auth_mode = WebAuthMode::Compatibility;
+                    return Ok(());
+                }
+                _ => {}
             }
             if !state.public_path {
                 if let (Some(auth_token), Some(access_token)) = (
@@ -668,7 +701,7 @@ where
             state.principal = Some(principal);
         }
         WebApiSurface::InternalApi => {
-            if state.public_path {
+            if state.route_auth == Some(RouteAuth::Public) {
                 state.auth_mode = WebAuthMode::Public;
                 state.principal = None;
                 return Ok(());
@@ -678,27 +711,31 @@ where
                     "protected internal-api routes require ingress-token auth",
                 ));
             }
-            let ingress_token = state
-                .credentials
-                .api_key
-                .as_deref()
-                .or(state.credentials.auth_token.as_deref())
-                .ok_or_else(|| {
-                    WebFrameworkError::missing_credentials(
-                        "internal-api requests require X-API-Key, Authorization: Bearer, or X-SDKWork-Access-Token",
-                    )
-                })?;
+            let ingress_token = state.credentials.ingress_token.as_deref().ok_or_else(|| {
+                WebFrameworkError::missing_credentials(
+                    "internal-api requests require X-SDKWork-Ingress-Token",
+                )
+                .with_reason("missing-ingress-token")
+            })?;
             state.principal = Some(runtime.resolver.resolve_api_key(ingress_token).await?);
             state.auth_mode = WebAuthMode::IngressToken;
         }
         WebApiSurface::AppApi | WebApiSurface::BackendApi | WebApiSurface::GatewayApi => {
-            if state.public_path
-                && skips_access_token_for_tenant_isolation(
-                    state.route_auth,
-                    state.forbid_credential_headers,
-                )
-            {
-                return finish_optional_public_access_context(state, runtime).await;
+            match state.route_auth {
+                Some(RouteAuth::Public) => {
+                    state.auth_mode = WebAuthMode::Public;
+                    state.principal = None;
+                    return Ok(());
+                }
+                Some(RouteAuth::CredentialEntryBootstrap) => {
+                    return finish_credential_entry_bootstrap_context(state, runtime).await;
+                }
+                Some(RouteAuth::RefreshToken) => {
+                    state.auth_mode = WebAuthMode::RefreshToken;
+                    state.principal = None;
+                    return Ok(());
+                }
+                _ => {}
             }
             // AgentToken routes resolve via api-key path using X-SDKWork-Agent-Token (C8-C9).
             // The agent token provides both authentication and tenant isolation without
@@ -710,7 +747,7 @@ where
                     )
                 })?;
                 state.principal = Some(runtime.resolver.resolve_api_key(agent_token).await?);
-                state.auth_mode = WebAuthMode::ApiKey;
+                state.auth_mode = WebAuthMode::AgentToken;
                 return Ok(());
             }
             let access_token = state.credentials.access_token.as_deref().ok_or_else(|| {
@@ -718,23 +755,19 @@ where
                     "non-open-api requests require Access-Token JWT for tenant isolation",
                 )
             })?;
-            if state.public_path {
-                state.auth_mode = WebAuthMode::Public;
-                state.principal = Some(runtime.resolver.resolve_access_token(access_token).await?);
-            } else {
-                let auth_token = state.credentials.auth_token.as_deref().ok_or_else(|| {
-                    WebFrameworkError::missing_credentials(
-                        "app-api and backend-api requests require Authorization: Bearer <auth_token>",
-                    )
-                })?;
-                state.principal = Some(
-                    runtime
-                        .resolver
-                        .resolve_dual_token(auth_token, access_token)
-                        .await?,
-                );
-                state.auth_mode = WebAuthMode::DualToken;
-            }
+            let auth_token = state.credentials.auth_token.as_deref().ok_or_else(|| {
+                WebFrameworkError::missing_credentials(
+                    "app-api and backend-api requests require Authorization: Bearer <auth_token>",
+                )
+                .with_reason("missing-auth-token")
+            })?;
+            state.principal = Some(
+                runtime
+                    .resolver
+                    .resolve_dual_token(auth_token, access_token)
+                    .await?,
+            );
+            state.auth_mode = WebAuthMode::DualToken;
         }
         WebApiSurface::Unknown => {
             return Err(WebFrameworkError::missing_credentials(
@@ -749,30 +782,93 @@ fn is_cors_preflight(state: &WebCallState) -> bool {
     state.cors_preflight
 }
 
-fn skips_access_token_for_tenant_isolation(
-    route_auth: Option<RouteAuth>,
-    forbid_credential_headers: bool,
-) -> bool {
-    if forbid_credential_headers || route_auth == Some(RouteAuth::RefreshToken) {
-        return false;
-    }
-    route_auth.is_none_or(|auth| auth.skips_credential_resolution())
+fn matched_route<R>(state: &WebCallState, runtime: &WebCallRuntime<R>) -> Option<HttpRoute>
+where
+    R: WebRequestContextResolver + Clone,
+{
+    runtime
+        .route_manifest
+        .as_ref()
+        .and_then(|manifest| manifest.match_route(&state.method, &state.path).copied())
 }
 
-/// Public / optional Access-Token routes: missing token is allowed; malformed tokens are rejected.
-async fn finish_optional_public_access_context<R>(
+fn extract_compatibility_credentials(
+    compatibility: &CompatibilityAuth,
+    headers: &HeaderMap,
+) -> Result<Vec<crate::resolvers::CompatibilityCredential>, WebFrameworkError> {
+    compatibility.validate().map_err(|message| {
+        WebFrameworkError::bad_request(message).with_reason("invalid-compatibility-auth-contract")
+    })?;
+
+    let mut matches = Vec::new();
+    for requirement in compatibility.requirements {
+        let mut credentials = Vec::new();
+        let mut complete = true;
+        for scheme_name in requirement.scheme_names {
+            let scheme = compatibility.scheme(scheme_name).ok_or_else(|| {
+                WebFrameworkError::bad_request(format!(
+                    "compatibility requirement references unknown scheme {scheme_name}"
+                ))
+                .with_reason("invalid-compatibility-auth-contract")
+            })?;
+            let value = match scheme.kind {
+                CompatibilitySecuritySchemeKind::ApiKeyHeader { header_name } => headers
+                    .get(header_name)
+                    .map(|value| {
+                        value.to_str().map(str::to_owned).map_err(|_| {
+                            WebFrameworkError::invalid_credentials(format!(
+                                "compatibility credential {scheme_name} is not a valid header value"
+                            ))
+                            .with_reason("invalid-compatibility-credential")
+                        })
+                    })
+                    .transpose()?,
+                CompatibilitySecuritySchemeKind::HttpBearer { .. } => {
+                    crate::extractors::bearer_token(headers)
+                }
+            };
+            let Some(value) = value else {
+                complete = false;
+                break;
+            };
+            credentials.push(crate::resolvers::CompatibilityCredential {
+                scheme_name: (*scheme_name).to_owned(),
+                value,
+            });
+        }
+        if complete {
+            matches.push(credentials);
+        }
+    }
+
+    match matches.len() {
+        0 => Err(WebFrameworkError::missing_credentials(
+            "compatibility route requires its declared external protocol credentials",
+        )
+        .with_reason("missing-compatibility-credential")),
+        1 => Ok(matches.pop().expect("one matched requirement")),
+        _ => Err(WebFrameworkError::bad_request(
+            "compatibility request satisfies multiple credential alternatives",
+        )
+        .with_reason("ambiguous-compatibility-credentials")),
+    }
+}
+
+async fn finish_credential_entry_bootstrap_context<R>(
     state: &mut WebCallState,
     runtime: &WebCallRuntime<R>,
 ) -> Result<(), WebFrameworkError>
 where
     R: WebRequestContextResolver + Clone,
 {
-    state.auth_mode = WebAuthMode::Public;
-    if let Some(access_token) = state.credentials.access_token.as_deref() {
-        state.principal = Some(runtime.resolver.resolve_access_token(access_token).await?);
-    } else {
-        state.principal = None;
-    }
+    let access_token = state.credentials.access_token.as_deref().ok_or_else(|| {
+        WebFrameworkError::missing_credentials(
+            "credential-entry-bootstrap requests require bootstrap Access-Token JWT",
+        )
+        .with_reason("missing-bootstrap-access-token")
+    })?;
+    state.auth_mode = WebAuthMode::CredentialEntryBootstrap;
+    state.principal = Some(runtime.resolver.resolve_access_token(access_token).await?);
     Ok(())
 }
 

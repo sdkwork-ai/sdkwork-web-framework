@@ -1,20 +1,27 @@
 //! Contract types for SDKWork HTTP route manifests.
 
+mod inventory;
 mod openapi;
 
 use serde::{Deserialize, Serialize};
 
+pub use inventory::{
+    normalize_route_path, route_inventory_from_openapi, route_inventory_from_routes,
+    ApiRouteInventoryEntry,
+};
 pub use openapi::{
     build_openapi_document, build_openapi_operation, build_openapi_path_item,
-    infer_api_surface_from_path, openapi_extensions_for_route,
-    validate_openapi_document_context_selectors, validate_openapi_routes_context_selectors,
+    infer_api_surface_from_path, is_canonical_iam_context_resource_path,
+    openapi_extensions_for_route, validate_openapi_document_context_selectors,
+    validate_openapi_routes_context_selectors, IAM_CANONICAL_CONTEXT_RESOURCE_PREFIXES,
     OPENAPI_API_SURFACE_EXTENSION, OPENAPI_AUTH_MODE_EXTENSION,
-    OPENAPI_FORBID_CREDENTIAL_HEADERS_EXTENSION, OPENAPI_PERMISSION_EXTENSION,
-    OPENAPI_RATE_LIMIT_TIER_EXTENSION, OPENAPI_REQUEST_CONTEXT_EXTENSION,
-    OPENAPI_REQUIRED_SURFACE_EXTENSION, OPENAPI_ROUTE_AUTH_EXTENSION,
+    OPENAPI_EXTERNAL_PROTOCOL_ID_EXTENSION, OPENAPI_FORBID_CREDENTIAL_HEADERS_EXTENSION,
+    OPENAPI_PERMISSION_EXTENSION, OPENAPI_RATE_LIMIT_TIER_EXTENSION,
+    OPENAPI_REQUEST_CONTEXT_EXTENSION, OPENAPI_REQUIRED_SURFACE_EXTENSION,
+    OPENAPI_ROUTE_AUTH_EXTENSION, OPENAPI_WIRE_PROTOCOL_EXTENSION,
 };
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "kebab-case")]
 pub enum ApiSurface {
     OpenApi,
     AppApi,
@@ -44,8 +51,10 @@ pub enum RateLimitTier {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum RouteAuth {
     Public,
+    CredentialEntryBootstrap,
     DualToken,
     ApiKey,
     /// Application-ingress token for protected internal-api routes.
@@ -62,6 +71,118 @@ pub enum RouteAuth {
     /// via [`WebRequestContextResolver::resolve_api_key`] using the agent token credential,
     /// without requiring `Access-Token` or `Authorization: Bearer` JWTs.
     AgentToken,
+    Compatibility,
+}
+
+/// OpenAPI security scheme used by an explicitly governed vendor-compatibility route.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CompatibilitySecuritySchemeKind {
+    ApiKeyHeader { header_name: &'static str },
+    HttpBearer { bearer_format: Option<&'static str> },
+}
+
+/// Named compatibility security scheme. `name` is the OpenAPI component/security key.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CompatibilitySecurityScheme {
+    pub name: &'static str,
+    pub kind: CompatibilitySecuritySchemeKind,
+}
+
+impl CompatibilitySecurityScheme {
+    pub const fn api_key_header(name: &'static str, header_name: &'static str) -> Self {
+        Self {
+            name,
+            kind: CompatibilitySecuritySchemeKind::ApiKeyHeader { header_name },
+        }
+    }
+
+    pub const fn http_bearer(name: &'static str, bearer_format: Option<&'static str>) -> Self {
+        Self {
+            name,
+            kind: CompatibilitySecuritySchemeKind::HttpBearer { bearer_format },
+        }
+    }
+}
+
+/// One OpenAPI security requirement object. Multiple rows are alternatives (OR); scheme names
+/// within a row are required together (AND).
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CompatibilitySecurityRequirement {
+    pub scheme_names: &'static [&'static str],
+}
+
+impl CompatibilitySecurityRequirement {
+    pub const fn all_of(scheme_names: &'static [&'static str]) -> Self {
+        Self { scheme_names }
+    }
+}
+
+/// Explicit external authentication contract for `RouteAuth::Compatibility`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CompatibilityAuth {
+    pub external_protocol_id: &'static str,
+    pub schemes: &'static [CompatibilitySecurityScheme],
+    pub requirements: &'static [CompatibilitySecurityRequirement],
+}
+
+impl CompatibilityAuth {
+    pub const fn new(
+        external_protocol_id: &'static str,
+        schemes: &'static [CompatibilitySecurityScheme],
+        requirements: &'static [CompatibilitySecurityRequirement],
+    ) -> Self {
+        Self {
+            external_protocol_id,
+            schemes,
+            requirements,
+        }
+    }
+
+    pub fn validate(&self) -> Result<(), String> {
+        if self.external_protocol_id.is_empty()
+            || !self
+                .external_protocol_id
+                .bytes()
+                .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+        {
+            return Err("external protocol id must be non-empty lowercase kebab-case".to_owned());
+        }
+        if self.schemes.is_empty() || self.requirements.is_empty() {
+            return Err(
+                "compatibility auth must declare schemes and security requirements".to_owned(),
+            );
+        }
+        for scheme in self.schemes {
+            if scheme.name.trim().is_empty() {
+                return Err("compatibility security scheme name must not be empty".to_owned());
+            }
+            match scheme.kind {
+                CompatibilitySecuritySchemeKind::ApiKeyHeader { header_name }
+                    if header_name.trim().is_empty() =>
+                {
+                    return Err("compatibility API-key header name must not be empty".to_owned());
+                }
+                _ => {}
+            }
+        }
+        for requirement in self.requirements {
+            if requirement.scheme_names.is_empty() {
+                return Err("compatibility security requirement must not be empty".to_owned());
+            }
+            for name in requirement.scheme_names {
+                if !self.schemes.iter().any(|scheme| scheme.name == *name) {
+                    return Err(format!(
+                        "compatibility security requirement references unknown scheme {name}"
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn scheme(&self, name: &str) -> Option<&CompatibilitySecurityScheme> {
+        self.schemes.iter().find(|scheme| scheme.name == name)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -87,6 +208,10 @@ pub struct HttpRoute {
     pub alternate_permissions: Option<&'static [&'static str]>,
     /// Credential-entry routes (login/register/reset) reject inbound credential headers at runtime.
     pub forbid_credential_headers: bool,
+    /// Required external authentication metadata for `RouteAuth::Compatibility`.
+    pub compatibility_auth: Option<CompatibilityAuth>,
+    /// Exact upstream-compatible OpenAPI operation JSON for compatibility routes.
+    pub compatibility_openapi_operation: Option<&'static str>,
 }
 
 impl HttpRoute {
@@ -108,6 +233,8 @@ impl HttpRoute {
             required_permission: None,
             alternate_permissions: None,
             forbid_credential_headers: false,
+            compatibility_auth: None,
+            compatibility_openapi_operation: None,
         }
     }
 
@@ -139,14 +266,92 @@ impl HttpRoute {
         self
     }
 
-    /// Marks credential-entry anonymous routes (login/register/reset) per `WEB_FRAMEWORK_SPEC.md`.
+    pub fn validate_compatibility_contract(&self) -> Result<(), String> {
+        if self.auth != RouteAuth::Compatibility {
+            if self.compatibility_auth.is_some() || self.compatibility_openapi_operation.is_some() {
+                return Err(format!(
+                    "non-compatibility route {} must not declare compatibility metadata",
+                    self.operation_id
+                ));
+            }
+            return Ok(());
+        }
+        let auth = self.compatibility_auth.as_ref().ok_or_else(|| {
+            format!(
+                "compatibility route {} must declare external authentication metadata",
+                self.operation_id
+            )
+        })?;
+        auth.validate()?;
+        let source = self.compatibility_openapi_operation.ok_or_else(|| {
+            format!(
+                "compatibility route {} must provide exact upstream OpenAPI operation JSON",
+                self.operation_id
+            )
+        })?;
+        let operation: serde_json::Value = serde_json::from_str(source).map_err(|error| {
+            format!(
+                "compatibility route {} has invalid OpenAPI operation JSON: {error}",
+                self.operation_id
+            )
+        })?;
+        let object = operation.as_object().ok_or_else(|| {
+            format!(
+                "compatibility route {} OpenAPI operation must be a JSON object",
+                self.operation_id
+            )
+        })?;
+        if object
+            .get("operationId")
+            .and_then(serde_json::Value::as_str)
+            != Some(self.operation_id)
+        {
+            return Err(format!(
+                "compatibility route {} operationId must match its upstream OpenAPI operation",
+                self.operation_id
+            ));
+        }
+        if !object
+            .get("responses")
+            .is_some_and(serde_json::Value::is_object)
+        {
+            return Err(format!(
+                "compatibility route {} must preserve upstream response definitions",
+                self.operation_id
+            ));
+        }
+        Ok(())
+    }
+
+    /// First-class credential-entry route (login/register/OAuth/reset).
+    pub const fn credential_entry_bootstrap(
+        method: HttpMethod,
+        path: &'static str,
+        tag: &'static str,
+        operation_id: &'static str,
+    ) -> Self {
+        Self::new(
+            method,
+            path,
+            tag,
+            operation_id,
+            RouteAuth::CredentialEntryBootstrap,
+        )
+        .with_forbid_credential_headers(true)
+    }
+
+    /// Migration alias for [`Self::credential_entry_bootstrap`].
+    #[deprecated(
+        since = "0.1.0",
+        note = "use HttpRoute::credential_entry_bootstrap; credential entry is not anonymous"
+    )]
     pub const fn credential_entry_public(
         method: HttpMethod,
         path: &'static str,
         tag: &'static str,
         operation_id: &'static str,
     ) -> Self {
-        Self::public(method, path, tag, operation_id).with_forbid_credential_headers(true)
+        Self::credential_entry_bootstrap(method, path, tag, operation_id)
     }
 
     pub const fn public(
@@ -221,12 +426,42 @@ impl HttpRoute {
     ) -> Self {
         Self::new(method, path, tag, operation_id, RouteAuth::AgentToken)
     }
+
+    /// Vendor-compatibility operation with adapter-defined authentication semantics.
+    pub const fn compatibility(
+        method: HttpMethod,
+        path: &'static str,
+        tag: &'static str,
+        operation_id: &'static str,
+        auth: CompatibilityAuth,
+        openapi_operation_json: &'static str,
+    ) -> Self {
+        let mut route = Self::new(method, path, tag, operation_id, RouteAuth::Compatibility)
+            .with_forbid_credential_headers(true);
+        route.compatibility_auth = Some(auth);
+        route.compatibility_openapi_operation = Some(openapi_operation_json);
+        route
+    }
 }
 
 impl RouteAuth {
-    /// Routes that skip session auth (`Authorization`) and full dual-token resolution.
+    /// Routes that bypass session authorization and dual-token resolution.
+    ///
+    /// Credential-entry still resolves its bootstrap access JWT. Refresh-token handlers validate
+    /// their declared body proof. The existing name remains for source compatibility.
     pub const fn skips_credential_resolution(self) -> bool {
-        matches!(self, Self::Public | Self::RefreshToken)
+        matches!(
+            self,
+            Self::Public | Self::CredentialEntryBootstrap | Self::RefreshToken
+        )
+    }
+
+    pub const fn is_anonymous(self) -> bool {
+        matches!(self, Self::Public)
+    }
+
+    pub const fn requires_bootstrap_access_token(self) -> bool {
+        matches!(self, Self::CredentialEntryBootstrap)
     }
 
     /// Protected app-api / backend-api / gateway-api routes require both auth and access tokens.
@@ -248,6 +483,22 @@ impl RouteAuth {
     /// Internal-api routes authenticate with an application ingress token.
     pub const fn is_ingress_token_credential_mode(self) -> bool {
         matches!(self, Self::IngressToken)
+    }
+
+    /// Canonical contract label used by route manifests, OpenAPI, diagnostics, and SDK policy.
+    pub const fn auth_profile_label(self) -> &'static str {
+        match self {
+            Self::Public => "anonymous",
+            Self::CredentialEntryBootstrap => "credential-entry-bootstrap",
+            Self::RefreshToken => "refresh-token",
+            Self::DualToken => "dual-token",
+            Self::ApiKey => "api-key",
+            Self::IngressToken => "ingress-token",
+            Self::OAuth => "oauth",
+            Self::OpenApiFlexible => "open-api-flexible",
+            Self::AgentToken => "agent-token",
+            Self::Compatibility => "compatibility",
+        }
     }
 }
 

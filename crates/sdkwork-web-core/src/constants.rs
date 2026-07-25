@@ -12,7 +12,9 @@ pub const SDKWORK_TRACE_ID_HEADER_LOWER: &str = "x-sdkwork-trace-id";
 pub const AUTHORIZATION_HEADER: &str = "Authorization";
 pub const ACCESS_TOKEN_HEADER: &str = "Access-Token";
 pub const API_KEY_HEADER: &str = "X-Api-Key";
-/// Internal-api ingress token alias used by application hosts.
+/// Canonical internal-api ingress token header.
+pub const INGRESS_TOKEN_HEADER: &str = "X-SDKWork-Ingress-Token";
+/// Retired internal-api ingress alias retained only for migration diagnostics.
 pub const SDKWORK_ACCESS_TOKEN_HEADER: &str = "X-SDKWork-Access-Token";
 /// Backend agent bootstrap token header (C8-C9). Maps to `RouteAuth::AgentToken`.
 pub const AGENT_TOKEN_HEADER: &str = "X-SDKWork-Agent-Token";
@@ -86,8 +88,7 @@ pub const FORBIDDEN_CLIENT_CONTEXT_QUERY_KEYS: &[&str] = &[
 pub const FORBIDDEN_AMBIENT_CONTEXT_PATH_MARKERS: &[&str] = &["/tenants/", "/organizations/"];
 
 /// Canonical IAM resource roots (API_SPEC §11.3) — not ambient tenant/org path scoping.
-pub const IAM_CANONICAL_CONTEXT_RESOURCE_PREFIXES: &[&str] =
-    &["/iam/organizations", "/iam/tenants"];
+pub use sdkwork_web_contract::IAM_CANONICAL_CONTEXT_RESOURCE_PREFIXES;
 
 /// Session and API-key headers rejected on credential-entry routes (`forbidCredentialHeaders`).
 /// Bootstrap `Access-Token` JWT is EXCLUDED because it remains required for tenant isolation
@@ -96,6 +97,16 @@ pub const IAM_CANONICAL_CONTEXT_RESOURCE_PREFIXES: &[&str] =
 pub const FORBIDDEN_CREDENTIAL_ENTRY_HEADERS: &[&str] = &[
     "authorization",
     "x-api-key",
+    "x-sdkwork-access-token",
+    "x-sdkwork-agent-token",
+];
+
+/// Standard credential headers governed by the matched route authentication profile.
+pub const STANDARD_CREDENTIAL_HEADERS: &[&str] = &[
+    "authorization",
+    "access-token",
+    "x-api-key",
+    "x-sdkwork-ingress-token",
     "x-sdkwork-access-token",
     "x-sdkwork-agent-token",
 ];

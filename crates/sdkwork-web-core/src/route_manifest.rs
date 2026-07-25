@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use sdkwork_web_contract::{HttpMethod, HttpRoute, RateLimitTier, RouteAuth};
 
 use crate::client_context_guard::is_canonical_iam_context_resource_path;
@@ -6,19 +8,30 @@ use crate::constants::FORBIDDEN_AMBIENT_CONTEXT_PATH_MARKERS;
 use crate::request_context::{WebApiSurface, WebRequestContextProfile};
 use crate::surface::{classify_api_surface, matches_prefix};
 
-/// Static route manifest for operationId / rate-limit tier resolution (EP-17 lite).
-#[derive(Clone, Copy, Debug)]
+/// Owned route manifest for operationId / rate-limit tier resolution (EP-17 lite).
+///
+/// Static route crates and runtime-composed assemblies share the same contract.
+/// Cloning a manifest only clones the reference-counted route inventory.
+#[derive(Clone, Debug)]
 pub struct HttpRouteManifest {
-    routes: &'static [HttpRoute],
+    routes: Arc<[HttpRoute]>,
 }
 
 impl HttpRouteManifest {
-    pub const fn new(routes: &'static [HttpRoute]) -> Self {
-        Self { routes }
+    pub fn new(routes: &[HttpRoute]) -> Self {
+        Self {
+            routes: Arc::from(routes),
+        }
     }
 
-    pub fn routes(&self) -> &'static [HttpRoute] {
-        self.routes
+    pub fn from_owned_routes(routes: Vec<HttpRoute>) -> Self {
+        Self {
+            routes: Arc::from(routes),
+        }
+    }
+
+    pub fn routes(&self) -> &[HttpRoute] {
+        &self.routes
     }
 
     pub fn match_route(&self, method: &str, path: &str) -> Option<&HttpRoute> {
@@ -35,19 +48,17 @@ impl HttpRouteManifest {
 
     pub fn is_public_route(&self, method: &str, path: &str) -> bool {
         self.match_route(method, path)
-            .is_some_and(|route| route.auth.skips_credential_resolution())
+            .is_some_and(|route| route.auth.is_anonymous())
     }
 
-    pub fn public_routes(&self) -> impl Iterator<Item = &'static HttpRoute> {
-        self.routes
-            .iter()
-            .filter(|route| route.auth.skips_credential_resolution())
+    pub fn public_routes(&self) -> impl Iterator<Item = &HttpRoute> {
+        self.routes.iter().filter(|route| route.auth.is_anonymous())
     }
 
     /// Ensures infra [`public_path_prefixes`](crate::request_context::WebRequestContextProfile::public_path_prefixes)
     /// do not cover protected manifest routes.
     pub fn validate_public_path_prefixes(&self, prefixes: &[String]) -> Result<(), String> {
-        for route in self.routes {
+        for route in self.routes.iter() {
             if route.auth.skips_credential_resolution() {
                 continue;
             }
@@ -75,7 +86,8 @@ impl HttpRouteManifest {
         &self,
         profile: &WebRequestContextProfile,
     ) -> Result<(), String> {
-        for route in self.routes {
+        for route in self.routes.iter() {
+            route.validate_compatibility_contract()?;
             let surface = classify_api_surface(route.path, profile);
             match surface {
                 WebApiSurface::AppApi | WebApiSurface::GatewayApi => {
@@ -124,6 +136,9 @@ impl HttpRouteManifest {
                     if route.auth.skips_credential_resolution() {
                         continue;
                     }
+                    if route.auth == RouteAuth::Compatibility {
+                        continue;
+                    }
                     if route.auth.requires_dual_token_headers()
                         || route.auth == RouteAuth::RefreshToken
                     {
@@ -154,7 +169,7 @@ impl HttpRouteManifest {
         &self,
         profile: &WebRequestContextProfile,
     ) -> Result<(), String> {
-        for route in self.routes {
+        for route in self.routes.iter() {
             let surface = classify_api_surface(route.path, profile);
             if !requires_client_context_selector_guard(surface) {
                 continue;
@@ -180,6 +195,7 @@ impl HttpRouteManifest {
 fn route_auth_label(auth: RouteAuth) -> &'static str {
     match auth {
         RouteAuth::Public => "public",
+        RouteAuth::CredentialEntryBootstrap => "credentialEntryBootstrap",
         RouteAuth::RefreshToken => "refresh-token",
         RouteAuth::DualToken => "dualToken",
         RouteAuth::ApiKey => "apiKey",
@@ -187,6 +203,7 @@ fn route_auth_label(auth: RouteAuth) -> &'static str {
         RouteAuth::OAuth => "oauth",
         RouteAuth::OpenApiFlexible => "openApiFlexible",
         RouteAuth::AgentToken => "agentToken",
+        RouteAuth::Compatibility => "compatibility",
     }
 }
 
@@ -275,6 +292,20 @@ mod tests {
         );
         assert!(manifest.is_public_route("POST", "/app/v3/api/auth/sessions"));
         assert!(!manifest.is_public_route("GET", "/app/v3/api/auth/sessions"));
+    }
+
+    #[test]
+    fn owns_runtime_composed_route_inventory() {
+        let manifest = HttpRouteManifest::from_owned_routes(ROUTES.to_vec());
+        let shared = manifest.clone();
+
+        assert_eq!(shared.routes(), ROUTES);
+        assert_eq!(
+            shared
+                .match_route("POST", "/app/v3/api/auth/sessions")
+                .map(|route| route.operation_id),
+            Some("createSession")
+        );
     }
 
     #[test]

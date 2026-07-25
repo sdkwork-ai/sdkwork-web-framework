@@ -318,7 +318,7 @@ async fn extractor_rejection_includes_trace_id_without_pipeline_context() {
         .expect("body");
     let payload: serde_json::Value = serde_json::from_slice(&body).expect("json");
     assert_eq!(
-        "https://sdkwork.dev/problems/context-not-injected",
+        "https://docs.sdkwork.com/problems/50001",
         payload["type"].as_str().unwrap()
     );
     assert_eq!(

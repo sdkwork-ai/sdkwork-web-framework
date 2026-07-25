@@ -4,13 +4,13 @@ use crate::route_manifest::HttpRouteManifest;
 use async_trait::async_trait;
 
 /// Stage 12 — manifest-driven permission enforcement (wildcard-aware).
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct ManifestAuthorizationPolicy {
     pub manifest: HttpRouteManifest,
 }
 
 impl ManifestAuthorizationPolicy {
-    pub const fn new(manifest: HttpRouteManifest) -> Self {
+    pub fn new(manifest: HttpRouteManifest) -> Self {
         Self { manifest }
     }
 }

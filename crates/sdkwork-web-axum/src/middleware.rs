@@ -213,6 +213,7 @@ fn anonymous_context_from_request(request: &Request, request_id: &str) -> WebReq
             auth_token_present: false,
             access_token_present: false,
             api_key_present: false,
+            ingress_token_present: false,
             oauth_bearer_present: false,
             agent_token_present: false,
         },

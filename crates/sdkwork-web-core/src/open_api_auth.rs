@@ -95,10 +95,12 @@ impl OpenApiCredentialSchemeDetector for DefaultOpenApiCredentialSchemeDetector 
             Some(RouteAuth::OpenApiFlexible) | None => {}
             Some(
                 RouteAuth::Public
+                | RouteAuth::CredentialEntryBootstrap
                 | RouteAuth::RefreshToken
                 | RouteAuth::DualToken
                 | RouteAuth::IngressToken
-                | RouteAuth::AgentToken,
+                | RouteAuth::AgentToken
+                | RouteAuth::Compatibility,
             ) => {}
         }
 
@@ -165,13 +167,16 @@ where
 /// Maps route manifest auth to allowed open-api schemes (when not using flexible mode).
 pub fn allowed_open_api_schemes(route_auth: RouteAuth) -> &'static [OpenApiAuthScheme] {
     match route_auth {
-        RouteAuth::ApiKey | RouteAuth::AgentToken => &[OpenApiAuthScheme::ApiKey],
+        RouteAuth::ApiKey => &[OpenApiAuthScheme::ApiKey],
         RouteAuth::OAuth => &[OpenApiAuthScheme::OAuthBearer],
         RouteAuth::OpenApiFlexible => &[OpenApiAuthScheme::ApiKey, OpenApiAuthScheme::OAuthBearer],
         RouteAuth::Public
+        | RouteAuth::CredentialEntryBootstrap
         | RouteAuth::RefreshToken
         | RouteAuth::DualToken
-        | RouteAuth::IngressToken => &[],
+        | RouteAuth::IngressToken
+        | RouteAuth::AgentToken
+        | RouteAuth::Compatibility => &[],
     }
 }
 
@@ -196,6 +201,7 @@ mod tests {
             auth_token: None,
             access_token: None,
             api_key: Some("key-abc".to_owned()),
+            ingress_token: None,
             oauth_bearer: Some("oauth-token".to_owned()),
             agent_token: None,
         };
@@ -214,6 +220,7 @@ mod tests {
             auth_token: None,
             access_token: None,
             api_key: None,
+            ingress_token: None,
             oauth_bearer: Some("oauth-only".to_owned()),
             agent_token: None,
         };
@@ -231,6 +238,7 @@ mod tests {
             auth_token: None,
             access_token: None,
             api_key: Some("key-abc".to_owned()),
+            ingress_token: None,
             oauth_bearer: Some("oauth-token".to_owned()),
             agent_token: None,
         };
@@ -251,6 +259,7 @@ mod tests {
             auth_token: None,
             access_token: None,
             api_key: Some("api_key_id=key-1;tenant_id=100001;user_id=30;app_id=appbase".to_owned()),
+            ingress_token: None,
             oauth_bearer: None,
             agent_token: None,
         };
@@ -274,6 +283,7 @@ mod tests {
             auth_token: Some("oauth-token".to_owned()),
             access_token: None,
             api_key: None,
+            ingress_token: None,
             oauth_bearer: Some(
                 "token_id=tok-1;tenant_id=100001;user_id=user-oauth;app_id=appbase".to_owned(),
             ),

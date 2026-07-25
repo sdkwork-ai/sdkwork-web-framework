@@ -17,10 +17,14 @@ pub enum WebApiSurface {
 #[serde(rename_all = "camelCase")]
 pub enum WebAuthMode {
     Public,
+    CredentialEntryBootstrap,
+    RefreshToken,
     ApiKey,
     IngressToken,
+    AgentToken,
     OAuth,
     DualToken,
+    Compatibility,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -75,6 +79,7 @@ pub struct WebTransportFacts {
     pub auth_token_present: bool,
     pub access_token_present: bool,
     pub api_key_present: bool,
+    pub ingress_token_present: bool,
     pub oauth_bearer_present: bool,
     /// Backend agent bootstrap token presence (C8-C9).
     pub agent_token_present: bool,

@@ -51,6 +51,7 @@ fn web_request_context_json_matches_schema_vocabulary() {
             auth_token_present: true,
             access_token_present: true,
             api_key_present: false,
+            ingress_token_present: false,
             oauth_bearer_present: false,
             agent_token_present: false,
         },
@@ -130,6 +131,7 @@ fn production_runtime_enables_rate_limit_and_deny_all_auth() {
             auth_token_present: true,
             access_token_present: true,
             api_key_present: false,
+            ingress_token_present: false,
             oauth_bearer_present: false,
             agent_token_present: false,
         },
@@ -358,6 +360,7 @@ async fn open_api_flexible_detector_selects_oauth_when_only_bearer_present() {
         auth_token: Some("oauth-token".to_owned()),
         access_token: None,
         api_key: None,
+        ingress_token: None,
         oauth_bearer: Some("oauth-token".to_owned()),
         agent_token: None,
     };

@@ -6,7 +6,9 @@ use std::fmt;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum WebFrameworkErrorKind {
     MissingCredentials,
+    ExpiredCredentials,
     InvalidCredentials,
+    RevokedCredentials,
     Forbidden,
     BadRequest,
     UnprocessableEntity,
@@ -28,6 +30,9 @@ pub struct WebFrameworkError {
     pub kind: WebFrameworkErrorKind,
     pub message: String,
     pub retry_after_seconds: Option<u64>,
+    pub auth_profile: Option<String>,
+    pub failed_stage: Option<String>,
+    pub reason: Option<String>,
 }
 
 pub type AppRequestContextError = WebFrameworkError;
@@ -39,6 +44,9 @@ impl WebFrameworkError {
             kind,
             message: message.into(),
             retry_after_seconds: None,
+            auth_profile: None,
+            failed_stage: None,
+            reason: None,
         }
     }
 
@@ -48,6 +56,32 @@ impl WebFrameworkError {
 
     pub fn invalid_credentials(message: impl Into<String>) -> Self {
         Self::new(WebFrameworkErrorKind::InvalidCredentials, message)
+    }
+
+    pub fn expired_credentials(message: impl Into<String>) -> Self {
+        Self::new(WebFrameworkErrorKind::ExpiredCredentials, message)
+    }
+
+    pub fn revoked_credentials(message: impl Into<String>) -> Self {
+        Self::new(WebFrameworkErrorKind::RevokedCredentials, message)
+    }
+
+    pub fn with_auth_diagnostics(
+        mut self,
+        auth_profile: Option<&str>,
+        failed_stage: impl Into<String>,
+    ) -> Self {
+        self.auth_profile = auth_profile.map(str::to_owned);
+        self.failed_stage = Some(failed_stage.into());
+        if self.reason.is_none() {
+            self.reason = Some(self.kind.reason().to_owned());
+        }
+        self
+    }
+
+    pub fn with_reason(mut self, reason: impl Into<String>) -> Self {
+        self.reason = Some(reason.into());
+        self
     }
 
     pub fn forbidden(message: impl Into<String>) -> Self {
@@ -71,6 +105,9 @@ impl WebFrameworkError {
             kind: WebFrameworkErrorKind::RateLimitExceeded,
             message: message.into(),
             retry_after_seconds: Some(retry_after_seconds),
+            auth_profile: None,
+            failed_stage: None,
+            reason: None,
         }
     }
 
@@ -112,7 +149,9 @@ impl WebFrameworkError {
     pub fn status(&self) -> StatusCode {
         match self.kind {
             WebFrameworkErrorKind::MissingCredentials
-            | WebFrameworkErrorKind::InvalidCredentials => StatusCode::UNAUTHORIZED,
+            | WebFrameworkErrorKind::ExpiredCredentials
+            | WebFrameworkErrorKind::InvalidCredentials
+            | WebFrameworkErrorKind::RevokedCredentials => StatusCode::UNAUTHORIZED,
             WebFrameworkErrorKind::Forbidden => StatusCode::FORBIDDEN,
             WebFrameworkErrorKind::BadRequest | WebFrameworkErrorKind::WebSocketRejected => {
                 StatusCode::BAD_REQUEST
@@ -137,7 +176,9 @@ impl WebFrameworkError {
             WebFrameworkErrorKind::MissingCredentials => {
                 SdkWorkResultCode::AuthenticationRequired.as_i32()
             }
+            WebFrameworkErrorKind::ExpiredCredentials => SdkWorkResultCode::TokenExpired.as_i32(),
             WebFrameworkErrorKind::InvalidCredentials => SdkWorkResultCode::InvalidToken.as_i32(),
+            WebFrameworkErrorKind::RevokedCredentials => SdkWorkResultCode::SessionRevoked.as_i32(),
             WebFrameworkErrorKind::Forbidden => SdkWorkResultCode::PermissionRequired.as_i32(),
             WebFrameworkErrorKind::BadRequest => SdkWorkResultCode::ValidationError.as_i32(),
             WebFrameworkErrorKind::UnprocessableEntity => {
@@ -174,7 +215,9 @@ impl fmt::Display for WebFrameworkErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             WebFrameworkErrorKind::MissingCredentials => write!(f, "missing_credentials"),
+            WebFrameworkErrorKind::ExpiredCredentials => write!(f, "expired_credentials"),
             WebFrameworkErrorKind::InvalidCredentials => write!(f, "invalid_credentials"),
+            WebFrameworkErrorKind::RevokedCredentials => write!(f, "revoked_credentials"),
             WebFrameworkErrorKind::Forbidden => write!(f, "forbidden"),
             WebFrameworkErrorKind::BadRequest => write!(f, "bad_request"),
             WebFrameworkErrorKind::UnprocessableEntity => write!(f, "unprocessable_entity"),
@@ -189,6 +232,31 @@ impl fmt::Display for WebFrameworkErrorKind {
             WebFrameworkErrorKind::InternalServerError => write!(f, "internal_server_error"),
             WebFrameworkErrorKind::ContextNotInjected => write!(f, "context_not_injected"),
             WebFrameworkErrorKind::WebSocketRejected => write!(f, "websocket_rejected"),
+        }
+    }
+}
+
+impl WebFrameworkErrorKind {
+    pub const fn reason(&self) -> &'static str {
+        match self {
+            Self::MissingCredentials => "missing-credentials",
+            Self::ExpiredCredentials => "expired-credentials",
+            Self::InvalidCredentials => "invalid-credentials",
+            Self::RevokedCredentials => "revoked-credentials",
+            Self::Forbidden => "forbidden",
+            Self::BadRequest => "bad-request",
+            Self::UnprocessableEntity => "unprocessable-entity",
+            Self::Conflict => "conflict",
+            Self::PayloadTooLarge => "payload-too-large",
+            Self::RateLimitExceeded => "rate-limit-exceeded",
+            Self::DependencyUnavailable => "dependency-unavailable",
+            Self::RequestTimeout => "request-timeout",
+            Self::MethodNotAllowed => "method-not-allowed",
+            Self::NotFound => "not-found",
+            Self::NotImplemented => "not-implemented",
+            Self::InternalServerError => "internal-server-error",
+            Self::ContextNotInjected => "context-not-injected",
+            Self::WebSocketRejected => "websocket-rejected",
         }
     }
 }

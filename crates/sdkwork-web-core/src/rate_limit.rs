@@ -89,6 +89,7 @@ mod tests {
                 auth_token: None,
                 access_token: None,
                 api_key: None,
+                ingress_token: None,
                 oauth_bearer: None,
                 agent_token: None,
             },

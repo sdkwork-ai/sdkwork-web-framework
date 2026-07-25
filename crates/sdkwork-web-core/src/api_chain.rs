@@ -2,8 +2,7 @@ use crate::context_injection::DomainContextInjector;
 use crate::cors_policy::{DynamicCorsPolicySource, NoOpDynamicCorsPolicySource};
 use crate::error::WebFrameworkError;
 use crate::extractors::{
-    access_token, agent_token, api_key, bearer_token, header_value, idempotency_key,
-    sdkwork_access_token,
+    access_token, agent_token, api_key, bearer_token, header_value, idempotency_key, ingress_token,
 };
 use crate::idempotency::IdempotencyResponseRecord;
 use crate::open_api_auth::{default_open_api_scheme_detector, DynOpenApiCredentialSchemeDetector};
@@ -85,6 +84,7 @@ pub struct WebCallCredentials {
     pub auth_token: Option<String>,
     pub access_token: Option<String>,
     pub api_key: Option<String>,
+    pub ingress_token: Option<String>,
     /// OAuth bearer for open-api when `Authorization: Bearer` is present without `Access-Token`.
     pub oauth_bearer: Option<String>,
     /// Backend agent bootstrap token (`X-SDKWork-Agent-Token`) for `RouteAuth::AgentToken` routes (C8-C9).
@@ -436,7 +436,8 @@ impl WebCallState {
             credentials: WebCallCredentials {
                 auth_token: bearer,
                 access_token,
-                api_key: api_key(headers).or_else(|| sdkwork_access_token(headers)),
+                api_key: api_key(headers),
+                ingress_token: ingress_token(headers),
                 oauth_bearer,
                 agent_token: agent_token(headers),
             },
@@ -507,6 +508,7 @@ impl WebCallState {
                 auth_token_present: self.credentials.auth_token.is_some(),
                 access_token_present: self.credentials.access_token.is_some(),
                 api_key_present: self.credentials.api_key.is_some(),
+                ingress_token_present: self.credentials.ingress_token.is_some(),
                 oauth_bearer_present: self.credentials.oauth_bearer.is_some(),
                 agent_token_present: self.credentials.agent_token.is_some(),
             },
@@ -550,6 +552,7 @@ impl WebCallState {
         self.credentials.auth_token.is_some()
             || self.credentials.access_token.is_some()
             || self.credentials.api_key.is_some()
+            || self.credentials.ingress_token.is_some()
             || self.credentials.oauth_bearer.is_some()
             || self.credentials.agent_token.is_some()
     }
@@ -568,6 +571,8 @@ impl WebCallState {
             )
         } else if let Some(api_key) = &self.credentials.api_key {
             format!("api_key={}", hash_key_material(api_key))
+        } else if let Some(ingress_token) = &self.credentials.ingress_token {
+            format!("ingress_token={}", hash_key_material(ingress_token))
         } else if let Some(agent_token) = &self.credentials.agent_token {
             format!("agent_token={}", hash_key_material(agent_token))
         } else if let Some(oauth) = &self.credentials.oauth_bearer {
@@ -607,10 +612,11 @@ impl WebCallState {
 
     fn credentials_fingerprint(&self) -> String {
         format!(
-            "a={}:t={}:k={}:o={}:g={}",
+            "a={}:t={}:k={}:i={}:o={}:g={}",
             self.credentials.auth_token.is_some(),
             self.credentials.access_token.is_some(),
             self.credentials.api_key.is_some(),
+            self.credentials.ingress_token.is_some(),
             self.credentials.oauth_bearer.is_some(),
             self.credentials.agent_token.is_some()
         )
@@ -722,6 +728,10 @@ where
         for interceptor in &self.interceptors {
             let started = std::time::Instant::now();
             if let Err(error) = interceptor.before(state, request, runtime).await {
+                let error = error.with_auth_diagnostics(
+                    state.route_auth.map(|auth| auth.auth_profile_label()),
+                    interceptor.name().replace('_', "-"),
+                );
                 // 记录失败阶段的 error，供 Audit.after 使用。
                 state.before_failure = Some(error.clone());
                 // 返回错误前，仍记录该阶段耗时。

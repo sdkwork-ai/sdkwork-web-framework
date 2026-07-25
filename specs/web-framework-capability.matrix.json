@@ -22,7 +22,7 @@
         { "id": "A10", "name": "request-timeout", "targetM": "M3", "designStatus": "defined", "implStatus": "implemented", "modules": ["axum:with_request_timeout", "bootstrap:WebFrameworkBuilder::request_timeout", "constants:PRODUCTION_DEFAULT_REQUEST_TIMEOUT_SECS"] },
         { "id": "A13", "name": "handler-auto-inject-from-request-parts", "targetM": "M3", "designStatus": "defined", "implStatus": "implemented", "modules": ["axum:FromRequestParts<WebRequestContext>"] },
         { "id": "A14", "name": "require-tenant-app-extractors", "targetM": "M3", "designStatus": "defined", "implStatus": "implemented", "modules": ["axum:RequirePrincipal", "axum:RequireTenantApp"] },
-        { "id": "A16", "name": "locale-context-resolution", "targetM": "M3", "designStatus": "defined", "implStatus": "planned", "modules": ["WebLocaleContext", "LocaleResolver", "pipeline:RequestContextResolution"] }
+        { "id": "A16", "name": "locale-context-resolution", "targetM": "M4", "designStatus": "defined", "implStatus": "planned", "modules": ["WebLocaleContext", "LocaleResolver", "pipeline:RequestContextResolution"] }
       ]
     },
     {
@@ -55,7 +55,9 @@
         { "id": "C8", "name": "credential-log-redaction", "targetM": "M3", "designStatus": "defined", "implStatus": "implemented", "modules": ["redact::redact_sensitive_header", "redact::redact_sensitive_log_value", "bootstrap:init_tracing"] },
         { "id": "C15", "name": "cors-production-lint", "targetM": "M3", "designStatus": "defined", "implStatus": "implemented", "modules": ["CorsPolicy::validate_for_production", "production_assembly", "admin-api:validate_cors_upsert", "tests/header_fuzz"] },
         { "id": "C16", "name": "forged-header-fuzz", "targetM": "M3", "designStatus": "defined", "implStatus": "implemented", "modules": ["tests/vectors/forged-identity-headers.json", "tests/architecture/header_fuzz"] },
-        { "id": "C17", "name": "owasp-api-top10-mapping", "targetM": "M3", "designStatus": "defined", "implStatus": "implemented", "modules": ["docs/architecture/tech/TECH-18-owasp-api-top10-mapping.md"] }
+        { "id": "C17", "name": "owasp-api-top10-mapping", "targetM": "M3", "designStatus": "defined", "implStatus": "implemented", "modules": ["docs/architecture/tech/TECH-18-owasp-api-top10-mapping.md"] },
+        { "id": "C18", "name": "route-auth-profile-contamination-guard", "targetM": "M3", "designStatus": "defined", "implStatus": "implemented", "modules": ["contract:RouteAuth", "security:validate_route_auth_credentials", "pipeline:SurfaceClassification"] },
+        { "id": "C19", "name": "vendor-compatibility-auth-adapter", "targetM": "M3", "designStatus": "defined", "implStatus": "implemented", "modules": ["contract:CompatibilityAuth", "contract:CompatibilitySecurityRequirement", "resolver:resolve_compatibility", "pipeline:RequestContextResolution"] }
       ]
     },
     {
@@ -97,7 +99,9 @@
         { "id": "F1", "name": "api-surface-enum", "targetM": "M3", "designStatus": "defined", "implStatus": "implemented", "modules": ["contract:ApiSurface"] },
         { "id": "F3", "name": "contract-fallback-501", "targetM": "M3", "designStatus": "defined", "implStatus": "implemented", "modules": ["bootstrap:contract_fallback_handler", "service_router:fallback", "WebFrameworkBuilder:route_manifest"] },
         { "id": "F4", "name": "openapi-document-builder", "targetM": "M2", "designStatus": "defined", "implStatus": "implemented", "modules": ["contract:build_openapi_document", "validate_openapi_document_context_selectors"] },
-        { "id": "F6", "name": "openapi-flat-extensions", "targetM": "M2", "designStatus": "defined", "implStatus": "implemented", "modules": ["x-sdkwork-request-context"] }
+        { "id": "F6", "name": "openapi-flat-extensions", "targetM": "M2", "designStatus": "defined", "implStatus": "implemented", "modules": ["x-sdkwork-request-context"] },
+        { "id": "F7", "name": "auth-profile-openapi-parity", "targetM": "M3", "designStatus": "defined", "implStatus": "implemented", "modules": ["contract:RouteAuth", "openapi:build_openapi_operation", "x-sdkwork-auth-mode"] },
+        { "id": "F8", "name": "external-wire-operation-preservation", "targetM": "M3", "designStatus": "defined", "implStatus": "implemented", "modules": ["contract:HttpRoute::compatibility", "openapi:build_compatibility_openapi_operation", "x-sdkwork-wire-protocol", "x-sdkwork-external-protocol-id"] }
       ]
     },
     {
@@ -105,10 +109,11 @@
       "name": "errors",
       "capabilities": [
         { "id": "G1", "name": "problem-plus-json", "targetM": "M3", "designStatus": "defined", "implStatus": "implemented", "modules": ["core:problem_response", "ProblemCorrelation", "WebRequestContext::problem_correlation", "router:finish_api_json", "axum:OwnedProblemCorrelation"] },
-        { "id": "G2", "name": "problem-type-uri", "targetM": "M2", "designStatus": "defined", "implStatus": "implemented", "modules": ["https://sdkwork.dev/problems/*"] },
+        { "id": "G2", "name": "problem-type-uri", "targetM": "M2", "designStatus": "defined", "implStatus": "implemented", "modules": ["https://docs.sdkwork.com/problems/<numeric-code>"] },
         { "id": "G3", "name": "stage-error-status-mapping", "targetM": "M3", "designStatus": "defined", "implStatus": "implemented", "modules": ["WebFrameworkError::status"] },
         { "id": "G6", "name": "no-client-stack-traces", "targetM": "M3", "designStatus": "defined", "implStatus": "implemented", "modules": ["problem::problem_response", "WebFrameworkRejection", "router:finish_api_json", "router:into_response_for", "tests/problem_correlation_rules"] },
-        { "id": "G7", "name": "localized-problem-metadata", "targetM": "M3", "designStatus": "defined", "implStatus": "planned", "modules": ["LocalizedProblemMapper", "MessageBundleProvider", "ValidationMessageResolver", "ProblemDetail.i18nKey", "ProblemDetail.locale"] }
+        { "id": "G7", "name": "localized-problem-metadata", "targetM": "M4", "designStatus": "defined", "implStatus": "planned", "modules": ["LocalizedProblemMapper", "MessageBundleProvider", "ValidationMessageResolver", "ProblemDetail.i18nKey", "ProblemDetail.locale"] },
+        { "id": "G8", "name": "auth-problem-diagnostics", "targetM": "M3", "designStatus": "defined", "implStatus": "implemented", "modules": ["WebFrameworkError.auth_profile", "WebFrameworkError.failed_stage", "WebFrameworkError.reason", "problem::problem_response"] }
       ]
     },
     {
@@ -169,7 +174,7 @@
         { "id": "K17", "name": "pc-admin-playwright-integration-e2e", "targetM": "M3", "designStatus": "defined", "implStatus": "implemented", "modules": ["apps/sdkwork-web-framework-pc/e2e/console.integration.spec.ts", "scripts/e2e-web-stack.mjs", "scripts/build-pc-admin-e2e.mjs"] },
         { "id": "K18", "name": "production-rollout-adoption-evidence", "targetM": "M4", "designStatus": "defined", "implStatus": "implemented", "modules": ["docs/architecture/tech/TECH-24-production-rollout-and-adoption.md", "specs/production-adoption.evidence.template.json", "tests/contract/production-rollout.contract.test.mjs"] },
         { "id": "K19", "name": "release-evidence-bundle", "targetM": "M4", "designStatus": "defined", "implStatus": "implemented", "modules": ["scripts/collect-release-evidence.mjs", "scripts/validate-adoption-evidence.mjs", "specs/framework-adoption.evidence.json", "tests/contract/release-evidence.contract.test.mjs"] },
-        { "id": "K20", "name": "locale-context-contract-tests", "targetM": "M3", "designStatus": "defined", "implStatus": "planned", "modules": ["tests/architecture/locale_context", "tests/architecture/localized_problem_metadata"] }
+        { "id": "K20", "name": "locale-context-contract-tests", "targetM": "M4", "designStatus": "defined", "implStatus": "planned", "modules": ["tests/architecture/locale_context", "tests/architecture/localized_problem_metadata"] }
       ]
     },
     {

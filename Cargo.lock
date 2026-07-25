@@ -1983,6 +1983,7 @@ dependencies = [
  "sdkwork-routes-web-framework-backend-api",
  "sdkwork-web-bootstrap",
  "sdkwork-web-core",
+ "sdkwork-web-framework-admin-repository-sqlx",
  "sdkwork-web-store-redis",
  "sdkwork-web-store-sqlx",
  "sqlx",

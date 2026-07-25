@@ -16,6 +16,7 @@ use sdkwork_web_store_sqlx::{
     shared_idempotency_store as sqlx_idempotency_store,
     shared_rate_limit_store as sqlx_rate_limit_store, shared_security_event_emitter,
 };
+use sqlx::SqlitePool;
 use std::any::Any;
 use std::sync::Arc;
 
