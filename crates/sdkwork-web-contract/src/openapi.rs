@@ -860,13 +860,20 @@ fn openapi_envelope_component_schemas() -> Map<String, Value> {
         json!({
             "type": "object",
             "additionalProperties": true,
-            "required": ["type", "title", "status", "code", "traceId"],
+            "required": ["type", "title", "status", "code", "traceId", "instance"],
             "properties": {
                 "type": { "type": "string", "format": "uri-reference" },
                 "title": { "type": "string" },
                 "status": { "type": "integer", "minimum": 100, "maximum": 599 },
                 "detail": { "type": "string" },
-                "instance": { "type": "string" },
+                "instance": {
+                    "type": "string",
+                    "description": "Failing request occurrence as {METHOD} {routeTemplate}, with a redacted path fallback."
+                },
+                "operationId": {
+                    "type": "string",
+                    "description": "Matched OpenAPI operation id; omitted only when no operation resolves."
+                },
                 "code": { "$ref": "#/components/schemas/SdkWorkPlatformErrorCode" },
                 "traceId": {
                     "type": "string",
@@ -1048,6 +1055,25 @@ mod tests {
             .expect("responses");
         assert!(responses.contains_key("404"));
         assert!(responses.contains_key("503"));
+    }
+
+    #[test]
+    fn problem_detail_schema_requires_request_instance_and_declares_operation_id() {
+        let route = HttpRoute::public(
+            HttpMethod::Get,
+            "/app/v3/api/users/current",
+            "users",
+            "users.current.retrieve",
+        );
+        let document = build_openapi_document("Problem contract", &[route]);
+        let schema = document
+            .pointer("/components/schemas/ProblemDetail")
+            .expect("ProblemDetail schema");
+        let required = schema["required"].as_array().expect("required fields");
+        assert!(required.iter().any(|field| field == "instance"));
+        assert!(schema
+            .pointer("/properties/operationId")
+            .is_some_and(Value::is_object));
     }
 
     #[test]

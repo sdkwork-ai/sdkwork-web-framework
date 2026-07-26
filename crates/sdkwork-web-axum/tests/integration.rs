@@ -6,14 +6,14 @@ use axum::extract::Query;
 use axum::http::Request;
 use axum::response::Response;
 use axum::routing::get;
-use axum::Router;
+use axum::{Json, Router};
 use sdkwork_web_axum::{
     run_websocket_session, with_web_request_context, WebFrameworkLayer, WebSocketUpgradeLayer,
 };
 use sdkwork_web_core::{
-    CorsPolicy, DefaultWebRequestContextResolver, SecurityPolicy, WebRequestContext,
-    WebRequestContextProfile, WebSocketCallInterceptorChain, WebSocketCallRuntime,
-    WebSocketSession, SDKWORK_TRACE_ID_HEADER,
+    CorsPolicy, DefaultWebRequestContextResolver, HttpMethod, HttpRoute, HttpRouteManifest,
+    SecurityPolicy, WebRequestContext, WebRequestContextProfile, WebSocketCallInterceptorChain,
+    WebSocketCallRuntime, WebSocketSession, SDKWORK_TRACE_ID_HEADER,
 };
 use std::sync::Arc;
 use tower::ServiceExt;
@@ -283,6 +283,62 @@ async fn pipeline_problem_response_includes_trace_id_from_traceparent() {
     );
     assert!(payload.get("requestId").is_none());
     assert!(payload["traceId"].as_str().is_some());
+}
+
+#[tokio::test]
+async fn extractor_rejection_is_normalized_with_route_identity() {
+    use axum::routing::post;
+
+    let manifest = HttpRouteManifest::new(&[HttpRoute::public(
+        HttpMethod::Post,
+        "/app/v3/api/users",
+        "users",
+        "users.create",
+    )]);
+    let layer = WebFrameworkLayer::new(DefaultWebRequestContextResolver::default())
+        .with_route_manifest(manifest);
+    let app = with_web_request_context(
+        Router::new().route(
+            "/app/v3/api/users",
+            post(|Json(_payload): Json<serde_json::Value>| async { "created" }),
+        ),
+        layer,
+    );
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/app/v3/api/users")
+                .header("content-type", "application/json")
+                .body(Body::from("{"))
+                .unwrap(),
+        )
+        .await
+        .expect("response");
+
+    assert_eq!(axum::http::StatusCode::BAD_REQUEST, response.status());
+    assert_eq!(
+        Some("application/problem+json"),
+        response
+            .headers()
+            .get("content-type")
+            .and_then(|value| value.to_str().ok())
+    );
+    let trace_id = response
+        .headers()
+        .get(SDKWORK_TRACE_ID_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .expect("trace header")
+        .to_owned();
+    let body = to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("body");
+    let payload: serde_json::Value = serde_json::from_slice(&body).expect("problem json");
+    assert_eq!(Some(40002), payload["code"].as_i64());
+    assert_eq!(Some(trace_id.as_str()), payload["traceId"].as_str());
+    assert_eq!(Some("POST /app/v3/api/users"), payload["instance"].as_str());
+    assert_eq!(Some("users.create"), payload["operationId"].as_str());
 }
 
 #[tokio::test]

@@ -280,6 +280,14 @@ Route crates for **business** capabilities `MUST NOT` live in `sdkwork-web-frame
 - Framework-generated auth, authorization, tenant-isolation, routing, and dependency problems
   include `authProfile`, `failedStage`, and a stable non-secret `reason` whenever route metadata is
   known. They never expose token contents, lookup keys, subject secrets, or upstream addresses.
+- Every SDKWork-owned custom 4xx/5xx response is normalized to `application/problem+json`, including
+  Axum/Spring extractor or binding rejection, request-size/media-type rejection, router fallback,
+  timeout, and handler errors. The framework supplies server-owned `traceId` and `instance`, and
+  supplies the manifest `operationId` whenever method and path resolve to a route. Explicit external
+  protocol operations preserve their declared upstream error wire.
+- `with_server_request_identity` and equivalent request-id-only middleware do not satisfy Web
+  Framework integration for business API routes and cannot replace a manifest-bound framework
+  layer.
 - Oversized body: 413.
 - Rate limit exceeded: 429 with `Retry-After` when applicable.
 - Rate-limit / idempotency / audit store errors: fail-closed (`503` Problem+json via `DependencyUnavailable`); applications `MUST NOT` bypass stores in production.
@@ -292,6 +300,8 @@ Route crates for **business** capabilities `MUST NOT` live in `sdkwork-web-frame
 - Metrics and logs `SHOULD` include `request_id`, `trace_id` (when known), `api_surface`, `operation_id` when known.
 - Metrics and logs `SHOULD` include locale as diagnostic context when it is available, but machine names and audit action codes remain non-localized.
 - All framework Problem+json error surfaces (pipeline, extractors, handlers, contract fallback, timeouts) `MUST` include `traceId` when available via `WebRequestContext` or inbound W3C `traceparent`, and `SHOULD` include safe `i18nKey`/`locale` metadata when message mapping exists.
+- All SDKWork-owned custom Problem+json surfaces `MUST` include `instance`; matched routes `MUST`
+  include `operationId`, and unmatched routes `MUST NOT` fabricate one.
 - Raw URL paths with identifiers `MUST NOT` be logged; use route templates.
 - `HttpMetricsRegistry` uses hard framework ceilings of 4,096 labeled request series and 128 pipeline-stage series. Public construction may lower but must not raise those ceilings.
 - A request-series key over 2,048 bytes or pipeline-stage label over 128 bytes is dropped and counted; metric recording must not allocate the rejected series.
@@ -314,6 +324,8 @@ Business repository after integration:
 - Handler static rule: no raw credential or locale header parsing in route crates.
 - Locale context test: public and protected routes receive `WebRequestContext.locale`; unsupported locales resolve through fallback.
 - Locale response test: localized responses emit `Content-Language`, language-varying responses emit `Vary: Accept-Language`, and localized problem mapping preserves numeric `ProblemDetail.code` and `traceId`.
+- Problem routing test: extractor, handler, timeout, and fallback errors contain `instance`; matched
+  routes contain the manifest `operationId`; explicit external protocol operations retain their wire.
 - Open-api auth check: protected routes declare `api-key`, `oauth`, or `open-api-flexible`; security vectors cover missing credentials, API key resolution, OAuth bearer resolution, and flexible scheme selection.
 
 ## 12. Capability Matrix

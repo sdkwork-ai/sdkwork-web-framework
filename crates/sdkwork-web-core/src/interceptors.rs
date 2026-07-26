@@ -560,10 +560,16 @@ where
                             .insert(crate::trace::TRACESTATE_HEADER, value);
                     }
                 }
-                if let Err(error) =
-                    crate::problem::enrich_problem_response(state.problem_correlation(), response)
-                        .await
-                {
+                let problem_result = if state.route_auth == Some(RouteAuth::Compatibility) {
+                    Ok(())
+                } else {
+                    crate::problem::normalize_problem_response(
+                        state.problem_correlation(),
+                        response,
+                    )
+                    .await
+                };
+                if let Err(error) = problem_result {
                     tracing::warn!(
                         request_id = ?state.request_id_value(),
                         operation_id = ?state.operation_id,

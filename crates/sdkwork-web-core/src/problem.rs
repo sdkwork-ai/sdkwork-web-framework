@@ -8,6 +8,18 @@ use sdkwork_utils_rust::{SdkWorkProblemDetail, SdkWorkProblemRouting, SdkWorkRes
 
 const PROBLEM_RESPONSE_ENRICHMENT_MAX_BYTES: usize = 64 * 1024;
 
+fn is_problem_json(response: &Response) -> bool {
+    response
+        .headers()
+        .get(header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .map(|value| {
+            value.starts_with("application/problem+json")
+                || value.starts_with("application/problem+json;")
+        })
+        .unwrap_or(false)
+}
+
 fn map_result_code(code: i32) -> SdkWorkResultCode {
     match code {
         40001 => SdkWorkResultCode::ValidationError,
@@ -23,6 +35,31 @@ fn map_result_code(code: i32) -> SdkWorkResultCode {
         41301 => SdkWorkResultCode::PayloadTooLarge,
         42901 => SdkWorkResultCode::RateLimitExceeded,
         50301 => SdkWorkResultCode::ServiceUnavailable,
+        _ => SdkWorkResultCode::InternalError,
+    }
+}
+
+fn result_code_from_status(status: axum::http::StatusCode) -> SdkWorkResultCode {
+    match status.as_u16() {
+        400 => SdkWorkResultCode::MalformedRequest,
+        401 => SdkWorkResultCode::AuthenticationRequired,
+        403 => SdkWorkResultCode::PermissionRequired,
+        404 => SdkWorkResultCode::NotFound,
+        405 => SdkWorkResultCode::MethodNotAllowed,
+        408 => SdkWorkResultCode::RequestTimeout,
+        409 => SdkWorkResultCode::Conflict,
+        410 => SdkWorkResultCode::Gone,
+        412 => SdkWorkResultCode::PreconditionFailed,
+        413 => SdkWorkResultCode::PayloadTooLarge,
+        415 => SdkWorkResultCode::UnsupportedMediaType,
+        422 => SdkWorkResultCode::UnprocessableEntity,
+        423 => SdkWorkResultCode::Locked,
+        428 => SdkWorkResultCode::PreconditionRequired,
+        429 => SdkWorkResultCode::RateLimitExceeded,
+        502 => SdkWorkResultCode::BadGateway,
+        503 => SdkWorkResultCode::ServiceUnavailable,
+        504 => SdkWorkResultCode::GatewayTimeout,
+        code if (400..500).contains(&code) => SdkWorkResultCode::ValidationError,
         _ => SdkWorkResultCode::InternalError,
     }
 }
@@ -138,16 +175,7 @@ pub async fn enrich_problem_response(
     correlation: ProblemCorrelation<'_>,
     response: &mut Response,
 ) -> Result<(), WebFrameworkError> {
-    let is_problem_json = response
-        .headers()
-        .get(header::CONTENT_TYPE)
-        .and_then(|value| value.to_str().ok())
-        .map(|value| {
-            value.starts_with("application/problem+json")
-                || value.starts_with("application/problem+json;")
-        })
-        .unwrap_or(false);
-    if !is_problem_json {
+    if !is_problem_json(response) {
         return Ok(());
     }
 
@@ -166,6 +194,9 @@ pub async fn enrich_problem_response(
         WebFrameworkError::internal_server_error(format!("invalid problem response json: {error}"))
     })?;
     enrich_problem_detail_value(&mut payload, &correlation.routing());
+    if let Some(trace_id) = correlation.resolved_trace_id() {
+        payload["traceId"] = serde_json::Value::String(trace_id);
+    }
     let encoded = serde_json::to_vec(&payload).map_err(|error| {
         WebFrameworkError::internal_server_error(format!(
             "failed to encode problem response: {error}"
@@ -175,7 +206,68 @@ pub async fn enrich_problem_response(
     Ok(())
 }
 
-/// Build RFC 9457 Problem+json with required numeric `code`, `traceId`, `instance`, and `operationId`.
+/// Normalizes every SDKWork-owned 4xx/5xx response to the standard Problem+json contract.
+pub async fn normalize_problem_response(
+    correlation: ProblemCorrelation<'_>,
+    response: &mut Response,
+) -> Result<(), WebFrameworkError> {
+    let status = response.status();
+    if !status.is_client_error() && !status.is_server_error() {
+        return enrich_problem_response(correlation, response).await;
+    }
+    if is_problem_json(response) {
+        if let Err(error) = enrich_problem_response(correlation, response).await {
+            replace_with_standard_problem(status, correlation, response);
+            return Err(error);
+        }
+        return Ok(());
+    }
+    replace_with_standard_problem(status, correlation, response);
+    Ok(())
+}
+
+fn replace_with_standard_problem(
+    status: axum::http::StatusCode,
+    correlation: ProblemCorrelation<'_>,
+    response: &mut Response,
+) {
+    let original_headers = response.headers().clone();
+    let result_code = result_code_from_status(status);
+    let trace_id = correlation
+        .resolved_trace_id()
+        .unwrap_or_else(|| "unknown".to_owned());
+    let mut problem = SdkWorkProblemDetail::platform_enriched(
+        result_code,
+        result_code.title(),
+        trace_id.clone(),
+        correlation.routing(),
+    );
+    problem.status = status.as_u16();
+    let mut normalized = (
+        status,
+        [(header::CONTENT_TYPE, "application/problem+json")],
+        Json(problem),
+    )
+        .into_response();
+    if let Ok(value) = HeaderValue::from_str(&trace_id) {
+        normalized.headers_mut().insert(
+            HeaderName::from_static(crate::constants::SDKWORK_TRACE_ID_HEADER_LOWER),
+            value,
+        );
+    }
+    for (name, value) in &original_headers {
+        if name == header::CONTENT_TYPE
+            || name == header::CONTENT_LENGTH
+            || name.as_str() == crate::constants::SDKWORK_TRACE_ID_HEADER_LOWER
+        {
+            continue;
+        }
+        normalized.headers_mut().append(name.clone(), value.clone());
+    }
+    *response = normalized;
+}
+
+/// Builds RFC 9457 Problem+json with required correlation and resolved route identity.
 pub fn problem_response(
     error: &WebFrameworkError,
     correlation: ProblemCorrelation<'_>,
@@ -390,7 +482,7 @@ mod tests {
             "title": "Internal server error",
             "status": 500,
             "code": 50001,
-            "traceId": "trace-abc",
+            "traceId": "handler-local-trace",
             "detail": "An internal error occurred"
         });
         enrich_problem_detail_value(&mut payload, &routing);
@@ -402,6 +494,7 @@ mod tests {
             "wallet.transactions.list",
             payload["operationId"].as_str().unwrap()
         );
+        assert_eq!("handler-local-trace", payload["traceId"].as_str().unwrap());
 
         let correlation = ProblemCorrelation::new(Some("req-1"), Some("trace-abc")).with_routing(
             Some("GET"),
@@ -426,6 +519,7 @@ mod tests {
             "wallet.transactions.list",
             enriched["operationId"].as_str().unwrap()
         );
+        assert_eq!("trace-abc", enriched["traceId"].as_str().unwrap());
     }
 
     #[test]

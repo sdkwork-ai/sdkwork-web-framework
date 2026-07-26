@@ -90,7 +90,8 @@ pub use crate::policy_cache::{
     CachingDynamicTenantRuntimeProfileSource, DynamicPolicyCaches, TtlCache,
 };
 pub use crate::problem::{
-    enrich_problem_response, problem_response, redact_path_template, ProblemCorrelation,
+    enrich_problem_response, normalize_problem_response, problem_response, redact_path_template,
+    ProblemCorrelation,
 };
 pub use crate::production_assembly::{
     requires_production_assembly, validate_deployment_environment, validate_production_assembly,
