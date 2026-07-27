@@ -1,6 +1,7 @@
 //! Open-api multi-scheme authentication: header-driven credential detection and resolution.
 //!
-//! Supported schemes: API key (`X-Api-Key`), OAuth 2.0 bearer (`Authorization: Bearer`).
+//! Supported schemes: API key (`X-Api-Key`), OAuth 2.0 bearer (`Authorization: Bearer`),
+//! and SDKWork dual token (`Authorization: Bearer` plus `Access-Token`).
 //! Applications extend via custom [`OpenApiCredentialSchemeDetector`], [`WebRequestContextResolver`]
 //! method overrides, or a custom [`WebCallInterceptor`] at `RequestContextResolution`.
 
@@ -18,6 +19,7 @@ use std::sync::Arc;
 pub enum OpenApiAuthScheme {
     ApiKey,
     OAuthBearer,
+    DualToken,
 }
 
 /// Header-driven detection of which open-api auth scheme a client is using.
@@ -66,8 +68,11 @@ impl OpenApiCredentialSchemeDetector for DefaultOpenApiCredentialSchemeDetector 
         route_auth: Option<RouteAuth>,
     ) -> Result<Option<OpenApiAuthScheme>, WebFrameworkError> {
         let api_key_present = credentials.api_key.is_some() || api_key(headers).is_some();
-        let oauth_present = credentials.oauth_bearer.is_some()
-            || (bearer_token(headers).is_some() && credentials.access_token.is_none());
+        let auth_token_present =
+            credentials.auth_token.is_some() || bearer_token(headers).is_some();
+        let access_token_present = credentials.access_token.is_some();
+        let oauth_present =
+            credentials.oauth_bearer.is_some() || (auth_token_present && !access_token_present);
 
         match route_auth {
             Some(RouteAuth::ApiKey) => {
@@ -92,13 +97,39 @@ impl OpenApiCredentialSchemeDetector for DefaultOpenApiCredentialSchemeDetector 
                 }
                 return Ok(Some(OpenApiAuthScheme::OAuthBearer));
             }
+            Some(RouteAuth::ApiKeyOrDualToken) => {
+                if api_key_present && (auth_token_present || access_token_present) {
+                    return Err(WebFrameworkError::invalid_credentials(
+                        "api-key-or-dual-token routes do not accept mixed credential profiles",
+                    )
+                    .with_reason("credential-profile-contamination"));
+                }
+                if auth_token_present != access_token_present {
+                    return Err(WebFrameworkError::missing_credentials(
+                        "the dual-token branch requires both Authorization and Access-Token",
+                    )
+                    .with_reason("incomplete-credential-profile"));
+                }
+                if api_key_present {
+                    return Ok(Some(OpenApiAuthScheme::ApiKey));
+                }
+                if auth_token_present {
+                    return Ok(Some(OpenApiAuthScheme::DualToken));
+                }
+                return Ok(None);
+            }
+            Some(RouteAuth::DualToken) => {
+                if auth_token_present && access_token_present {
+                    return Ok(Some(OpenApiAuthScheme::DualToken));
+                }
+                return Ok(None);
+            }
             Some(RouteAuth::OpenApiFlexible) | None => {}
             Some(
                 RouteAuth::Public
                 | RouteAuth::BootstrapBody
                 | RouteAuth::CredentialEntryBootstrap
                 | RouteAuth::RefreshToken
-                | RouteAuth::DualToken
                 | RouteAuth::IngressToken
                 | RouteAuth::AgentToken
                 | RouteAuth::Compatibility,
@@ -162,6 +193,20 @@ where
             let principal = inner.resolve_oauth_bearer(raw).await?;
             Ok((WebAuthMode::OAuth, principal))
         }
+        OpenApiAuthScheme::DualToken => {
+            let auth_token = credentials.auth_token.as_deref().ok_or_else(|| {
+                WebFrameworkError::missing_credentials(
+                    "open-api dual-token authentication requires Authorization",
+                )
+            })?;
+            let access_token = credentials.access_token.as_deref().ok_or_else(|| {
+                WebFrameworkError::missing_credentials(
+                    "open-api dual-token authentication requires Access-Token",
+                )
+            })?;
+            let principal = inner.resolve_dual_token(auth_token, access_token).await?;
+            Ok((WebAuthMode::DualToken, principal))
+        }
     }
 }
 
@@ -171,6 +216,7 @@ pub fn allowed_open_api_schemes(route_auth: RouteAuth) -> &'static [OpenApiAuthS
         RouteAuth::ApiKey => &[OpenApiAuthScheme::ApiKey],
         RouteAuth::OAuth => &[OpenApiAuthScheme::OAuthBearer],
         RouteAuth::OpenApiFlexible => &[OpenApiAuthScheme::ApiKey, OpenApiAuthScheme::OAuthBearer],
+        RouteAuth::ApiKeyOrDualToken => &[OpenApiAuthScheme::ApiKey, OpenApiAuthScheme::DualToken],
         RouteAuth::Public
         | RouteAuth::BootstrapBody
         | RouteAuth::CredentialEntryBootstrap
@@ -195,6 +241,23 @@ mod tests {
     use crate::resolvers::{
         DefaultOpenApiWebRequestContextResolver, DefaultWebRequestContextResolver,
     };
+
+    fn credentials(
+        api_key: Option<&str>,
+        auth_token: Option<&str>,
+        access_token: Option<&str>,
+    ) -> WebCallCredentials {
+        WebCallCredentials {
+            auth_token: auth_token.map(str::to_owned),
+            access_token: access_token.map(str::to_owned),
+            api_key: api_key.map(str::to_owned),
+            ingress_token: None,
+            oauth_bearer: auth_token
+                .filter(|_| access_token.is_none())
+                .map(str::to_owned),
+            agent_token: None,
+        }
+    }
 
     #[test]
     fn detector_prefers_api_key_by_default_when_both_present() {
@@ -252,6 +315,49 @@ mod tests {
             crate::error::WebFrameworkErrorKind::InvalidCredentials,
             error.kind
         );
+    }
+
+    #[test]
+    fn api_key_or_dual_token_detector_accepts_each_complete_alternative() {
+        let detector = DefaultOpenApiCredentialSchemeDetector::default();
+        let headers = HeaderMap::new();
+
+        let api_key_scheme = detector
+            .detect(
+                &credentials(Some("key-abc"), None, None),
+                &headers,
+                Some(RouteAuth::ApiKeyOrDualToken),
+            )
+            .expect("api key detection");
+        assert_eq!(Some(OpenApiAuthScheme::ApiKey), api_key_scheme);
+
+        let dual_token_scheme = detector
+            .detect(
+                &credentials(None, Some("auth-token"), Some("access-token")),
+                &headers,
+                Some(RouteAuth::ApiKeyOrDualToken),
+            )
+            .expect("dual token detection");
+        assert_eq!(Some(OpenApiAuthScheme::DualToken), dual_token_scheme);
+    }
+
+    #[test]
+    fn api_key_or_dual_token_detector_rejects_mixed_and_partial_credentials() {
+        let detector = DefaultOpenApiCredentialSchemeDetector::default();
+        let headers = HeaderMap::new();
+        let cases = [
+            credentials(Some("key-abc"), Some("auth-token"), None),
+            credentials(Some("key-abc"), None, Some("access-token")),
+            credentials(Some("key-abc"), Some("auth-token"), Some("access-token")),
+            credentials(None, Some("auth-token"), None),
+            credentials(None, None, Some("access-token")),
+        ];
+
+        for credentials in cases {
+            detector
+                .detect(&credentials, &headers, Some(RouteAuth::ApiKeyOrDualToken))
+                .expect_err("mixed or partial credentials must fail");
+        }
     }
 
     #[tokio::test]

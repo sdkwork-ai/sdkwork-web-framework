@@ -45,7 +45,7 @@ async fn valid_cors_preflight_short_circuits_with_204_and_headers() {
                 .header("access-control-request-method", "POST")
                 .header(
                     "access-control-request-headers",
-                    "authorization,access-token,content-type,idempotency-key",
+                    "authorization,access-token,content-type,idempotency-key,x-content-sha256,x-idempotency-fingerprint",
                 )
                 .body(Body::empty())
                 .unwrap(),

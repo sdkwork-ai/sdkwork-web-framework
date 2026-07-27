@@ -65,6 +65,8 @@ pub enum RouteAuth {
     OAuth,
     /// Header-driven open-api auth: API key or OAuth bearer (detector chooses).
     OpenApiFlexible,
+    /// Header-driven open-api auth: API key or a complete auth/access token pair.
+    ApiKeyOrDualToken,
     /// Refresh-token proof supplied in the typed request body without credential headers.
     RefreshToken,
     /// Agent bootstrap token (`X-SDKWork-Agent-Token`) on backend-api agent routes.
@@ -421,6 +423,21 @@ impl HttpRoute {
         Self::new(method, path, tag, operation_id, RouteAuth::OpenApiFlexible)
     }
 
+    pub const fn api_key_or_dual_token(
+        method: HttpMethod,
+        path: &'static str,
+        tag: &'static str,
+        operation_id: &'static str,
+    ) -> Self {
+        Self::new(
+            method,
+            path,
+            tag,
+            operation_id,
+            RouteAuth::ApiKeyOrDualToken,
+        )
+    }
+
     pub const fn refresh_token(
         method: HttpMethod,
         path: &'static str,
@@ -492,9 +509,12 @@ impl RouteAuth {
         matches!(self, Self::DualToken)
     }
 
-    /// Open-api protected routes authenticate via API key and/or OAuth bearer headers.
+    /// Open-api protected routes authenticate through one of the declared open-api profiles.
     pub const fn is_open_api_credential_mode(self) -> bool {
-        matches!(self, Self::ApiKey | Self::OAuth | Self::OpenApiFlexible)
+        matches!(
+            self,
+            Self::ApiKey | Self::OAuth | Self::OpenApiFlexible | Self::ApiKeyOrDualToken
+        )
     }
 
     /// Backend-api agent routes authenticate via `X-SDKWork-Agent-Token` (C8-C9).
@@ -520,6 +540,7 @@ impl RouteAuth {
             Self::IngressToken => "ingress-token",
             Self::OAuth => "oauth",
             Self::OpenApiFlexible => "open-api-flexible",
+            Self::ApiKeyOrDualToken => "api-key-or-dual-token",
             Self::AgentToken => "agent-token",
             Self::Compatibility => "compatibility",
         }

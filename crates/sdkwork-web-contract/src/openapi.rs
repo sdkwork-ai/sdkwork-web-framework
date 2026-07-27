@@ -175,6 +175,9 @@ pub fn build_openapi_operation(route: &HttpRoute) -> Value {
             RouteAuth::OpenApiFlexible => {
                 json!([{ "ApiKey": [] }, { "OAuthBearer": [] }])
             }
+            RouteAuth::ApiKeyOrDualToken => {
+                json!([{ "ApiKey": [] }, { "AuthToken": [], "AccessToken": [] }])
+            }
             RouteAuth::IngressToken => json!([{ "IngressToken": [], "AccessToken": [] }]),
             RouteAuth::AgentToken => json!([{ "AgentToken": [], "AccessToken": [] }]),
             RouteAuth::Compatibility => unreachable!("handled above"),
@@ -973,6 +976,7 @@ fn route_auth_label(auth: RouteAuth) -> &'static str {
         RouteAuth::IngressToken => "ingress-token",
         RouteAuth::OAuth => "oauth",
         RouteAuth::OpenApiFlexible => "open-api-flexible",
+        RouteAuth::ApiKeyOrDualToken => "api-key-or-dual-token",
         RouteAuth::AgentToken => "agent-token",
         RouteAuth::Compatibility => "compatibility",
     }
@@ -989,6 +993,7 @@ fn auth_mode_label(auth: RouteAuth) -> &'static str {
         RouteAuth::IngressToken => "ingress-token",
         RouteAuth::OAuth => "oauth",
         RouteAuth::OpenApiFlexible => "open-api-flexible",
+        RouteAuth::ApiKeyOrDualToken => "api-key-or-dual-token",
         // AgentToken maps to canonical api-key auth-mode (API_SPEC §19).
         RouteAuth::AgentToken => "agent-token",
         RouteAuth::Compatibility => "compatibility",
@@ -1365,6 +1370,30 @@ mod tests {
             .and_then(Value::as_str)
             .expect("dual token security scheme");
         assert_eq!("Access-Token", schemes);
+    }
+
+    #[test]
+    fn api_key_or_dual_token_openapi_uses_mutually_exclusive_requirements() {
+        let route = HttpRoute::api_key_or_dual_token(
+            HttpMethod::Get,
+            "/im/v3/api/social/contacts",
+            "social",
+            "social.contacts.list",
+        );
+        let operation = build_openapi_operation(&route);
+        assert_eq!(
+            Some(&json!([
+                { "ApiKey": [] },
+                { "AuthToken": [], "AccessToken": [] }
+            ])),
+            operation.get("security")
+        );
+        assert_eq!(
+            Some("api-key-or-dual-token"),
+            operation
+                .get(OPENAPI_AUTH_MODE_EXTENSION)
+                .and_then(Value::as_str)
+        );
     }
 
     #[test]

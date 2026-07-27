@@ -131,6 +131,8 @@ impl Default for CorsPolicy {
                 "access-token".to_owned(),
                 "content-type".to_owned(),
                 "idempotency-key".to_owned(),
+                "x-content-sha256".to_owned(),
+                "x-idempotency-fingerprint".to_owned(),
                 "x-api-key".to_owned(),
                 "x-sdkwork-access-token".to_owned(),
             ],
@@ -575,6 +577,7 @@ impl SecurityPolicy {
             RouteAuth::ApiKey => &["x-api-key"],
             RouteAuth::OAuth => &["authorization"],
             RouteAuth::OpenApiFlexible => &["authorization", "x-api-key"],
+            RouteAuth::ApiKeyOrDualToken => &["authorization", "access-token", "x-api-key"],
             RouteAuth::IngressToken => &["x-sdkwork-ingress-token", "access-token"],
             RouteAuth::AgentToken => &["x-sdkwork-agent-token", "access-token"],
             RouteAuth::Compatibility => unreachable!("handled by route metadata validation"),
@@ -586,6 +589,23 @@ impl SecurityPolicy {
                     route_auth.auth_profile_label(),
                 ))
                 .with_reason("credential-profile-contamination"));
+            }
+        }
+        if route_auth == RouteAuth::ApiKeyOrDualToken {
+            let has_api_key = headers.contains_key("x-api-key");
+            let has_auth_token = headers.contains_key("authorization");
+            let has_access_token = headers.contains_key("access-token");
+            if has_api_key && (has_auth_token || has_access_token) {
+                return Err(WebFrameworkError::bad_request(
+                    "api-key-or-dual-token routes require either X-API-Key or the dual-token pair, never both",
+                )
+                .with_reason("credential-profile-contamination"));
+            }
+            if has_auth_token != has_access_token {
+                return Err(WebFrameworkError::bad_request(
+                    "the dual-token branch requires both Authorization and Access-Token",
+                )
+                .with_reason("incomplete-credential-profile"));
             }
         }
         Ok(())
@@ -1039,6 +1059,65 @@ mod tests {
                         error.reason.as_deref()
                     );
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn api_key_or_dual_token_profile_enforces_exact_credential_alternatives() {
+        let route = route(RouteAuth::ApiKeyOrDualToken);
+        let cases = [
+            (&[("x-api-key", "key")][..], true, None),
+            (
+                &[("authorization", "Bearer auth"), ("access-token", "access")][..],
+                true,
+                None,
+            ),
+            (
+                &[("x-api-key", "key"), ("authorization", "Bearer auth")][..],
+                false,
+                Some("credential-profile-contamination"),
+            ),
+            (
+                &[("x-api-key", "key"), ("access-token", "access")][..],
+                false,
+                Some("credential-profile-contamination"),
+            ),
+            (
+                &[
+                    ("x-api-key", "key"),
+                    ("authorization", "Bearer auth"),
+                    ("access-token", "access"),
+                ][..],
+                false,
+                Some("credential-profile-contamination"),
+            ),
+            (
+                &[("authorization", "Bearer auth")][..],
+                false,
+                Some("incomplete-credential-profile"),
+            ),
+            (
+                &[("access-token", "access")][..],
+                false,
+                Some("incomplete-credential-profile"),
+            ),
+        ];
+
+        for (entries, accepted, expected_reason) in cases {
+            let mut headers = axum::http::HeaderMap::new();
+            for (name, value) in entries {
+                headers.insert(
+                    axum::http::HeaderName::from_bytes(name.as_bytes()).expect("header name"),
+                    axum::http::HeaderValue::from_str(value).expect("header value"),
+                );
+            }
+            let result = SecurityPolicy::validate_route_auth_credentials(&route, &headers);
+            if accepted {
+                result.expect("credential alternative must be accepted");
+            } else {
+                let error = result.expect_err("invalid credential combination must fail");
+                assert_eq!(expected_reason, error.reason.as_deref());
             }
         }
     }

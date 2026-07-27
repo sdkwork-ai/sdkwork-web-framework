@@ -153,7 +153,7 @@ impl HttpRouteManifest {
                         || route.auth == RouteAuth::RefreshToken
                     {
                         return Err(format!(
-                            "open-api route {} {} must not use {} auth; declare api-key, oauth, or open-api-flexible",
+                            "open-api route {} {} must not use {} auth; declare api-key, oauth, open-api-flexible, or api-key-or-dual-token",
                             http_method_label(route.method),
                             route.path,
                             route_auth_label(route.auth),
@@ -213,6 +213,7 @@ fn route_auth_label(auth: RouteAuth) -> &'static str {
         RouteAuth::IngressToken => "ingressToken",
         RouteAuth::OAuth => "oauth",
         RouteAuth::OpenApiFlexible => "openApiFlexible",
+        RouteAuth::ApiKeyOrDualToken => "apiKeyOrDualToken",
         RouteAuth::AgentToken => "agentToken",
         RouteAuth::Compatibility => "compatibility",
     }

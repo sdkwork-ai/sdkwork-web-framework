@@ -678,24 +678,13 @@ where
                 }
                 _ => {}
             }
-            if !state.public_path {
-                if let (Some(auth_token), Some(access_token)) = (
-                    state.credentials.auth_token.as_deref(),
-                    state.credentials.access_token.as_deref(),
-                ) {
-                    state.principal = Some(
-                        runtime
-                            .resolver
-                            .resolve_dual_token(auth_token, access_token)
-                            .await?,
-                    );
-                    state.auth_mode = WebAuthMode::DualToken;
-                    return Ok(());
+            let route_auth = state.route_auth.or_else(|| {
+                if state.credentials.access_token.is_some() {
+                    Some(RouteAuth::ApiKeyOrDualToken)
+                } else {
+                    Some(RouteAuth::OpenApiFlexible)
                 }
-            }
-            let route_auth = state
-                .route_auth
-                .or(Some(sdkwork_web_contract::RouteAuth::OpenApiFlexible));
+            });
             let (auth_mode, principal) = resolve_open_api_request_context(
                 &state.credentials,
                 headers,

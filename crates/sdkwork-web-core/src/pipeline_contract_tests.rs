@@ -859,6 +859,97 @@ async fn open_api_flexible_route_accepts_oauth_bearer_credentials() {
 }
 
 #[tokio::test]
+async fn api_key_or_dual_token_route_accepts_each_complete_alternative() {
+    use sdkwork_web_contract::{HttpMethod, HttpRoute};
+
+    const ROUTES: &[HttpRoute] = &[HttpRoute::api_key_or_dual_token(
+        HttpMethod::Get,
+        "/im/v3/api/social/contacts",
+        "social",
+        "social.contacts.list",
+    )];
+    let profile = WebRequestContextProfile {
+        open_api_prefixes: vec!["/im/v3/api".to_owned()],
+        ..Default::default()
+    };
+    let runtime = WebCallRuntime::new(DefaultOpenApiWebRequestContextResolver::default())
+        .with_profile(profile)
+        .with_route_manifest(HttpRouteManifest::new(ROUTES));
+    let chain = WebCallInterceptorChain::standard();
+
+    let mut api_key_request = Request::builder()
+        .method("GET")
+        .uri("/im/v3/api/social/contacts")
+        .header(
+            "X-API-Key",
+            "api_key_id=key-1;tenant_id=100001;user_id=30;app_id=appbase",
+        )
+        .body(Body::empty())
+        .expect("api key request");
+    let mut api_key_state = WebCallState::from_request(&api_key_request);
+    chain
+        .before(&mut api_key_state, &mut api_key_request, &runtime)
+        .await
+        .expect("API key alternative");
+    assert_eq!(WebAuthMode::ApiKey, api_key_state.auth_mode);
+
+    let mut dual_token_request = Request::builder()
+        .method("GET")
+        .uri("/im/v3/api/social/contacts")
+        .header("Authorization", fixture_auth_header())
+        .header("Access-Token", fixture_access_header())
+        .body(Body::empty())
+        .expect("dual token request");
+    let mut dual_token_state = WebCallState::from_request(&dual_token_request);
+    chain
+        .before(&mut dual_token_state, &mut dual_token_request, &runtime)
+        .await
+        .expect("dual token alternative");
+    assert_eq!(WebAuthMode::DualToken, dual_token_state.auth_mode);
+}
+
+#[tokio::test]
+async fn api_key_or_dual_token_route_rejects_profile_mixing() {
+    use sdkwork_web_contract::{HttpMethod, HttpRoute};
+
+    const ROUTES: &[HttpRoute] = &[HttpRoute::api_key_or_dual_token(
+        HttpMethod::Get,
+        "/im/v3/api/social/contacts",
+        "social",
+        "social.contacts.list",
+    )];
+    let runtime = WebCallRuntime::new(DefaultOpenApiWebRequestContextResolver::default())
+        .with_profile(WebRequestContextProfile {
+            open_api_prefixes: vec!["/im/v3/api".to_owned()],
+            ..Default::default()
+        })
+        .with_route_manifest(HttpRouteManifest::new(ROUTES));
+    let chain = WebCallInterceptorChain::standard();
+    let mut request = Request::builder()
+        .method("GET")
+        .uri("/im/v3/api/social/contacts")
+        .header("X-API-Key", "key-1")
+        .header("Authorization", fixture_auth_header())
+        .header("Access-Token", fixture_access_header())
+        .body(Body::empty())
+        .expect("mixed request");
+    let mut state = WebCallState::from_request(&request);
+    let error = chain
+        .before(&mut state, &mut request, &runtime)
+        .await
+        .expect_err("mixed profiles must fail");
+    assert_eq!(WebFrameworkErrorKind::BadRequest, error.kind);
+    assert_eq!(
+        Some("credential-profile-contamination"),
+        error.reason.as_deref()
+    );
+    assert_eq!(
+        Some("surface-classification"),
+        error.failed_stage.as_deref()
+    );
+}
+
+#[tokio::test]
 async fn manifest_refresh_token_route_rejects_automatic_credentials() {
     use sdkwork_web_contract::{HttpMethod, HttpRoute};
 
