@@ -17,6 +17,7 @@ pub enum WebApiSurface {
 #[serde(rename_all = "camelCase")]
 pub enum WebAuthMode {
     Public,
+    BootstrapBody,
     CredentialEntryBootstrap,
     RefreshToken,
     ApiKey,

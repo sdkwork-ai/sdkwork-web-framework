@@ -601,15 +601,14 @@ async fn manifest_credential_entry_route_rejects_authorization_header() {
 }
 
 #[tokio::test]
-async fn manifest_refresh_route_rejects_missing_access_token_header() {
-    use sdkwork_web_contract::{HttpMethod, HttpRoute, RouteAuth};
+async fn manifest_refresh_route_accepts_body_proof_without_credential_headers() {
+    use sdkwork_web_contract::{HttpMethod, HttpRoute};
 
-    const ROUTES: &[HttpRoute] = &[HttpRoute::new(
+    const ROUTES: &[HttpRoute] = &[HttpRoute::refresh_token(
         HttpMethod::Post,
         "/app/v3/api/auth/sessions/refresh",
         "Auth",
         "sessions.refresh",
-        RouteAuth::RefreshToken,
     )];
 
     let runtime = WebCallRuntime::new(DefaultWebRequestContextResolver::default())
@@ -618,15 +617,16 @@ async fn manifest_refresh_route_rejects_missing_access_token_header() {
     let mut request = Request::builder()
         .method("POST")
         .uri("/app/v3/api/auth/sessions/refresh")
-        .body(Body::empty())
+        .header("content-type", "application/json")
+        .body(Body::from(r#"{"refreshToken":"rt-1"}"#))
         .expect("request");
     let mut state = WebCallState::from_request(&request);
-    let error = chain
+    chain
         .before(&mut state, &mut request, &runtime)
         .await
-        .expect_err("refresh body proof does not replace Access-Token");
-    assert_eq!(WebFrameworkErrorKind::MissingCredentials, error.kind);
-    assert!(error.message.contains("Access-Token"));
+        .expect("refresh-token route delegates body proof validation to the handler");
+    assert_eq!(WebAuthMode::RefreshToken, state.auth_mode);
+    assert!(state.principal.is_none());
 }
 
 #[tokio::test]
@@ -750,6 +750,38 @@ async fn manifest_app_api_public_route_with_path_parameter_skips_credentials() {
 }
 
 #[tokio::test]
+async fn manifest_backend_bootstrap_body_route_skips_header_credentials_without_being_public() {
+    use sdkwork_web_contract::{HttpMethod, HttpRoute};
+
+    const ROUTES: &[HttpRoute] = &[HttpRoute::bootstrap_body(
+        HttpMethod::Post,
+        "/backend/v3/api/iam/access_credentials",
+        "iam",
+        "accessCredentials.create",
+    )];
+
+    let runtime = WebCallRuntime::new(DefaultWebRequestContextResolver::default())
+        .with_route_manifest(HttpRouteManifest::new(ROUTES));
+    let chain = WebCallInterceptorChain::standard();
+    let mut request = Request::builder()
+        .method("POST")
+        .uri("/backend/v3/api/iam/access_credentials")
+        .header("content-type", "application/json")
+        .body(Body::from(
+            r#"{"username":"owner@example.test","password":"secret"}"#,
+        ))
+        .expect("request");
+    let mut state = WebCallState::from_request(&request);
+    chain
+        .before(&mut state, &mut request, &runtime)
+        .await
+        .expect("backend bootstrap-body route skips framework credential resolution");
+    assert!(state.public_path);
+    assert_eq!(WebAuthMode::BootstrapBody, state.auth_mode);
+    assert!(state.principal.is_none());
+}
+
+#[tokio::test]
 async fn manifest_open_api_public_route_skips_open_api_credentials() {
     use sdkwork_web_contract::{HttpMethod, HttpRoute, RouteAuth};
 
@@ -827,15 +859,14 @@ async fn open_api_flexible_route_accepts_oauth_bearer_credentials() {
 }
 
 #[tokio::test]
-async fn manifest_refresh_token_route_skips_dual_token_requirement() {
-    use sdkwork_web_contract::{HttpMethod, HttpRoute, RouteAuth};
+async fn manifest_refresh_token_route_rejects_automatic_credentials() {
+    use sdkwork_web_contract::{HttpMethod, HttpRoute};
 
-    const ROUTES: &[HttpRoute] = &[HttpRoute::new(
+    const ROUTES: &[HttpRoute] = &[HttpRoute::refresh_token(
         HttpMethod::Post,
         "/app/v3/api/auth/sessions/refresh",
         "auth",
         "sessions.refresh",
-        RouteAuth::RefreshToken,
     )];
 
     let runtime = WebCallRuntime::new(DefaultWebRequestContextResolver::default())
@@ -849,13 +880,15 @@ async fn manifest_refresh_token_route_skips_dual_token_requirement() {
         .body(Body::from(r#"{"refreshToken":"rt-1"}"#))
         .expect("request");
     let mut state = WebCallState::from_request(&request);
-    chain
+    let error = chain
         .before(&mut state, &mut request, &runtime)
         .await
-        .expect("refresh-token route requires Access-Token but not Authorization");
-    assert!(!state.public_path);
-    assert_eq!(WebAuthMode::RefreshToken, state.auth_mode);
-    assert!(state.principal.is_some());
+        .expect_err("refresh-token route must reject inherited Access-Token");
+    assert_eq!(WebFrameworkErrorKind::BadRequest, error.kind);
+    assert_eq!(
+        Some("credential-profile-contamination"),
+        error.reason.as_deref()
+    );
 }
 
 #[tokio::test]

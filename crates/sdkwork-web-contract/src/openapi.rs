@@ -167,10 +167,8 @@ pub fn build_openapi_operation(route: &HttpRoute) -> Value {
     operation.insert(
         "security".to_owned(),
         match route.auth {
-            RouteAuth::Public => json!([]),
-            RouteAuth::CredentialEntryBootstrap | RouteAuth::RefreshToken => {
-                json!([{ "AccessToken": [] }])
-            }
+            RouteAuth::Public | RouteAuth::BootstrapBody | RouteAuth::RefreshToken => json!([]),
+            RouteAuth::CredentialEntryBootstrap => json!([{ "AccessToken": [] }]),
             RouteAuth::DualToken => json!([{ "AuthToken": [], "AccessToken": [] }]),
             RouteAuth::ApiKey => json!([{ "ApiKey": [] }]),
             RouteAuth::OAuth => json!([{ "OAuthBearer": [] }]),
@@ -967,6 +965,7 @@ fn api_surface_label(surface: ApiSurface) -> &'static str {
 fn route_auth_label(auth: RouteAuth) -> &'static str {
     match auth {
         RouteAuth::Public => "public",
+        RouteAuth::BootstrapBody => "bootstrap-body",
         RouteAuth::CredentialEntryBootstrap => "credential-entry-bootstrap",
         RouteAuth::RefreshToken => "refresh-token",
         RouteAuth::DualToken => "dual-token",
@@ -982,6 +981,7 @@ fn route_auth_label(auth: RouteAuth) -> &'static str {
 fn auth_mode_label(auth: RouteAuth) -> &'static str {
     match auth {
         RouteAuth::Public => "anonymous",
+        RouteAuth::BootstrapBody => "bootstrap-body",
         RouteAuth::CredentialEntryBootstrap => "credential-entry-bootstrap",
         RouteAuth::RefreshToken => "refresh-token",
         RouteAuth::DualToken => "dual-token",
@@ -1055,6 +1055,37 @@ mod tests {
             .expect("responses");
         assert!(responses.contains_key("404"));
         assert!(responses.contains_key("503"));
+    }
+
+    #[test]
+    fn bootstrap_body_operation_declares_explicit_non_anonymous_profile() {
+        let route = HttpRoute::bootstrap_body(
+            HttpMethod::Post,
+            "/backend/v3/api/iam/access_credentials",
+            "iam",
+            "accessCredentials.create",
+        );
+        let operation = build_openapi_operation(&route);
+        assert_eq!(Some(&json!([])), operation.get("security"));
+        assert_eq!(
+            Some("bootstrap-body"),
+            operation
+                .get(OPENAPI_AUTH_MODE_EXTENSION)
+                .and_then(Value::as_str)
+        );
+        assert_eq!(
+            Some("bootstrap-body"),
+            operation
+                .get(OPENAPI_ROUTE_AUTH_EXTENSION)
+                .and_then(Value::as_str)
+        );
+        assert_eq!(
+            Some(true),
+            operation
+                .get(OPENAPI_FORBID_CREDENTIAL_HEADERS_EXTENSION)
+                .and_then(Value::as_bool)
+        );
+        assert!(operation.get(OPENAPI_REQUIRED_SURFACE_EXTENSION).is_none());
     }
 
     #[test]

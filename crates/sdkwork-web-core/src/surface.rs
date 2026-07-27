@@ -123,16 +123,15 @@ mod tests {
     }
 
     #[test]
-    fn resolve_public_path_treats_refresh_token_routes_as_access_token_protected() {
-        const ROUTES: &[HttpRoute] = &[HttpRoute::new(
+    fn resolve_public_path_skips_framework_credentials_for_refresh_token_routes() {
+        const ROUTES: &[HttpRoute] = &[HttpRoute::refresh_token(
             HttpMethod::Post,
             "/app/v3/api/auth/sessions/refresh",
             "auth",
             "sessions.refresh",
-            RouteAuth::RefreshToken,
         )];
         let profile = WebRequestContextProfile::default();
-        assert!(!resolve_public_path(
+        assert!(resolve_public_path(
             "POST",
             "/app/v3/api/auth/sessions/refresh",
             &profile,

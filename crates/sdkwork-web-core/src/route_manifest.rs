@@ -79,8 +79,9 @@ impl HttpRouteManifest {
     /// Ensures manifest `RouteAuth` matches the API surface inferred from each route path.
     ///
     /// App API routes may be public or use an Access-Token-bearing profile. Gateway routes use
-    /// dual-token or access-token-only entry profiles; backend additionally permits agent-token
-    /// plus `Access-Token`; internal routes use ingress-token plus `Access-Token`.
+    /// dual-token or access-token-only entry profiles; backend additionally permits body-credential
+    /// bootstrap and agent-token plus `Access-Token`; internal routes use ingress-token plus
+    /// `Access-Token`.
     pub fn validate_route_auth_for_surfaces(
         &self,
         profile: &WebRequestContextProfile,
@@ -90,14 +91,14 @@ impl HttpRouteManifest {
             let surface = classify_api_surface(route.path, profile);
             match surface {
                 WebApiSurface::AppApi => {
-                    if route.auth.is_anonymous() {
+                    if route.auth.is_anonymous() || route.auth == RouteAuth::RefreshToken {
                         continue;
                     }
                     if !route.auth.requires_dual_token_headers()
                         && !route.auth.requires_access_token_only()
                     {
                         return Err(format!(
-                            "app-api route {} {} must declare RouteAuth::Public or an Access-Token-bearing auth profile: RouteAuth::DualToken, RouteAuth::CredentialEntryBootstrap, or RouteAuth::RefreshToken (found {})",
+                            "app-api route {} {} must declare RouteAuth::Public, RouteAuth::RefreshToken, or an Access-Token-bearing auth profile: RouteAuth::DualToken or RouteAuth::CredentialEntryBootstrap (found {})",
                             http_method_label(route.method),
                             route.path,
                             route_auth_label(route.auth),
@@ -117,13 +118,14 @@ impl HttpRouteManifest {
                     }
                 }
                 WebApiSurface::BackendApi => {
-                    // Backend-api permits access-token-only entry profiles and agent bootstrap.
+                    // Backend-api permits body/access-token entry profiles and agent bootstrap.
                     if !route.auth.requires_dual_token_headers()
                         && !route.auth.requires_access_token_only()
+                        && !route.auth.is_bootstrap_body_credential_mode()
                         && !route.auth.is_agent_token_credential_mode()
                     {
                         return Err(format!(
-                            "backend-api route {} {} must declare an Access-Token-bearing auth profile (found {})",
+                            "backend-api route {} {} must declare a protected or bootstrap-body auth profile (found {})",
                             http_method_label(route.method),
                             route.path,
                             route_auth_label(route.auth),
@@ -203,6 +205,7 @@ impl HttpRouteManifest {
 fn route_auth_label(auth: RouteAuth) -> &'static str {
     match auth {
         RouteAuth::Public => "public",
+        RouteAuth::BootstrapBody => "bootstrapBody",
         RouteAuth::CredentialEntryBootstrap => "credentialEntryBootstrap",
         RouteAuth::RefreshToken => "refresh-token",
         RouteAuth::DualToken => "dualToken",
@@ -425,7 +428,24 @@ mod tests {
         let error = HttpRouteManifest::new(ROUTES)
             .validate_route_auth_for_surfaces(&WebRequestContextProfile::default())
             .expect_err("backend-api public routes must be rejected");
-        assert!(error.contains("Access-Token"));
+        assert!(error.contains("protected or bootstrap-body"));
+    }
+
+    #[test]
+    fn accepts_backend_api_bootstrap_body_routes() {
+        use crate::request_context::WebRequestContextProfile;
+
+        const ROUTES: &[HttpRoute] = &[HttpRoute::bootstrap_body(
+            HttpMethod::Post,
+            "/backend/v3/api/iam/access_credentials",
+            "iam",
+            "accessCredentials.create",
+        )];
+        let manifest = HttpRouteManifest::new(ROUTES);
+        manifest
+            .validate_route_auth_for_surfaces(&WebRequestContextProfile::default())
+            .expect("backend-api bootstrap-body route should be valid");
+        assert!(!manifest.is_public_route("POST", "/backend/v3/api/iam/access_credentials"));
     }
 
     #[test]

@@ -95,6 +95,7 @@ impl OpenApiCredentialSchemeDetector for DefaultOpenApiCredentialSchemeDetector 
             Some(RouteAuth::OpenApiFlexible) | None => {}
             Some(
                 RouteAuth::Public
+                | RouteAuth::BootstrapBody
                 | RouteAuth::CredentialEntryBootstrap
                 | RouteAuth::RefreshToken
                 | RouteAuth::DualToken
@@ -171,6 +172,7 @@ pub fn allowed_open_api_schemes(route_auth: RouteAuth) -> &'static [OpenApiAuthS
         RouteAuth::OAuth => &[OpenApiAuthScheme::OAuthBearer],
         RouteAuth::OpenApiFlexible => &[OpenApiAuthScheme::ApiKey, OpenApiAuthScheme::OAuthBearer],
         RouteAuth::Public
+        | RouteAuth::BootstrapBody
         | RouteAuth::CredentialEntryBootstrap
         | RouteAuth::RefreshToken
         | RouteAuth::DualToken

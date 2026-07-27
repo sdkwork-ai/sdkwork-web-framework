@@ -645,14 +645,10 @@ where
                     return Ok(());
                 }
                 Some(RouteAuth::RefreshToken) => {
-                    return finish_access_token_only_context(
-                        state,
-                        runtime,
-                        WebAuthMode::RefreshToken,
-                        "refresh-token requests require Access-Token JWT",
-                        "missing-refresh-access-token",
+                    return Err(WebFrameworkError::bad_request(
+                        "refresh-token authentication is valid only on app-api routes",
                     )
-                    .await;
+                    .with_reason("invalid-refresh-token-surface"));
                 }
                 Some(RouteAuth::CredentialEntryBootstrap) => {
                     return finish_credential_entry_bootstrap_context(state, runtime).await;
@@ -741,18 +737,30 @@ where
                     )
                     .with_reason("invalid-non-open-api-public-route"));
                 }
+                Some(RouteAuth::BootstrapBody) => {
+                    if state.api_surface != WebApiSurface::BackendApi {
+                        return Err(WebFrameworkError::missing_credentials(
+                            "bootstrap-body authentication is valid only on backend-api routes",
+                        )
+                        .with_reason("invalid-bootstrap-body-surface"));
+                    }
+                    state.auth_mode = WebAuthMode::BootstrapBody;
+                    state.principal = None;
+                    return Ok(());
+                }
                 Some(RouteAuth::CredentialEntryBootstrap) => {
                     return finish_credential_entry_bootstrap_context(state, runtime).await;
                 }
                 Some(RouteAuth::RefreshToken) => {
-                    return finish_access_token_only_context(
-                        state,
-                        runtime,
-                        WebAuthMode::RefreshToken,
-                        "refresh-token requests require Access-Token JWT",
-                        "missing-refresh-access-token",
-                    )
-                    .await;
+                    if state.api_surface != WebApiSurface::AppApi {
+                        return Err(WebFrameworkError::bad_request(
+                            "refresh-token authentication is valid only on app-api routes",
+                        )
+                        .with_reason("invalid-refresh-token-surface"));
+                    }
+                    state.auth_mode = WebAuthMode::RefreshToken;
+                    state.principal = None;
+                    return Ok(());
                 }
                 _ => {}
             }

@@ -54,6 +54,8 @@ pub enum RateLimitTier {
 #[serde(rename_all = "kebab-case")]
 pub enum RouteAuth {
     Public,
+    /// Backend bootstrap operations authenticate explicit credentials from the request body.
+    BootstrapBody,
     CredentialEntryBootstrap,
     DualToken,
     ApiKey,
@@ -63,7 +65,7 @@ pub enum RouteAuth {
     OAuth,
     /// Header-driven open-api auth: API key or OAuth bearer (detector chooses).
     OpenApiFlexible,
-    /// Refresh-token proof in request body plus the mandatory non-open-api `Access-Token`.
+    /// Refresh-token proof supplied in the typed request body without credential headers.
     RefreshToken,
     /// Agent bootstrap token (`X-SDKWork-Agent-Token`) on backend-api agent routes.
     ///
@@ -363,6 +365,17 @@ impl HttpRoute {
         Self::new(method, path, tag, operation_id, RouteAuth::Public)
     }
 
+    /// Backend-only credential entry whose handler validates an explicit body credential.
+    pub const fn bootstrap_body(
+        method: HttpMethod,
+        path: &'static str,
+        tag: &'static str,
+        operation_id: &'static str,
+    ) -> Self {
+        Self::new(method, path, tag, operation_id, RouteAuth::BootstrapBody)
+            .with_forbid_credential_headers(true)
+    }
+
     pub const fn dual_token(
         method: HttpMethod,
         path: &'static str,
@@ -415,6 +428,7 @@ impl HttpRoute {
         operation_id: &'static str,
     ) -> Self {
         Self::new(method, path, tag, operation_id, RouteAuth::RefreshToken)
+            .with_forbid_credential_headers(true)
     }
 
     /// Backend-api agent route authenticated via `X-SDKWork-Agent-Token` (C8-C9).
@@ -447,10 +461,13 @@ impl HttpRoute {
 impl RouteAuth {
     /// Routes that bypass all framework credential resolution.
     ///
-    /// Only explicit public routes qualify. Access-token-only profiles still resolve their
-    /// application credential before dispatching to a handler.
+    /// Public routes and routes whose typed body carries the complete proof qualify.
+    /// Access-token-only credential-entry profiles still resolve their application credential.
     pub const fn skips_credential_resolution(self) -> bool {
-        matches!(self, Self::Public)
+        matches!(
+            self,
+            Self::Public | Self::BootstrapBody | Self::RefreshToken
+        )
     }
 
     pub const fn is_anonymous(self) -> bool {
@@ -462,7 +479,12 @@ impl RouteAuth {
     }
 
     pub const fn requires_access_token_only(self) -> bool {
-        matches!(self, Self::CredentialEntryBootstrap | Self::RefreshToken)
+        matches!(self, Self::CredentialEntryBootstrap)
+    }
+
+    /// Backend bootstrap routes authenticate credentials inside the typed request body.
+    pub const fn is_bootstrap_body_credential_mode(self) -> bool {
+        matches!(self, Self::BootstrapBody)
     }
 
     /// Protected app-api / backend-api / gateway-api routes require both auth and access tokens.
@@ -490,6 +512,7 @@ impl RouteAuth {
     pub const fn auth_profile_label(self) -> &'static str {
         match self {
             Self::Public => "anonymous",
+            Self::BootstrapBody => "bootstrap-body",
             Self::CredentialEntryBootstrap => "credential-entry-bootstrap",
             Self::RefreshToken => "refresh-token",
             Self::DualToken => "dual-token",

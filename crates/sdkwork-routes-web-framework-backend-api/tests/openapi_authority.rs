@@ -399,6 +399,7 @@ fn auth_mode_label(auth: sdkwork_web_contract::RouteAuth) -> &'static str {
     use sdkwork_web_contract::RouteAuth;
     match auth {
         RouteAuth::Public => "anonymous",
+        RouteAuth::BootstrapBody => "bootstrap-body",
         RouteAuth::CredentialEntryBootstrap => "credential-entry-bootstrap",
         RouteAuth::DualToken => "dual-token",
         RouteAuth::ApiKey => "api-key",

@@ -81,6 +81,11 @@
             "type": "array"
           },
           "instance": {
+            "description": "Failing request occurrence as {METHOD} {routeTemplate}, with a redacted path fallback.",
+            "type": "string"
+          },
+          "operationId": {
+            "description": "Matched OpenAPI operation id; omitted only when no operation resolves.",
             "type": "string"
           },
           "status": {
@@ -106,7 +111,8 @@
           "title",
           "status",
           "code",
-          "traceId"
+          "traceId",
+          "instance"
         ],
         "type": "object"
       },

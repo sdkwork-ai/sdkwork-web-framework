@@ -569,8 +569,8 @@ impl SecurityPolicy {
         headers: &axum::http::HeaderMap,
     ) -> Result<(), WebFrameworkError> {
         let allowed: &[&str] = match route_auth {
-            RouteAuth::Public => &[],
-            RouteAuth::CredentialEntryBootstrap | RouteAuth::RefreshToken => &["access-token"],
+            RouteAuth::Public | RouteAuth::BootstrapBody | RouteAuth::RefreshToken => &[],
+            RouteAuth::CredentialEntryBootstrap => &["access-token"],
             RouteAuth::DualToken => &["authorization", "access-token"],
             RouteAuth::ApiKey => &["x-api-key"],
             RouteAuth::OAuth => &["authorization"],
@@ -998,8 +998,9 @@ mod tests {
     fn route_auth_profile_allowlist_rejects_cross_profile_credentials() {
         let cases: &[(RouteAuth, &[&str])] = &[
             (RouteAuth::Public, &[]),
+            (RouteAuth::BootstrapBody, &[]),
+            (RouteAuth::RefreshToken, &[]),
             (RouteAuth::CredentialEntryBootstrap, &["access-token"]),
-            (RouteAuth::RefreshToken, &["access-token"]),
             (RouteAuth::DualToken, &["authorization", "access-token"]),
             (RouteAuth::ApiKey, &["x-api-key"]),
             (RouteAuth::OAuth, &["authorization"]),

@@ -115,7 +115,7 @@ WebFramework::builder(resolver)
 
 No duplicate `public_path_prefixes` entry is required for manifest-declared public business routes.
 
-### 3.6 Credential-entry and refresh profiles
+### 3.6 Bootstrap-body, credential-entry, and refresh profiles
 
 Pre-session operations use the auth profile declared by their owning API contract. Operations
 classified as credential-entry `MUST` declare `RouteAuth::CredentialEntryBootstrap` through
@@ -124,11 +124,18 @@ classified as credential-entry `MUST` declare `RouteAuth::CredentialEntryBootstr
 
 | Profile | Allowed proof | Runtime context | Forbidden credentials |
 | --- | --- | --- | --- |
+| `BootstrapBody` | Explicit typed body credential on backend-api only | `WebAuthMode::BootstrapBody`; framework credential resolution is skipped and the handler validates the body credential, operator permission, and tenant scope | Every credential/context header |
 | `CredentialEntryBootstrap` | Bootstrap `Access-Token` JWT only | `WebAuthMode::CredentialEntryBootstrap`; tenant/app isolation is resolved from the verified bootstrap JWT | Session `Authorization`, refresh proof, API key, OAuth bearer, ingress/agent token, and client context projection |
 | `RefreshToken` | The route-declared refresh proof only | `WebAuthMode::RefreshToken`; the IAM handler/adapter validates and projects the refresh session | `Authorization`, `Access-Token`, API key, OAuth bearer, ingress/agent token, and client context projection |
 
 Rules:
 
+- `BootstrapBody` is not anonymous and is valid only for backend-api operations whose owning
+  contract explicitly declares `bootstrap-body`. It materializes `security: []`,
+  `x-sdkwork-auth-mode: bootstrap-body`, and `x-sdkwork-forbid-credential-headers: true`.
+- Bootstrap-body handlers must validate the typed body credential before any business mutation and
+  must enforce operation permission and tenant scope. Browser-facing admin flows must use
+  dual-token management operations instead of collecting bootstrap credentials.
 - Missing bootstrap `Access-Token` fails with `40101` before handler dispatch.
 - Expired, invalid, and revoked bootstrap/session credentials use `40102`, `40103`, and `40104`
   respectively when the resolver can distinguish them.
