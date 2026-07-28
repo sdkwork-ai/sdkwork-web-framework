@@ -25,6 +25,8 @@ use sdkwork_web_contract::{
     CompatibilityAuth, CompatibilitySecuritySchemeKind, HttpRoute, RouteAuth,
 };
 use std::time::Duration;
+
+const MAX_IDEMPOTENCY_KEY_BYTES: usize = 128;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum StandardWebCallInterceptorKind {
     RequestIdentity,
@@ -327,6 +329,7 @@ where
                             "Idempotency-Key header is required for this command",
                         ));
                     };
+                    validate_idempotency_key(&client_key)?;
                     let store_key = state.scoped_idempotency_store_key(&client_key);
                     let fingerprint = resolve_idempotency_fingerprint(
                         &state.method,
@@ -614,6 +617,16 @@ where
         }
         Ok(())
     }
+}
+
+fn validate_idempotency_key(value: &str) -> Result<(), WebFrameworkError> {
+    if value.len() > MAX_IDEMPOTENCY_KEY_BYTES {
+        return Err(WebFrameworkError::bad_request(
+            "Idempotency-Key header must not exceed 128 bytes",
+        )
+        .with_reason("invalid-idempotency-key"));
+    }
+    Ok(())
 }
 
 async fn resolve_request_context<R>(

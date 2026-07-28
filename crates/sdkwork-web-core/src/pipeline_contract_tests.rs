@@ -162,6 +162,64 @@ async fn manifest_idempotent_requires_key_without_global_policy() {
 }
 
 #[tokio::test]
+async fn manifest_idempotent_bounds_key_before_store_access() {
+    use crate::security::IdempotencyPolicy;
+    use sdkwork_web_contract::{HttpMethod, HttpRoute, RouteAuth};
+
+    const ROUTES: &[HttpRoute] = &[HttpRoute::new(
+        HttpMethod::Post,
+        "/app/v3/api/orders",
+        "Orders",
+        "createOrder",
+        RouteAuth::DualToken,
+    )
+    .with_idempotent(true)];
+
+    let security = security_with_idempotency(IdempotencyPolicy {
+        require_for_retryable_commands: false,
+        retention_secs: 60,
+        max_cached_response_bytes: 1024,
+        require_body_hash_for_payload: true,
+    });
+    let runtime = WebCallRuntime::new(DefaultWebRequestContextResolver::default())
+        .with_route_manifest(HttpRouteManifest::new(ROUTES))
+        .with_security_policy(security);
+    let chain = WebCallInterceptorChain::standard();
+
+    let mut accepted_request = Request::builder()
+        .method("POST")
+        .uri("/app/v3/api/orders")
+        .header("content-length", "0")
+        .header("Authorization", fixture_auth_header())
+        .header("Access-Token", fixture_access_header())
+        .header("Idempotency-Key", "a".repeat(128))
+        .body(Body::empty())
+        .expect("request");
+    let mut accepted_state = WebCallState::from_request(&accepted_request);
+    chain
+        .before(&mut accepted_state, &mut accepted_request, &runtime)
+        .await
+        .expect("128-byte key");
+
+    let mut rejected_request = Request::builder()
+        .method("POST")
+        .uri("/app/v3/api/orders")
+        .header("content-length", "0")
+        .header("Authorization", fixture_auth_header())
+        .header("Access-Token", fixture_access_header())
+        .header("Idempotency-Key", "b".repeat(129))
+        .body(Body::empty())
+        .expect("request");
+    let mut rejected_state = WebCallState::from_request(&rejected_request);
+    let error = chain
+        .before(&mut rejected_state, &mut rejected_request, &runtime)
+        .await
+        .expect_err("129-byte key");
+    assert_eq!(WebFrameworkErrorKind::BadRequest, error.kind);
+    assert_eq!(Some("invalid-idempotency-key"), error.reason.as_deref());
+}
+
+#[tokio::test]
 async fn authorization_policy_is_invoked_for_protected_routes() {
     let calls = Arc::new(AtomicUsize::new(0));
     let runtime = WebCallRuntime::new(DefaultWebRequestContextResolver::default())
