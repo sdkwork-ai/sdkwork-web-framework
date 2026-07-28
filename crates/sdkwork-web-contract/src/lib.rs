@@ -2,6 +2,7 @@
 
 mod inventory;
 mod openapi;
+mod openapi_merge;
 
 use serde::{Deserialize, Serialize};
 
@@ -20,6 +21,7 @@ pub use openapi::{
     OPENAPI_REQUEST_CONTEXT_EXTENSION, OPENAPI_REQUIRED_SURFACE_EXTENSION,
     OPENAPI_ROUTE_AUTH_EXTENSION, OPENAPI_WIRE_PROTOCOL_EXTENSION,
 };
+pub use openapi_merge::{merge_openapi_documents, OpenApiDocumentContribution, OpenApiMergeError};
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ApiSurface {
