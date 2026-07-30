@@ -25,7 +25,12 @@ impl ContractFallbackConfig {
     }
 
     pub fn contains(&self, method: &str, path: &str) -> bool {
-        self.manifest_paths.contains(&format!("{method} {path}"))
+        self.manifest_paths.iter().any(|route| {
+            let Some((manifest_method, manifest_path)) = route.split_once(' ') else {
+                return false;
+            };
+            manifest_method == method && sdkwork_web_core::route_path_matches(manifest_path, path)
+        })
     }
 }
 

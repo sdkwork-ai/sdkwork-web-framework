@@ -13,6 +13,7 @@ pub struct SqlxTenantRuntimeProfileSource {
 }
 
 impl SqlxTenantRuntimeProfileSource {
+    #[cfg(feature = "sqlite")]
     pub fn new_sqlite(pool: sqlx::SqlitePool) -> Self {
         Self {
             pool: WebStorePool::Sqlite(pool),
@@ -45,6 +46,7 @@ impl DynamicTenantRuntimeProfileSource for SqlxTenantRuntimeProfileSource {
         ctx: &TenantRuntimeProfileContext,
     ) -> Result<Option<TenantRuntimeProfile>, WebFrameworkError> {
         match &self.pool {
+            #[cfg(feature = "sqlite")]
             WebStorePool::Sqlite(pool) => {
                 let row = sqlx::query_as::<_, TenantRuntimeProfileRow>(
                     "SELECT rate_limit_enabled, max_content_length, max_concurrent_requests \

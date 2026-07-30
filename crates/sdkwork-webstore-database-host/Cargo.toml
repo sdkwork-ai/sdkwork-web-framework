@@ -12,6 +12,11 @@ path = "src/lib.rs"
 [dependencies]
 dotenvy = "0.15"
 sdkwork-database-config = { workspace = true }
-sdkwork-database-lifecycle = { workspace = true }
+sdkwork-database-lifecycle = { workspace = true, default-features = false }
 sdkwork-database-spi = { workspace = true }
-sdkwork-database-sqlx = { workspace = true }
+sdkwork-database-sqlx = { workspace = true, default-features = false }
+
+[features]
+default = ["postgres"]
+postgres = ["sdkwork-database-lifecycle/postgres", "sdkwork-database-sqlx/postgres"]
+sqlite = ["sdkwork-database-lifecycle/sqlite", "sdkwork-database-sqlx/sqlite"]

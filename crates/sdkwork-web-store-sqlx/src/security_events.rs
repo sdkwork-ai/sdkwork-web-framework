@@ -20,6 +20,7 @@ pub struct SqlxSecurityEventEmitter {
 }
 
 impl SqlxSecurityEventEmitter {
+    #[cfg(feature = "sqlite")]
     pub fn new_sqlite(pool: sqlx::SqlitePool) -> Self {
         Self {
             pool: WebStorePool::Sqlite(pool.clone()),
@@ -53,6 +54,7 @@ impl SecurityEventEmitter for SqlxSecurityEventEmitter {
         let tenant_id = event.tenant_id.unwrap_or_else(|| "0".to_owned());
 
         match &self.pool {
+            #[cfg(feature = "sqlite")]
             WebStorePool::Sqlite(pool) => {
                 let result = sqlx::query(
                     "INSERT INTO web_security_event \

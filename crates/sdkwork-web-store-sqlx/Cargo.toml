@@ -3,7 +3,7 @@ name = "sdkwork-web-store-sqlx"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "SQLx-backed RateLimitStore, IdempotencyStore, and SecurityEventEmitter (web_* tables only). Supports SQLite and PostgreSQL."
+description = "SQLx-backed RateLimitStore, IdempotencyStore, and SecurityEventEmitter for web_* tables."
 
 [lib]
 name = "sdkwork_web_store_sqlx"
@@ -13,18 +13,26 @@ path = "src/lib.rs"
 async-trait.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "macros", "migrate"] }
 sdkwork-database-config.workspace = true
-sdkwork-database-sqlx.workspace = true
+sdkwork-database-sqlx = { workspace = true, default-features = false }
 sdkwork-web-core.workspace = true
-sdkwork-webstore-database-host = { path = "../sdkwork-webstore-database-host" }
+sdkwork-webstore-database-host = { path = "../sdkwork-webstore-database-host", default-features = false }
 tokio.workspace = true
 tracing.workspace = true
 
 [features]
-default = ["sqlite"]
-sqlite = ["sqlx/sqlite"]
-postgres = ["sqlx/postgres"]
+default = ["postgres"]
+sqlite = [
+    "sqlx/sqlite",
+    "sdkwork-database-sqlx/sqlite",
+    "sdkwork-webstore-database-host/sqlite",
+]
+postgres = [
+    "sqlx/postgres",
+    "sdkwork-database-sqlx/postgres",
+    "sdkwork-webstore-database-host/postgres",
+]
 
 [dev-dependencies]
 tokio.workspace = true

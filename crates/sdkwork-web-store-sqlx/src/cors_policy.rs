@@ -11,6 +11,7 @@ pub struct SqlxCorsPolicySource {
 }
 
 impl SqlxCorsPolicySource {
+    #[cfg(feature = "sqlite")]
     pub fn new_sqlite(pool: sqlx::SqlitePool) -> Self {
         Self {
             pool: WebStorePool::Sqlite(pool),
@@ -43,6 +44,7 @@ impl DynamicCorsPolicySource for SqlxCorsPolicySource {
         ctx: &CorsPolicyContext,
     ) -> Result<Option<CorsPolicy>, WebFrameworkError> {
         match &self.pool {
+            #[cfg(feature = "sqlite")]
             WebStorePool::Sqlite(pool) => {
                 let row = sqlx::query_as::<_, CorsPolicyRow>(
                     "SELECT allow_all_origins, allowed_origins, allow_credentials \

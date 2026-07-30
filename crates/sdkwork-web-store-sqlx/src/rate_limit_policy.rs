@@ -12,6 +12,7 @@ pub struct SqlxRateLimitPolicySource {
 }
 
 impl SqlxRateLimitPolicySource {
+    #[cfg(feature = "sqlite")]
     pub fn new_sqlite(pool: sqlx::SqlitePool) -> Self {
         Self {
             pool: WebStorePool::Sqlite(pool),
@@ -56,6 +57,7 @@ impl DynamicRateLimitPolicySource for SqlxRateLimitPolicySource {
         ];
 
         match &self.pool {
+            #[cfg(feature = "sqlite")]
             WebStorePool::Sqlite(pool) => {
                 for (tenant_id, tier) in candidates {
                     let row = sqlx::query_as::<_, RateLimitPolicyRow>(

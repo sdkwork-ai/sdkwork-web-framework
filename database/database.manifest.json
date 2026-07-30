@@ -1,21 +1,20 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "kind": "sdkwork.database.module",
   "moduleId": "webstore",
   "serviceCode": "WEB_STORE",
   "displayName": "WEB_STORE Database",
   "owner": "web-framework-platform",
   "engines": [
-    "sqlite",
     "postgres"
   ],
-  "defaultEngine": "sqlite",
+  "defaultEngine": "postgres",
   "tablePrefix": "web_",
   "contractVersion": "1.0.0",
   "baselineStrategy": "baseline-plus-migrations",
   "modules": [],
   "lifecycle": {
-    "autoMigrate": true,
+    "autoMigrate": false,
     "seedOnBoot": false,
     "defaultSeedLocale": "zh-CN",
     "defaultSeedProfile": "standard",
@@ -42,5 +41,6 @@
   "spi": {
     "provider": "default",
     "hooks": []
-  }
+  },
+  "databaseRole": "authoritative-server"
 }

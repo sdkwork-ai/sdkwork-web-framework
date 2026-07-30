@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.component.spec",
+  "component": {
+    "name": "sdkwork-web-build",
+    "type": "rust-build-support",
+    "root": "crates/sdkwork-web-build",
+    "domain": "platform",
+    "capability": "http-route-manifest-generation",
+    "surface": "build-support",
+    "languages": ["rust"],
+    "generated": false
+  },
+  "contracts": {
+    "publicExports": ["."],
+    "runtimeEntrypoints": ["generate_http_route_manifest", "render_http_route_manifest"],
+    "sdkDependencies": [],
+    "dependencyApiExports": [],
+    "dependencyApiSurfaces": [],
+    "events": [],
+    "configKeys": []
+  },
+  "verification": {
+    "commands": ["cargo test -p sdkwork-web-build"]
+  }
+}

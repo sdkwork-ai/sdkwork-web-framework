@@ -15,6 +15,7 @@ pub struct SqlxIdempotencyStore {
 }
 
 impl SqlxIdempotencyStore {
+    #[cfg(feature = "sqlite")]
     pub fn new_sqlite(pool: sqlx::SqlitePool) -> Self {
         Self {
             pool: WebStorePool::Sqlite(pool.clone()),
@@ -57,6 +58,7 @@ impl IdempotencyStore for SqlxIdempotencyStore {
         self.purge.maybe_run().await?;
 
         match &self.pool {
+            #[cfg(feature = "sqlite")]
             WebStorePool::Sqlite(pool) => sqlite_begin(pool, key, fingerprint, ttl).await,
             #[cfg(feature = "postgres")]
             WebStorePool::Postgres(pool) => pg_begin(pool, key, fingerprint, ttl).await,
@@ -71,6 +73,7 @@ impl IdempotencyStore for SqlxIdempotencyStore {
         ttl: Duration,
     ) -> Result<(), WebFrameworkError> {
         match &self.pool {
+            #[cfg(feature = "sqlite")]
             WebStorePool::Sqlite(pool) => {
                 sqlite_complete(pool, key, fingerprint, record, ttl).await
             }
@@ -81,6 +84,7 @@ impl IdempotencyStore for SqlxIdempotencyStore {
 
     async fn release(&self, key: &str, fingerprint: &str) -> Result<(), WebFrameworkError> {
         match &self.pool {
+            #[cfg(feature = "sqlite")]
             WebStorePool::Sqlite(pool) => sqlite_release(pool, key, fingerprint).await,
             #[cfg(feature = "postgres")]
             WebStorePool::Postgres(pool) => pg_release(pool, key, fingerprint).await,
@@ -93,6 +97,7 @@ impl IdempotencyStore for SqlxIdempotencyStore {
 }
 
 /// ---- SQLite implementations ----
+#[cfg(feature = "sqlite")]
 fn sqlite_begin<'a>(
     pool: &'a sqlx::SqlitePool,
     key: &'a str,
@@ -159,6 +164,7 @@ fn sqlite_begin<'a>(
     })
 }
 
+#[cfg(feature = "sqlite")]
 async fn sqlite_complete(
     pool: &sqlx::SqlitePool,
     key: &str,
@@ -205,6 +211,7 @@ async fn sqlite_complete(
     Ok(())
 }
 
+#[cfg(feature = "sqlite")]
 async fn sqlite_release(
     pool: &sqlx::SqlitePool,
     key: &str,

@@ -1,7 +1,7 @@
 //! SQLx store adapters for idempotency, rate limiting, audit, and security events (`web_*` only).
 //!
-//! Supports both SQLite (default, single-replica) and PostgreSQL (multi-replica HA).
-//! Use feature flags `sqlite` (default) or `postgres` to select the backend.
+//! PostgreSQL is the default authoritative-server backend. SQLite support is
+//! compiled only when an explicitly declared client-local consumer enables it.
 
 mod audit;
 mod bootstrap;
@@ -35,11 +35,13 @@ use sdkwork_web_core::{
     CachingDynamicCorsPolicySource, CachingDynamicRateLimitPolicySource,
     CachingDynamicTenantRuntimeProfileSource, DynamicPolicyCaches, DYNAMIC_POLICY_CACHE_TTL_SECS,
 };
+#[cfg(feature = "sqlite")]
 use sqlx::SqlitePool;
 use std::sync::Arc;
 use std::time::Duration;
 
 /// Open a SQLite pool through `sdkwork-database-sqlx`, run embedded migrations, and return it.
+#[cfg(feature = "sqlite")]
 pub async fn connect_sqlite(
     database_url: &str,
     max_connections: u32,
@@ -98,42 +100,49 @@ pub async fn connect_postgres(
 
 // ---- Shared factory functions (SQLite) ----
 
+#[cfg(feature = "sqlite")]
 pub fn shared_idempotency_store(
     pool: SqlitePool,
 ) -> std::sync::Arc<dyn sdkwork_web_core::IdempotencyStore> {
     std::sync::Arc::new(SqlxIdempotencyStore::new_sqlite(pool))
 }
 
+#[cfg(feature = "sqlite")]
 pub fn shared_rate_limit_store(
     pool: SqlitePool,
 ) -> std::sync::Arc<dyn sdkwork_web_core::RateLimitStore> {
     std::sync::Arc::new(SqlxRateLimitStore::new_sqlite(pool))
 }
 
+#[cfg(feature = "sqlite")]
 pub fn shared_security_event_emitter(
     pool: SqlitePool,
 ) -> std::sync::Arc<dyn sdkwork_web_core::SecurityEventEmitter> {
     std::sync::Arc::new(SqlxSecurityEventEmitter::new_sqlite(pool))
 }
 
+#[cfg(feature = "sqlite")]
 pub fn shared_audit_emitter(
     pool: SqlitePool,
 ) -> std::sync::Arc<dyn sdkwork_web_core::AuditEmitter> {
     std::sync::Arc::new(SqlxAuditEmitter::new_sqlite(pool))
 }
 
+#[cfg(feature = "sqlite")]
 pub fn shared_cors_policy_source(
     pool: SqlitePool,
 ) -> std::sync::Arc<dyn sdkwork_web_core::DynamicCorsPolicySource> {
     std::sync::Arc::new(SqlxCorsPolicySource::new_sqlite(pool))
 }
 
+#[cfg(feature = "sqlite")]
 pub fn shared_rate_limit_policy_source(
     pool: SqlitePool,
 ) -> std::sync::Arc<dyn sdkwork_web_core::DynamicRateLimitPolicySource> {
     std::sync::Arc::new(SqlxRateLimitPolicySource::new_sqlite(pool))
 }
 
+#[cfg(feature = "sqlite")]
 pub fn shared_tenant_runtime_profile_source(
     pool: SqlitePool,
 ) -> std::sync::Arc<dyn sdkwork_web_core::DynamicTenantRuntimeProfileSource> {
@@ -199,6 +208,7 @@ pub struct SqlxDynamicPolicyBundle {
     pub tenant_runtime_profile_source: Arc<dyn sdkwork_web_core::DynamicTenantRuntimeProfileSource>,
 }
 
+#[cfg(feature = "sqlite")]
 pub fn shared_dynamic_policy_bundle(pool: SqlitePool) -> SqlxDynamicPolicyBundle {
     let caches = Arc::new(DynamicPolicyCaches::new(Duration::from_secs(
         DYNAMIC_POLICY_CACHE_TTL_SECS,
@@ -263,7 +273,7 @@ pub(crate) fn now_epoch_secs() -> i64 {
         .as_secs() as i64
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "sqlite"))]
 mod tests {
     use super::*;
     use sdkwork_web_core::{

@@ -2,6 +2,7 @@
 
 #[cfg(feature = "admin-api")]
 mod admin_api;
+mod api_assembly;
 mod env_config;
 mod fallback;
 mod framework;
@@ -17,7 +18,6 @@ mod redis_readiness;
 mod redis_stores;
 mod router;
 mod serve;
-#[cfg(feature = "sqlx")]
 mod sqlx_readiness;
 #[cfg(feature = "sqlx")]
 mod sqlx_stores;
@@ -25,6 +25,9 @@ mod tracing_init;
 
 #[cfg(feature = "admin-api")]
 pub use admin_api::{mount_web_framework_admin_api, WebFrameworkAdminMount};
+pub use api_assembly::{
+    permission_catalog, ApiAssemblyContribution, ComposedApiAssembly, HostedApiAssembly,
+};
 pub use env_config::{
     application_cors_layer_from_env, application_security_policy_from_env,
     cors_allowed_origins_from_env, security_policy_for_environment, web_environment_from_env,
@@ -54,11 +57,12 @@ pub use router::{
     assemble_multi_surface_router, mount_infra_routes, service_router, ServiceRouterConfig,
 };
 pub use serve::{serve, serve_with_lifecycle};
-#[cfg(feature = "sqlx")]
-pub use sqlx_readiness::{PgPoolReadinessCheck, SqliteReadinessCheck};
+#[cfg(feature = "sqlx-sqlite")]
+pub use sqlx_readiness::SqliteReadinessCheck;
+pub use sqlx_readiness::{DatabasePoolReadinessCheck, PgPoolReadinessCheck};
 #[cfg(feature = "sqlx")]
 pub use sqlx_stores::{
-    connect_sqlite, shared_audit_emitter as shared_sqlx_audit_emitter,
+    connect_postgres, shared_audit_emitter as shared_sqlx_audit_emitter,
     shared_idempotency_store as shared_sqlx_idempotency_store,
     shared_rate_limit_store as shared_sqlx_rate_limit_store, shared_security_event_emitter,
     SqlxAuditEmitter, SqlxIdempotencyStore, SqlxRateLimitStore, SqlxSecurityEventEmitter,

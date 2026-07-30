@@ -14,6 +14,7 @@ pub struct SqlxAuditEmitter {
 }
 
 impl SqlxAuditEmitter {
+    #[cfg(feature = "sqlite")]
     pub fn new_sqlite(pool: sqlx::SqlitePool) -> Self {
         Self {
             pool: WebStorePool::Sqlite(pool.clone()),
@@ -46,6 +47,7 @@ impl AuditEmitter for SqlxAuditEmitter {
         let expires_at = now + AUDIT_TTL_SECS;
 
         match &self.pool {
+            #[cfg(feature = "sqlite")]
             WebStorePool::Sqlite(pool) => {
                 sqlx::query(
                     "INSERT INTO web_audit_event \

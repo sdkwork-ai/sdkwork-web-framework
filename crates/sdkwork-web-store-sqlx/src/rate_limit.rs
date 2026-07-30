@@ -15,6 +15,7 @@ pub struct SqlxRateLimitStore {
 }
 
 impl SqlxRateLimitStore {
+    #[cfg(feature = "sqlite")]
     pub fn new_sqlite(pool: sqlx::SqlitePool) -> Self {
         Self {
             pool: WebStorePool::Sqlite(pool.clone()),
@@ -60,6 +61,7 @@ impl RateLimitStore for SqlxRateLimitStore {
 
         // Use backend-specific queries.
         match &self.pool {
+            #[cfg(feature = "sqlite")]
             WebStorePool::Sqlite(pool) => {
                 sqlite_check_and_record(pool, key, max_requests, window_secs, now, expires_at).await
             }
@@ -76,6 +78,7 @@ impl RateLimitStore for SqlxRateLimitStore {
 }
 
 /// SQLite implementation — uses `?` placeholders and `INSERT OR REPLACE` / `ON CONFLICT DO UPDATE`.
+#[cfg(feature = "sqlite")]
 async fn sqlite_check_and_record(
     pool: &sqlx::SqlitePool,
     key: &str,

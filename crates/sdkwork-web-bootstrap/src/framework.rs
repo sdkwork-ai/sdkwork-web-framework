@@ -117,6 +117,22 @@ where
         crate::router::service_router(router, self.service_router_config())
     }
 
+    pub(crate) fn mount_contract_fallback(&self, router: axum::Router) -> axum::Router {
+        let Some(config) = self.contract_fallback.clone() else {
+            return router;
+        };
+        router.fallback(move |request: axum::extract::Request| {
+            let config = config.clone();
+            async move { crate::contract_fallback_handler(request, config).await }
+        })
+    }
+
+    pub(crate) fn mount_process_routes(&self, router: axum::Router) -> axum::Router {
+        let mut config = self.service_router_config();
+        config.contract_fallback = None;
+        crate::router::service_router(router, config)
+    }
+
     /// Mount service routes and run until shutdown (EP-20 lifecycle hooks included).
     pub async fn run(self, addr: SocketAddr, router: axum::Router) -> std::io::Result<()> {
         let router = self.mount_service_routes(router);

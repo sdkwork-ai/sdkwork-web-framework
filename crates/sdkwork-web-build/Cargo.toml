@@ -1,0 +1,9 @@
+[package]
+name = "sdkwork-web-build"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Build-time OpenAPI to typed route-manifest generation for SDKWork route crates."
+
+[dependencies]
+serde_json.workspace = true

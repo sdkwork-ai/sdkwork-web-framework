@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/sdkwork-api-web-framework-assembly",
     "crates/sdkwork-web-contract",
+    "crates/sdkwork-web-build",
     "crates/sdkwork-web-core",
     "crates/sdkwork-web-axum",
     "crates/sdkwork-web-bootstrap",
@@ -37,11 +38,12 @@ tracing = "0.1"
 rsa = { version = "0.9", features = ["sha2", "pkcs8"] }
 
 sdkwork-web-contract = { path = "crates/sdkwork-web-contract" }
+sdkwork-web-build = { path = "crates/sdkwork-web-build" }
 sdkwork-web-core = { path = "crates/sdkwork-web-core" }
 sdkwork-web-axum = { path = "crates/sdkwork-web-axum" }
 sdkwork-web-bootstrap = { path = "crates/sdkwork-web-bootstrap" }
 sdkwork-web-store-redis = { path = "crates/sdkwork-web-store-redis" }
-sdkwork-web-store-sqlx = { path = "crates/sdkwork-web-store-sqlx" }
+sdkwork-web-store-sqlx = { path = "crates/sdkwork-web-store-sqlx", default-features = false }
 sdkwork-webstore-database-host = { path = "crates/sdkwork-webstore-database-host" }
 sdkwork-web-test-utils = { path = "crates/sdkwork-web-test-utils" }
 sdkwork-web-schema-registry = { path = "crates/sdkwork-web-schema-registry" }
@@ -49,8 +51,8 @@ sdkwork-routes-web-framework-backend-api = { path = "crates/sdkwork-routes-web-f
 sdkwork-web-framework-admin-repository-sqlx = { path = "crates/sdkwork-web-framework-admin-repository-sqlx" }
 
 sdkwork-database-config = { path = "../sdkwork-database/crates/sdkwork-database-config" }
-sdkwork-database-lifecycle = { path = "../sdkwork-database/crates/sdkwork-database-lifecycle" }
+sdkwork-database-lifecycle = { path = "../sdkwork-database/crates/sdkwork-database-lifecycle", default-features = false }
 sdkwork-database-spi = { path = "../sdkwork-database/crates/sdkwork-database-spi" }
-sdkwork-database-sqlx = { path = "../sdkwork-database/crates/sdkwork-database-sqlx" }
+sdkwork-database-sqlx = { path = "../sdkwork-database/crates/sdkwork-database-sqlx", default-features = false }
 # SDKWork 跨语言工具库（serde_int64、crypto 等）。API_SPEC §13 int64-as-string 强制使用。
 sdkwork-utils-rust = { path = "../sdkwork-utils/packages/sdkwork-utils-rust" }

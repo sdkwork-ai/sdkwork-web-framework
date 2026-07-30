@@ -24,6 +24,7 @@ impl ThrottledPurge {
         Self::new(
             pool_clone,
             match &pool {
+                #[cfg(feature = "sqlite")]
                 WebStorePool::Sqlite(_) => {
                     "DELETE FROM web_idempotency_record WHERE expires_at <= ?"
                 }
@@ -40,6 +41,7 @@ impl ThrottledPurge {
         Self::new(
             pool_clone,
             match &pool {
+                #[cfg(feature = "sqlite")]
                 WebStorePool::Sqlite(_) => {
                     "DELETE FROM web_rate_limit_bucket WHERE expires_at <= ?"
                 }
@@ -56,6 +58,7 @@ impl ThrottledPurge {
         Self::new(
             pool_clone,
             match &pool {
+                #[cfg(feature = "sqlite")]
                 WebStorePool::Sqlite(_) => {
                     "DELETE FROM web_audit_event WHERE expires_at IS NOT NULL AND expires_at <= ?"
                 }
@@ -72,6 +75,7 @@ impl ThrottledPurge {
         Self::new(
             pool_clone,
             match &pool {
+                #[cfg(feature = "sqlite")]
                 WebStorePool::Sqlite(_) => {
                     "DELETE FROM web_security_event WHERE expires_at IS NOT NULL AND expires_at <= ?"
                 }
@@ -107,6 +111,7 @@ impl ThrottledPurge {
         }
 
         match &self.pool {
+            #[cfg(feature = "sqlite")]
             WebStorePool::Sqlite(pool) => {
                 sqlx::query(self.table_sql.as_ref())
                     .bind(now)

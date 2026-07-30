@@ -8,6 +8,8 @@ use serde_json::{json, Map, Value};
 
 pub const OPENAPI_REQUEST_CONTEXT_EXTENSION: &str = "x-sdkwork-request-context";
 pub const OPENAPI_API_SURFACE_EXTENSION: &str = "x-sdkwork-api-surface";
+pub const OPENAPI_OWNER_EXTENSION: &str = "x-sdkwork-owner";
+pub const OPENAPI_API_AUTHORITY_EXTENSION: &str = "x-sdkwork-api-authority";
 pub const OPENAPI_ROUTE_AUTH_EXTENSION: &str = "x-sdkwork-route-auth";
 pub const OPENAPI_AUTH_MODE_EXTENSION: &str = "x-sdkwork-auth-mode";
 pub const OPENAPI_FORBID_CREDENTIAL_HEADERS_EXTENSION: &str = "x-sdkwork-forbid-credential-headers";
@@ -18,6 +20,61 @@ pub const OPENAPI_RATE_LIMIT_TIER_EXTENSION: &str = "x-sdkwork-rate-limit-tier";
 pub const OPENAPI_PERMISSION_EXTENSION: &str = "x-sdkwork-permission";
 pub const OPENAPI_ALTERNATE_PERMISSIONS_EXTENSION: &str = "x-sdkwork-alternate-permissions";
 pub const OPENAPI_REQUIRED_SURFACE_EXTENSION: &str = "x-sdkwork-required-surface";
+
+/// Adds SDKWork runtime contract metadata to an authored OpenAPI document without replacing
+/// request, response, parameter, example, or component schemas.
+pub fn enrich_owned_openapi_document(
+    mut document: Value,
+    owner: &str,
+    routes: &[HttpRoute],
+) -> Result<Value, String> {
+    let info = document
+        .get_mut("info")
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| "authored OpenAPI document must contain an info object".to_owned())?;
+    info.insert(
+        OPENAPI_OWNER_EXTENSION.to_owned(),
+        Value::String(owner.to_owned()),
+    );
+
+    let paths = document
+        .get_mut("paths")
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| "authored OpenAPI document must contain a paths object".to_owned())?;
+    for route in routes {
+        let Some(path_item) = paths.get_mut(route.path).and_then(Value::as_object_mut) else {
+            continue;
+        };
+        let method = http_method_label(route.method).to_ascii_lowercase();
+        let Some(operation) = path_item.get_mut(&method).and_then(Value::as_object_mut) else {
+            continue;
+        };
+        for (key, value) in openapi_extensions_for_route(route) {
+            operation.insert(key, value);
+        }
+        operation.insert(
+            OPENAPI_OWNER_EXTENSION.to_owned(),
+            Value::String(owner.to_owned()),
+        );
+        operation.insert(
+            OPENAPI_API_AUTHORITY_EXTENSION.to_owned(),
+            Value::String(api_authority_for_route(owner, route)),
+        );
+    }
+    Ok(document)
+}
+
+fn api_authority_for_route(owner: &str, route: &HttpRoute) -> String {
+    let surface = match infer_api_surface_from_path(route.path) {
+        ApiSurface::AppApi => "app-api",
+        ApiSurface::BackendApi => "backend-api",
+        ApiSurface::OpenApi => "open-api",
+        ApiSurface::InternalApi => "internal-api",
+        ApiSurface::GatewayApi => "gateway-api",
+        ApiSurface::Unknown => "api",
+    };
+    format!("{owner}-{surface}")
+}
 
 const APP_API_PREFIX: &str = "/app/v3/api";
 const BACKEND_API_PREFIX: &str = "/backend/v3/api";
@@ -144,6 +201,53 @@ pub fn openapi_extensions_for_route(route: &HttpRoute) -> Map<String, Value> {
         );
     }
     extensions
+}
+
+/// Builds a runtime OpenAPI document whose operations carry explicit SDK ownership metadata.
+pub fn build_owned_openapi_document(
+    title: &str,
+    owner: &str,
+    routes: &[HttpRoute],
+) -> Result<Value, String> {
+    let owner = owner.trim();
+    if owner.is_empty() {
+        return Err("OpenAPI owner must not be empty".to_owned());
+    }
+
+    let mut document = build_openapi_document(title, routes);
+    let paths = document
+        .get_mut("paths")
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| "generated OpenAPI document must contain a paths object".to_owned())?;
+    for (path, path_item) in paths {
+        let authority = format!(
+            "{owner}-{}",
+            api_surface_label(infer_api_surface_from_path(path))
+        );
+        let path_item = path_item
+            .as_object_mut()
+            .ok_or_else(|| format!("generated OpenAPI path {path} must be an object"))?;
+        for (method, operation) in path_item {
+            if !matches!(method.as_str(), "delete" | "get" | "patch" | "post" | "put") {
+                continue;
+            }
+            let operation = operation.as_object_mut().ok_or_else(|| {
+                format!(
+                    "generated OpenAPI operation {} {path} must be an object",
+                    method.to_uppercase()
+                )
+            })?;
+            operation.insert(
+                OPENAPI_OWNER_EXTENSION.to_owned(),
+                Value::String(owner.to_owned()),
+            );
+            operation.insert(
+                OPENAPI_API_AUTHORITY_EXTENSION.to_owned(),
+                Value::String(authority.clone()),
+            );
+        }
+    }
+    Ok(document)
 }
 
 pub fn build_openapi_operation(route: &HttpRoute) -> Value {

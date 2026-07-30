@@ -1,4 +1,4 @@
-/// SQLx connection pool backend abstraction — supports SQLite and PostgreSQL.
+/// SQLx connection pool backend abstraction.
 ///
 /// Allows store adapters to share a single implementation path without
 /// generic type parameter explosion. Each variant delegates to the
@@ -9,7 +9,8 @@
 /// MUST use `$N` syntax directly.
 #[derive(Clone)]
 pub enum WebStorePool {
-    /// SQLite in-memory or file-backed database (single-replica, dev/test/standalone).
+    /// SQLite is available only to explicitly declared client-local consumers.
+    #[cfg(feature = "sqlite")]
     Sqlite(sqlx::SqlitePool),
     /// PostgreSQL (multi-replica HA production capable).
     #[cfg(feature = "postgres")]
@@ -19,7 +20,14 @@ pub enum WebStorePool {
 impl WebStorePool {
     /// Returns `true` when backed by a single-replica SQLite pool.
     pub fn is_sqlite(&self) -> bool {
-        matches!(self, Self::Sqlite(_))
+        #[cfg(feature = "sqlite")]
+        {
+            matches!(self, Self::Sqlite(_))
+        }
+        #[cfg(not(feature = "sqlite"))]
+        {
+            false
+        }
     }
 
     /// Returns `true` when backed by a multi-replica-capable PostgreSQL pool.
@@ -41,6 +49,7 @@ impl WebStorePool {
     }
 }
 
+#[cfg(feature = "sqlite")]
 impl From<sqlx::SqlitePool> for WebStorePool {
     fn from(pool: sqlx::SqlitePool) -> Self {
         Self::Sqlite(pool)

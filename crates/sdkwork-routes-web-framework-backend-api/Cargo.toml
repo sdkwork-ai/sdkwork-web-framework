@@ -27,7 +27,7 @@ tracing.workspace = true
 tokio.workspace = true
 tower.workspace = true
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite"] }
-sdkwork-web-store-sqlx = { workspace = true }
+sdkwork-web-store-sqlx = { workspace = true, features = ["sqlite"] }
 sdkwork-web-axum = { workspace = true }
 sdkwork-web-test-utils = { workspace = true }
 serde_json.workspace = true

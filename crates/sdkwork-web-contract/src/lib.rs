@@ -12,12 +12,13 @@ pub use inventory::{
 };
 pub use openapi::{
     build_openapi_document, build_openapi_operation, build_openapi_path_item,
-    infer_api_surface_from_path, is_canonical_iam_context_resource_path,
-    openapi_extensions_for_route, validate_openapi_document_context_selectors,
-    validate_openapi_routes_context_selectors, IAM_CANONICAL_CONTEXT_RESOURCE_PREFIXES,
+    build_owned_openapi_document, enrich_owned_openapi_document, infer_api_surface_from_path,
+    is_canonical_iam_context_resource_path, openapi_extensions_for_route,
+    validate_openapi_document_context_selectors, validate_openapi_routes_context_selectors,
+    IAM_CANONICAL_CONTEXT_RESOURCE_PREFIXES, OPENAPI_API_AUTHORITY_EXTENSION,
     OPENAPI_API_SURFACE_EXTENSION, OPENAPI_AUTH_MODE_EXTENSION,
     OPENAPI_EXTERNAL_PROTOCOL_ID_EXTENSION, OPENAPI_FORBID_CREDENTIAL_HEADERS_EXTENSION,
-    OPENAPI_PERMISSION_EXTENSION, OPENAPI_RATE_LIMIT_TIER_EXTENSION,
+    OPENAPI_OWNER_EXTENSION, OPENAPI_PERMISSION_EXTENSION, OPENAPI_RATE_LIMIT_TIER_EXTENSION,
     OPENAPI_REQUEST_CONTEXT_EXTENSION, OPENAPI_REQUIRED_SURFACE_EXTENSION,
     OPENAPI_ROUTE_AUTH_EXTENSION, OPENAPI_WIRE_PROTOCOL_EXTENSION,
 };

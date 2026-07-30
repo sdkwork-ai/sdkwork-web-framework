@@ -30,7 +30,7 @@ impl ServiceRouterConfig {
         self
     }
 
-    #[cfg(feature = "sqlx")]
+    #[cfg(feature = "sqlx-sqlite")]
     pub fn with_sqlite_readiness(mut self, pool: sqlx::SqlitePool) -> Self {
         self.readiness = Some(Arc::new(crate::sqlx_readiness::SqliteReadinessCheck::new(
             pool,
