@@ -96,7 +96,7 @@ impl IdempotencyStore for SqlxIdempotencyStore {
     }
 }
 
-/// ---- SQLite implementations ----
+// ---- SQLite implementations ----
 #[cfg(feature = "sqlite")]
 fn sqlite_begin<'a>(
     pool: &'a sqlx::SqlitePool,
@@ -229,7 +229,7 @@ async fn sqlite_release(
     Ok(())
 }
 
-/// ---- PostgreSQL implementations ----
+// ---- PostgreSQL implementations ----
 
 #[cfg(feature = "postgres")]
 fn pg_begin<'a>(

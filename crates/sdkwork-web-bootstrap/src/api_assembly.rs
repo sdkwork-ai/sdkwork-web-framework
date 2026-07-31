@@ -67,7 +67,9 @@ impl ApiAssemblyContribution {
         }
         let mut owned_documents = Vec::with_capacity(documents.len());
         for (index, document) in documents.into_iter().enumerate() {
-            let document = enrich_owned_openapi_document(document, owner, route_manifest.routes())?;
+            let mut document =
+                enrich_owned_openapi_document(document, owner, route_manifest.routes())?;
+            remove_document_scoped_ownership(&mut document);
             owned_documents.push((format!("{owner}-{index}"), document));
         }
         let openapi = merge_openapi_documents(
@@ -136,6 +138,18 @@ impl ApiAssemblyContribution {
             ));
         }
         Ok(())
+    }
+}
+
+fn remove_document_scoped_ownership(document: &mut Value) {
+    let Some(document) = document.as_object_mut() else {
+        return;
+    };
+    document.remove(OPENAPI_OWNER_EXTENSION);
+    document.remove(OPENAPI_API_AUTHORITY_EXTENSION);
+    if let Some(info) = document.get_mut("info").and_then(Value::as_object_mut) {
+        info.remove(OPENAPI_OWNER_EXTENSION);
+        info.remove(OPENAPI_API_AUTHORITY_EXTENSION);
     }
 }
 
@@ -516,6 +530,101 @@ mod tests {
             contribution.openapi["paths"]["/app/v3/api/widgets"]["post"]
                 [OPENAPI_API_AUTHORITY_EXTENSION],
             "sdkwork-widgets-app-api"
+        );
+    }
+
+    #[test]
+    fn authored_openapi_contribution_merges_distinct_surface_authorities() {
+        const MULTI_SURFACE_ROUTES: &[HttpRoute] = &[
+            HttpRoute::new(
+                HttpMethod::Get,
+                "/app/v3/api/widgets",
+                "Widgets",
+                "widgets.list",
+                RouteAuth::DualToken,
+            ),
+            HttpRoute::new(
+                HttpMethod::Get,
+                "/backend/v3/api/widgets",
+                "Widgets",
+                "widgets.management.list",
+                RouteAuth::DualToken,
+            ),
+        ];
+        let app_api = serde_json::json!({
+            "openapi": "3.1.2",
+            "x-sdkwork-owner": "sdkwork-widgets",
+            "x-sdkwork-api-authority": "sdkwork-widgets-app-api",
+            "info": {
+                "title": "Widgets App API",
+                "version": "1.0.0",
+                "x-sdkwork-owner": "sdkwork-widgets",
+                "x-sdkwork-api-authority": "sdkwork-widgets-app-api"
+            },
+            "paths": {
+                "/app/v3/api/widgets": {
+                    "get": {
+                        "operationId": "widgets.list",
+                        "tags": ["Widgets"],
+                        "responses": { "200": { "description": "OK" } },
+                        "security": [{ "AuthToken": [], "AccessToken": [] }]
+                    }
+                }
+            }
+        });
+        let backend_api = serde_json::json!({
+            "openapi": "3.1.2",
+            "x-sdkwork-owner": "sdkwork-widgets",
+            "x-sdkwork-api-authority": "sdkwork-widgets-backend-api",
+            "info": {
+                "title": "Widgets Backend API",
+                "version": "1.0.0",
+                "x-sdkwork-owner": "sdkwork-widgets",
+                "x-sdkwork-api-authority": "sdkwork-widgets-backend-api"
+            },
+            "paths": {
+                "/backend/v3/api/widgets": {
+                    "get": {
+                        "operationId": "widgets.management.list",
+                        "tags": ["Widgets"],
+                        "responses": { "200": { "description": "OK" } },
+                        "security": [{ "AuthToken": [], "AccessToken": [] }]
+                    }
+                }
+            }
+        });
+
+        let contribution = ApiAssemblyContribution::from_openapi_documents(
+            "sdkwork-widgets",
+            "SDKWork Widgets API",
+            Router::new(),
+            HttpRouteManifest::new(MULTI_SURFACE_ROUTES),
+            vec![app_api, backend_api],
+            Vec::new(),
+            Arc::new(crate::AlwaysReady),
+        )
+        .expect("valid multi-surface authored contribution");
+
+        assert!(contribution.openapi["info"]
+            .get(OPENAPI_API_AUTHORITY_EXTENSION)
+            .is_none());
+        assert!(contribution.openapi["info"]
+            .get(OPENAPI_OWNER_EXTENSION)
+            .is_none());
+        assert!(contribution
+            .openapi
+            .get(OPENAPI_API_AUTHORITY_EXTENSION)
+            .is_none());
+        assert!(contribution.openapi.get(OPENAPI_OWNER_EXTENSION).is_none());
+        assert_eq!(
+            contribution.openapi["paths"]["/app/v3/api/widgets"]["get"]
+                [OPENAPI_API_AUTHORITY_EXTENSION],
+            "sdkwork-widgets-app-api"
+        );
+        assert_eq!(
+            contribution.openapi["paths"]["/backend/v3/api/widgets"]["get"]
+                [OPENAPI_API_AUTHORITY_EXTENSION],
+            "sdkwork-widgets-backend-api"
         );
     }
 

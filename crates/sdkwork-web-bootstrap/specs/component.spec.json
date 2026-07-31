@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.component.spec",
+  "component": {
+    "name": "sdkwork-web-bootstrap",
+    "displayName": "SDKWork Web Bootstrap",
+    "version": "0.1.0",
+    "type": "rust-crate",
+    "root": "crates/sdkwork-web-bootstrap",
+    "domain": "platform",
+    "capability": "web-bootstrap",
+    "surface": "runtime-composition",
+    "languages": [
+      "rust"
+    ],
+    "generated": false,
+    "manifests": [
+      "Cargo.toml"
+    ]
+  },
+  "canonicalSpecs": [
+    {
+      "file": "CODE_STYLE_SPEC.md",
+      "path": "../../../sdkwork-specs/CODE_STYLE_SPEC.md",
+      "purpose": "Authored source structure and public export rules."
+    },
+    {
+      "file": "RUST_CODE_SPEC.md",
+      "path": "../../../sdkwork-specs/RUST_CODE_SPEC.md",
+      "purpose": "Rust crate and module rules."
+    },
+    {
+      "file": "API_ASSEMBLY_SPEC.md",
+      "path": "../../../sdkwork-specs/API_ASSEMBLY_SPEC.md",
+      "purpose": "Host-neutral API contribution and composition rules."
+    },
+    {
+      "file": "WEB_FRAMEWORK_SPEC.md",
+      "path": "../../../sdkwork-specs/WEB_FRAMEWORK_SPEC.md",
+      "purpose": "Framework bootstrap, request context, and runtime binding rules."
+    },
+    {
+      "file": "TEST_SPEC.md",
+      "path": "../../../sdkwork-specs/TEST_SPEC.md",
+      "purpose": "Framework and API composition verification requirements."
+    }
+  ],
+  "contracts": {
+    "layerRole": "runtime-composition",
+    "publicExports": [
+      "."
+    ],
+    "runtimeEntrypoints": [
+      "ApiAssemblyContribution::from_manifest",
+      "ApiAssemblyContribution::from_openapi_documents",
+      "ComposedApiAssembly::try_compose"
+    ],
+    "sdkDependencies": [],
+    "dependencyApiExports": [],
+    "dependencyApiSurfaces": [],
+    "events": [],
+    "configKeys": []
+  },
+  "verification": {
+    "commands": [
+      "cargo test -p sdkwork-web-bootstrap",
+      "cargo clippy -p sdkwork-web-bootstrap --tests -- -D warnings"
+    ]
+  }
+}

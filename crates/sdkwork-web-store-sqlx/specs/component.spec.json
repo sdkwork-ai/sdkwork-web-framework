@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.component.spec",
+  "component": {
+    "name": "sdkwork-web-store-sqlx",
+    "displayName": "SDKWork Web SQLx Store",
+    "version": "0.1.0",
+    "type": "rust-crate",
+    "root": "crates/sdkwork-web-store-sqlx",
+    "domain": "platform",
+    "capability": "web-cross-cutting-store",
+    "surface": "backend-repository",
+    "languages": [
+      "rust"
+    ],
+    "generated": false,
+    "manifests": [
+      "Cargo.toml"
+    ]
+  },
+  "canonicalSpecs": [
+    {
+      "file": "CODE_STYLE_SPEC.md",
+      "path": "../../../sdkwork-specs/CODE_STYLE_SPEC.md",
+      "purpose": "Authored source structure and error handling rules."
+    },
+    {
+      "file": "RUST_CODE_SPEC.md",
+      "path": "../../../sdkwork-specs/RUST_CODE_SPEC.md",
+      "purpose": "Rust repository and module boundaries."
+    },
+    {
+      "file": "DATABASE_FRAMEWORK_SPEC.md",
+      "path": "../../../sdkwork-specs/DATABASE_FRAMEWORK_SPEC.md",
+      "purpose": "Database lifecycle and SQLx integration rules."
+    },
+    {
+      "file": "WEB_FRAMEWORK_SPEC.md",
+      "path": "../../../sdkwork-specs/WEB_FRAMEWORK_SPEC.md",
+      "purpose": "Cross-cutting store interfaces and secure runtime defaults."
+    },
+    {
+      "file": "TEST_SPEC.md",
+      "path": "../../../sdkwork-specs/TEST_SPEC.md",
+      "purpose": "Database adapter and framework verification requirements."
+    }
+  ],
+  "contracts": {
+    "layerRole": "backend-repository",
+    "publicExports": [
+      "."
+    ],
+    "runtimeEntrypoints": [
+      "connect_postgres",
+      "SqlxIdempotencyStore",
+      "SqlxRateLimitStore",
+      "SqlxSecurityEventEmitter"
+    ],
+    "sdkDependencies": [],
+    "dependencyApiExports": [],
+    "dependencyApiSurfaces": [],
+    "events": [],
+    "configKeys": [
+      "SDKWORK_DATABASE_*"
+    ]
+  },
+  "verification": {
+    "commands": [
+      "cargo test -p sdkwork-web-store-sqlx",
+      "cargo clippy -p sdkwork-web-store-sqlx --tests -- -D warnings"
+    ]
+  }
+}
