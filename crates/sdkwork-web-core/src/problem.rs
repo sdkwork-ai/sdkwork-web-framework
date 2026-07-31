@@ -33,6 +33,7 @@ fn map_result_code(code: i32) -> SdkWorkResultCode {
         40801 => SdkWorkResultCode::RequestTimeout,
         40901 => SdkWorkResultCode::Conflict,
         41301 => SdkWorkResultCode::PayloadTooLarge,
+        42201 => SdkWorkResultCode::UnprocessableEntity,
         42901 => SdkWorkResultCode::RateLimitExceeded,
         50301 => SdkWorkResultCode::ServiceUnavailable,
         _ => SdkWorkResultCode::InternalError,
@@ -365,6 +366,30 @@ mod tests {
                 .and_then(|v| v.to_str().ok())
                 .unwrap_or_default()
         );
+    }
+
+    #[test]
+    fn unprocessable_entity_problem_preserves_42201() {
+        let error = WebFrameworkError::unprocessable_entity("subject mapping failed");
+        let response = problem_response(
+            &error,
+            ProblemCorrelation::new(Some("req-subject"), Some("trace-subject")),
+        );
+        assert_eq!(
+            axum::http::StatusCode::UNPROCESSABLE_ENTITY,
+            response.status()
+        );
+
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("runtime");
+        let bytes = rt
+            .block_on(async { axum::body::to_bytes(response.into_body(), usize::MAX).await })
+            .expect("body");
+        let payload: serde_json::Value = serde_json::from_slice(&bytes).expect("json");
+        assert_eq!(42201, payload["code"].as_i64().unwrap());
+        assert_eq!(422, payload["status"].as_u64().unwrap());
     }
 
     #[test]

@@ -92,6 +92,10 @@ impl WebFrameworkError {
         Self::new(WebFrameworkErrorKind::BadRequest, message)
     }
 
+    pub fn unprocessable_entity(message: impl Into<String>) -> Self {
+        Self::new(WebFrameworkErrorKind::UnprocessableEntity, message)
+    }
+
     pub fn conflict(message: impl Into<String>) -> Self {
         Self::new(WebFrameworkErrorKind::Conflict, message)
     }
@@ -182,7 +186,7 @@ impl WebFrameworkError {
             WebFrameworkErrorKind::Forbidden => SdkWorkResultCode::PermissionRequired.as_i32(),
             WebFrameworkErrorKind::BadRequest => SdkWorkResultCode::ValidationError.as_i32(),
             WebFrameworkErrorKind::UnprocessableEntity => {
-                SdkWorkResultCode::ValidationError.as_i32()
+                SdkWorkResultCode::UnprocessableEntity.as_i32()
             }
             WebFrameworkErrorKind::Conflict => SdkWorkResultCode::Conflict.as_i32(),
             WebFrameworkErrorKind::PayloadTooLarge => SdkWorkResultCode::PayloadTooLarge.as_i32(),
