@@ -113,7 +113,7 @@ impl ThrottledPurge {
         match &self.pool {
             #[cfg(feature = "sqlite")]
             WebStorePool::Sqlite(pool) => {
-                sqlx::query(self.table_sql.as_ref())
+                sqlx::query(sqlx::AssertSqlSafe(self.table_sql.as_ref()))
                     .bind(now)
                     .execute(pool)
                     .await
@@ -121,7 +121,7 @@ impl ThrottledPurge {
             }
             #[cfg(feature = "postgres")]
             WebStorePool::Postgres(pool) => {
-                sqlx::query(self.table_sql.as_ref())
+                sqlx::query(sqlx::AssertSqlSafe(self.table_sql.as_ref()))
                     .bind(now)
                     .execute(pool)
                     .await

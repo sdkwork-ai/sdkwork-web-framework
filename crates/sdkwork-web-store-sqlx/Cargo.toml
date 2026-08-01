@@ -13,7 +13,7 @@ path = "src/lib.rs"
 async-trait.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "macros", "migrate"] }
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "macros", "migrate"] }
 sdkwork-database-config.workspace = true
 sdkwork-database-sqlx = { workspace = true, default-features = false }
 sdkwork-web-core.workspace = true

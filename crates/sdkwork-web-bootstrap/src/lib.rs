@@ -59,6 +59,8 @@ pub use router::{
 pub use serve::{serve, serve_with_lifecycle};
 #[cfg(feature = "sqlx-sqlite")]
 pub use sqlx_readiness::SqliteReadinessCheck;
+#[cfg(feature = "sqlx-sqlite")]
+pub use sdkwork_web_store_sqlx::connect_sqlite;
 pub use sqlx_readiness::{DatabasePoolReadinessCheck, PgPoolReadinessCheck};
 #[cfg(feature = "sqlx")]
 pub use sqlx_stores::{

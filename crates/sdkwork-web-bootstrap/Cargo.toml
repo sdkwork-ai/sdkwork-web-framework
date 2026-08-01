@@ -19,7 +19,9 @@ sqlx-sqlite = [
     "sdkwork-database-sqlx/sqlite",
     "sdkwork-web-store-sqlx/sqlite",
 ]
-admin-api = ["sqlx", "dep:sdkwork-routes-web-framework-backend-api", "dep:sdkwork-web-framework-admin-repository-sqlx"]
+# admin-api readiness covers both pool kinds; AdminStorePool::Sqlite is unconditional,
+# so the sqlite readiness check feature must be implied here.
+admin-api = ["sqlx", "sqlx-sqlite", "dep:sdkwork-routes-web-framework-backend-api", "dep:sdkwork-web-framework-admin-repository-sqlx"]
 otel = [
     "dep:tracing-opentelemetry",
     "dep:opentelemetry",
@@ -51,7 +53,7 @@ sdkwork-web-store-sqlx = { workspace = true, default-features = false, optional 
 redis = { version = "0.27", features = ["tokio-comp"], optional = true }
 sdkwork-routes-web-framework-backend-api = { workspace = true, optional = true }
 sdkwork-web-framework-admin-repository-sqlx = { workspace = true, optional = true }
-sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "postgres"] }
+sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "postgres"] }
 
 [dev-dependencies]
 tokio.workspace = true
