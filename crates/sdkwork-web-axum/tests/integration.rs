@@ -19,8 +19,10 @@ use std::sync::Arc;
 use tower::ServiceExt;
 
 fn development_cors_layer() -> WebFrameworkLayer<DefaultWebRequestContextResolver> {
-    let mut security = SecurityPolicy::default();
-    security.cors = CorsPolicy::development_loopback();
+    let security = SecurityPolicy {
+        cors: CorsPolicy::development_loopback(),
+        ..SecurityPolicy::default()
+    };
     WebFrameworkLayer::new(DefaultWebRequestContextResolver::default())
         .with_security_policy(security)
 }

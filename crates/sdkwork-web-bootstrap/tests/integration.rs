@@ -531,7 +531,9 @@ async fn web_framework_builder_shares_metrics_with_service_router() {
         .await
         .expect("body");
     let rendered = String::from_utf8_lossy(&body);
-    assert!(rendered.contains("sdkwork_http_requests_total 1"));
+    assert!(rendered.contains("sdkwork_http_requests_total{"));
+    assert!(rendered.contains("sdkwork_http_request_duration_seconds_bucket{"));
+    assert!(rendered.contains("sdkwork_http_request_duration_seconds_count{"));
     assert!(rendered.contains("api_surface=\"app-api\""));
     assert!(rendered.contains("backend_layer=\"handler\""));
 }
@@ -576,7 +578,9 @@ async fn metrics_increment_when_layer_shares_registry() {
     let body = to_bytes(metrics_response.into_body(), usize::MAX)
         .await
         .expect("body");
-    assert!(String::from_utf8_lossy(&body).contains("sdkwork_http_requests_total 1"));
+    let rendered = String::from_utf8_lossy(&body);
+    assert!(rendered.contains("sdkwork_http_requests_total{"));
+    assert!(rendered.contains("sdkwork_http_request_duration_seconds_bucket{"));
 }
 
 #[test]

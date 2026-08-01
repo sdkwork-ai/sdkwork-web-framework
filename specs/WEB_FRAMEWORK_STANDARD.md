@@ -311,6 +311,17 @@ Route crates for **business** capabilities `MUST NOT` live in `sdkwork-web-frame
   include `operationId`, and unmatched routes `MUST NOT` fabricate one.
 - Raw URL paths with identifiers `MUST NOT` be logged; use route templates.
 - `HttpMetricsRegistry` uses hard framework ceilings of 4,096 labeled request series and 128 pipeline-stage series. Public construction may lower but must not raise those ceilings.
+- Request series are distributed across 64 fixed shards while a process-wide
+  atomic reservation counter enforces the exact 4,096-series ceiling. Scraping
+  locks one shard at a time, so high-concurrency recording does not serialize
+  on one global request-series mutex.
+- `sdkwork_http_request_duration_seconds` is a Prometheus histogram with stable
+  `0.005`, `0.01`, `0.025`, `0.05`, `0.1`, `0.25`, `0.5`, `1`, `2.5`, `5`,
+  `10`, and `30` second buckets. Request counters and histograms share the same
+  bounded route/operation/status series key and use `operation_id` as the
+  metric label spelling required by `OBSERVABILITY_SPEC.md`. Pipeline-stage
+  duration uses the same stable histogram buckets and the separate fixed
+  128-stage ceiling.
 - A request-series key over 2,048 bytes or pipeline-stage label over 128 bytes is dropped and counted; metric recording must not allocate the rejected series.
 - Unresolved routes use the fixed metric label `unmatched`. Redacting individual path segments is not sufficient to bound metric cardinality.
 - Series saturation must increment `sdkwork_http_metric_series_dropped_total{kind=...}` without rejecting the business request or preventing updates to already registered series.

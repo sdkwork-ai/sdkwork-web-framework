@@ -338,6 +338,7 @@ async fn finalize_response<R>(
     layer: &WebFrameworkLayer<R>,
     state: &WebCallState,
     mut response: Response,
+    request_started: std::time::Instant,
 ) -> Response
 where
     R: WebRequestContextResolver + Clone,
@@ -347,7 +348,7 @@ where
         .after(state, &mut response, &layer.runtime)
         .await
     {
-        return problem_response(&error, state.problem_correlation());
+        response = problem_response(&error, state.problem_correlation());
     }
     if let Some(metrics) = layer.runtime.metrics() {
         if HttpMetricsRegistry::should_record_path(&state.path) {
@@ -356,7 +357,7 @@ where
                 &metrics.dimensions(),
                 response.status().as_u16(),
             );
-            metrics.record_request(&labels);
+            metrics.record_request_with_duration(&labels, request_started.elapsed());
         }
     }
     release_concurrent_admission(&layer.runtime, state).await;
@@ -371,6 +372,7 @@ async fn web_request_context_middleware<R>(
 where
     R: WebRequestContextResolver + Clone,
 {
+    let request_started = std::time::Instant::now();
     let mut state = WebCallState::from_request(&request);
     if let Err(error) = layer
         .call_chain
@@ -379,18 +381,18 @@ where
     {
         release_concurrent_admission(&layer.runtime, &state).await;
         release_idempotency_leader(&layer.runtime, &state).await;
-        let mut response = problem_response(&error, state.problem_correlation());
-        // 即使 before 失败也执行 after，确保 Audit/ResponseIdentity/HeaderSecurity
-        // 为失败请求留痕。SECURITY_SPEC §5.1 审计完整性。
-        let _ = layer
-            .call_chain
-            .after(&state, &mut response, &layer.runtime)
-            .await;
-        return finalize_response(&layer, &state, response).await;
+        let response = problem_response(&error, state.problem_correlation());
+        return finalize_response(&layer, &state, response, request_started).await;
     }
 
     if state.cors_preflight {
-        return finalize_response(&layer, &state, StatusCode::NO_CONTENT.into_response()).await;
+        return finalize_response(
+            &layer,
+            &state,
+            StatusCode::NO_CONTENT.into_response(),
+            request_started,
+        )
+        .await;
     }
 
     if let Some(replay) = state.idempotency_replay.clone() {
@@ -400,7 +402,7 @@ where
             .unwrap_or_else(new_request_id);
         let response = idempotency_replay_response(&replay, Some(&request_id))
             .unwrap_or_else(|error| problem_response(&error, state.problem_correlation()));
-        return finalize_response(&layer, &state, response).await;
+        return finalize_response(&layer, &state, response, request_started).await;
     }
 
     let idem_key = state.idempotency_key.clone();
@@ -436,6 +438,7 @@ where
                     &WebFrameworkError::dependency_unavailable("request handler panicked"),
                     state.problem_correlation(),
                 ),
+                request_started,
             )
             .await;
         }
@@ -443,5 +446,5 @@ where
     if let Some(guard) = &idem_guard {
         guard.mark_released();
     }
-    finalize_response(&layer, &state, response).await
+    finalize_response(&layer, &state, response, request_started).await
 }

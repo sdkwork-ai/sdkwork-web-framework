@@ -99,7 +99,7 @@ I. 存储适配        J. 验证与绑定     K. 测试与质量     L. 部署�
 | --- | --- | --- | --- | --- |
 | E1 | 结构化日志 | tracing span 每请求 | pipeline: Logging | M3 |
 | E2 | 阶段耗时 | 每 interceptor before 计时 | pipeline metrics hook | M2 |
-| E3 | Prometheus 指标 | `http_requests_total` 等 | bootstrap: /metrics | M3 |
+| E3 | Prometheus 指标 | `sdkwork_http_requests_labeled_total`、`sdkwork_http_request_duration_seconds` | bootstrap: /metrics | M3 |
 | E4 | 指标标签 | surface, method, status, operation | metrics labels 标准 | M2 |
 | E5 | 日志脱敏 | token/apikey/password 过滤 | observability: RedactingLayer | M3 |
 | E6 | 路由模板日志 | 记 template 非 raw path | OBSERVABILITY_SPEC 对齐 | M2 |
