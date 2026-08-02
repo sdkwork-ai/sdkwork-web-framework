@@ -294,11 +294,18 @@ where
                 // Skip rate limiting for health check and metrics endpoints.
                 // These paths are critical for monitoring and orchestration systems
                 // and must not be throttled. SECURITY_SPEC §4.3 / WEB_FRAMEWORK_STANDARD §6.
+                // CORS preflight requests are metadata probes that the browser
+                // issues before every cross-origin call; they must neither
+                // consume the anonymous request budget nor be throttled,
+                // otherwise a preflight 429 surfaces to the browser as a CORS
+                // failure (mirrors the preflight exemptions in the
+                // CrossSiteRequest, Idempotency, and Authentication stages).
                 let is_health_or_metrics = matches!(
                     state.path.as_str(),
                     "/healthz" | "/readyz" | "/livez" | "/metrics" | "/favicon.ico"
                 );
                 if !is_health_or_metrics
+                    && !is_cors_preflight(state)
                     && runtime.rate_limit_globally_enabled(state)
                     && runtime.security_policy.rate_limit.pre_auth_rate_limit
                 {

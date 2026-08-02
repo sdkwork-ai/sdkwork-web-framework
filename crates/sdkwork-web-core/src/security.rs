@@ -252,6 +252,12 @@ impl CorsPolicy {
                     .into(),
             );
         }
+        if self.allowed_headers.iter().any(|header| header == "*") {
+            return Err(
+                "production CORS policy must not allow all preflight request headers; configure an explicit header allowlist"
+                    .into(),
+            );
+        }
         Ok(())
     }
 
@@ -316,6 +322,14 @@ impl CorsPolicy {
             ));
         }
 
+        // `*` in the header allowlist relaxes the per-header gate entirely.
+        // Development/loopback policies use it so local browser surfaces never
+        // fail preflight because the SDK grows a new request header; production
+        // policies are rejected by `validate_for_production`.
+        if self.allowed_headers.iter().any(|allowed| allowed == "*") {
+            return Ok(());
+        }
+
         let Some(requested_headers) = request.headers().get("access-control-request-headers")
         else {
             return Ok(());
@@ -375,14 +389,21 @@ impl CorsPolicy {
                 HeaderValue::from_static("true"),
             );
         }
-        if let Ok(value) = HeaderValue::from_str(
-            &self
-                .allowed_headers
+        let allow_headers_value = if self.allowed_headers.iter().any(|allowed| allowed == "*") {
+            // The wildcard is honored by browsers for requests whose
+            // credentials mode is not `include`; the SDKWork clients use the
+            // default (same-origin) credentials mode and send tokens via
+            // headers, so `*` matches their preflights. Production policies
+            // are rejected by `validate_for_production`.
+            "*".to_owned()
+        } else {
+            self.allowed_headers
                 .iter()
                 .map(String::as_str)
                 .collect::<Vec<_>>()
-                .join(", "),
-        ) {
+                .join(", ")
+        };
+        if let Ok(value) = HeaderValue::from_str(&allow_headers_value) {
             response.headers_mut().insert(
                 HeaderName::from_static("access-control-allow-headers"),
                 value,
@@ -1152,6 +1173,58 @@ mod tests {
         policy
             .validate_for_production()
             .expect("explicit allowlist is production-safe");
+    }
+
+    #[test]
+    fn validate_for_production_rejects_wildcard_headers() {
+        let policy = CorsPolicy {
+            allow_all_origins: false,
+            allowed_origins: vec!["https://app.example".to_owned()],
+            allowed_headers: vec!["*".to_owned()],
+            ..CorsPolicy::default()
+        };
+        let error = policy
+            .validate_for_production()
+            .expect_err("wildcard headers must be rejected in production");
+        assert!(error.contains("header allowlist"));
+    }
+
+    #[test]
+    fn preflight_wildcard_headers_allow_any_request_header() {
+        let policy = CorsPolicy {
+            allowed_headers: vec!["*".to_owned()],
+            ..CorsPolicy::default()
+        };
+        let request = Request::builder()
+            .header("origin", "http://127.0.0.1:1520")
+            .header("access-control-request-method", "GET")
+            .header(
+                "access-control-request-headers",
+                "x-request-id, x-sdkwork-agent-token, x-device-id",
+            )
+            .body(Body::empty())
+            .expect("build wildcard header preflight request");
+        policy
+            .validate_preflight(&request)
+            .expect("wildcard header policy must accept any requested header");
+    }
+
+    #[test]
+    fn wildcard_headers_emit_asterisk_allow_headers_response() {
+        let policy = CorsPolicy {
+            allow_all_origins: true,
+            allowed_headers: vec!["*".to_owned()],
+            ..CorsPolicy::default()
+        };
+        let mut response = Response::new(Body::empty());
+        policy.apply_headers_from_origin(Some("http://127.0.0.1:1520"), &mut response);
+        assert_eq!(
+            Some("*"),
+            response
+                .headers()
+                .get("access-control-allow-headers")
+                .and_then(|value| value.to_str().ok()),
+        );
     }
 
     #[test]
