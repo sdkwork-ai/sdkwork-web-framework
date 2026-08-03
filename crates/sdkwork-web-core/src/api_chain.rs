@@ -127,6 +127,11 @@ pub struct WebCallState {
     pub concurrent_admission_key: Option<String>,
     /// Set at stage 15 (Logging) for post-handler audit duration.
     pub accepted_at: Option<std::time::Instant>,
+    /// 请求参数捕获（脱敏后），由可选的 request-logging 拦截器在 before 阶段填充。
+    /// 仅供日志/审计持久化使用，不影响请求处理语义。
+    pub redacted_query: Option<String>,
+    /// 白名单安全请求头捕获（JSON 字符串），同上。
+    pub safe_request_headers: Option<String>,
     /// Manifest flag: reject inbound credential/context headers before handler logic.
     pub forbid_credential_headers: bool,
     /// 记录 before 阶段失败时的错误，供 Audit.after 为失败请求留痕使用。
@@ -454,6 +459,8 @@ impl WebCallState {
             resolved_rate_limit: None,
             concurrent_admission_key: None,
             accepted_at: None,
+            redacted_query: None,
+            safe_request_headers: None,
             forbid_credential_headers: false,
             before_failure: None,
         }

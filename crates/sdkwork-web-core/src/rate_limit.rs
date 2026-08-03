@@ -106,6 +106,8 @@ mod tests {
             resolved_rate_limit: None,
             concurrent_admission_key: None,
             accepted_at: None,
+            redacted_query: None,
+            safe_request_headers: None,
             forbid_credential_headers: false,
             before_failure: None,
         }
