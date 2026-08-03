@@ -282,9 +282,9 @@ mod tests {
             .expect("body");
         let payload: serde_json::Value = serde_json::from_slice(&body).expect("json");
         assert_eq!(422, payload["status"].as_u64().unwrap());
-        assert_eq!(40001, payload["code"].as_i64().unwrap());
+        assert_eq!(42201, payload["code"].as_i64().unwrap());
         assert_eq!(
-            "https://docs.sdkwork.com/problems/40001",
+            "https://docs.sdkwork.com/problems/42201",
             payload["type"].as_str().unwrap()
         );
     }
