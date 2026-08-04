@@ -59,9 +59,9 @@ Missing dependency registry files produce a structured error. Release applicatio
 ```bash
 cargo run -p sdkwork-web-schema-registry -- \
   compose tables \
-  --app-root ../sdkwork-clawrouter \
-  --registry docs/schema-registry/sdkwork-clawrouter.tables.yaml \
-  --output generated/schema/registry/sdkwork-clawrouter.tables.effective.yaml
+  --app-root ../sdkwork-cloudrouter \
+  --registry docs/schema-registry/sdkwork-cloudrouter.tables.yaml \
+  --output generated/schema/registry/sdkwork-cloudrouter.tables.effective.yaml
 ```
 
 Supported subcommands:

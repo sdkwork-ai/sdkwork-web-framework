@@ -96,7 +96,7 @@ fn api_surface_bridge_matches_contract() {
 #[test]
 fn workspace_manifest_has_no_business_dependencies() {
     let manifest = include_str!("../Cargo.toml");
-    for forbidden in ["sdkwork-appbase", "sdkwork-clawrouter", "openchat"] {
+    for forbidden in ["sdkwork-appbase", "sdkwork-cloudrouter", "openchat"] {
         assert!(
             !manifest.contains(forbidden),
             "core crate must not depend on {forbidden}"

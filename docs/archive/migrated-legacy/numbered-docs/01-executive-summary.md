@@ -2,7 +2,7 @@
 
 ## 1. 背景
 
-SDKWork 各带 API 的产品共享 HTTP 契约（`/app/v3/api`、`/backend/v3/api`、领域 open-api）与 SaaS 多租户模型。通用 Web 能力曾落在 `sdkwork-appbase`，并与 IAM 耦合；`sdkwork-clawrouter` 等又重复实现 Axum 中间件。缺少 **独立的、零业务依赖的 Web 基础框架**。
+SDKWork 各带 API 的产品共享 HTTP 契约（`/app/v3/api`、`/backend/v3/api`、领域 open-api）与 SaaS 多租户模型。通用 Web 能力曾落在 `sdkwork-appbase`，并与 IAM 耦合；`sdkwork-cloudrouter` 等又重复实现 Axum 中间件。缺少 **独立的、零业务依赖的 Web 基础框架**。
 
 ## 2. 定位（修订）
 
@@ -18,7 +18,7 @@ SDKWork 各带 API 的产品共享 HTTP 契约（`/app/v3/api`、`/backend/v3/ap
 2. **封装**：业务只装配 `WebFrameworkRuntime`，不手写 CORS/流控/上下文链
 3. **扩展**：Resolver、Authorization、ApiKeyLookup、OAuthTokenLookup、OpenApiCredentialSchemeDetector、DomainContextInjector 由业务实现
 4. **迁出**：自 appbase 抽出原 `sdkwork-platform-http-context-service`，去除 IAM 硬依赖
-5. **对齐技术栈**：Axum 0.8 + Tower（与 claw-router 一致），claw-router **消费**本框架而非并列重复
+5. **对齐技术栈**：Axum 0.8 + Tower（与 cloud-router 一致），cloud-router **消费**本框架而非并列重复
 
 ## 4. 非目标
 
@@ -60,7 +60,7 @@ SDKWork 各带 API 的产品共享 HTTP 契约（`/app/v3/api`、`/backend/v3/ap
 
 - [ ] appbase 通过 adapter crate 实现 Resolver/Injector，并依赖框架
 - [ ] appbase 删除 `sdkwork-platform-http-context-service`
-- [ ] claw-router 可改为依赖 `sdkwork-web-bootstrap` + `sdkwork-web-axum`
+- [ ] cloud-router 可改为依赖 `sdkwork-web-bootstrap` + `sdkwork-web-axum`
 
 ## 8. 极致标准体系（rev.3 新增）
 

@@ -7,7 +7,7 @@
 
 ## 1. 定位
 
-技术选型服务于 **Web 运行时集成封装**，与 `sdkwork-clawrouter` 对齐，便于业务仓库统一栈；**选型结果落在框架 crate 内**，不引入业务依赖。
+技术选型服务于 **Web 运行时集成封装**，与 `sdkwork-cloudrouter` 对齐，便于业务仓库统一栈；**选型结果落在框架 crate 内**，不引入业务依赖。
 
 ## 2. 核心技术栈
 
@@ -32,14 +32,14 @@
 | sdkwork-web-bootstrap | ✅ | ❌ | ❌ |
 | sdkwork-web-store-sqlx | ❌ | ✅ | ❌ |
 
-## 4. 与 claw-router
+## 4. 与 cloud-router
 
-- claw-router **消费**本框架 crate，版本与 workspace 对齐
-- `InvocationPipeline`、Hyper 出站留在 claw-product/gateway，**不并入** web-framework 核心
+- cloud-router **消费**本框架 crate，版本与 workspace 对齐
+- `InvocationPipeline`、Hyper 出站留在 cloud-product/gateway，**不并入** web-framework 核心
 
 ## 5. 禁止
 
-- 框架 workspace 依赖 `sdkwork-claw-*`、`sdkwork-appbase`、`sdkwork-iam-*`
+- 框架 workspace 依赖 `sdkwork-cloudrouter-*`、`sdkwork-appbase`、`sdkwork-iam-*`
 - 在 `sdkwork-web-core` 引入 sqlx
 
 ## 6. 验证

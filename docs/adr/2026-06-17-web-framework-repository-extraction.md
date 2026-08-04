@@ -17,7 +17,7 @@ SDKWork 需要统一的 SaaS Web 开发标准与 Axum 集成封装。原方案�
 ## Decision
 
 1. **`sdkwork-web-framework` 定位为 L1 基础框架**：Web 集成封装 + SaaS 标准 + 通用能力 trait/默认实现
-2. **单向依赖**：`sdkwork-appbase`、`sdkwork-clawrouter` 等 → `sdkwork-web-framework`；禁止反向
+2. **单向依赖**：`sdkwork-appbase`、`sdkwork-cloudrouter` 等 → `sdkwork-web-framework`；禁止反向
 3. **框架 crate 拆分**：contract / context / pipeline / security / axum / bootstrap / store（可选）
 4. **`WebRequestContext`** 为框架核心类型；IAM 映射仅在 appbase `sdkwork-iam-web-adapter`
 5. **扩展点**：`WebRequestContextResolver`、`AuthorizationPolicy`、`DomainContextInjector` 等由业务实现
@@ -31,7 +31,7 @@ SDKWork 需要统一的 SaaS Web 开发标准与 Axum 集成封装。原方案�
 | 框架留在 appbase | 非 IAM 产品被迫依赖 IAM 仓库 |
 | 框架依赖 iam-context 做注入 | 违反零业务依赖 |
 | 框架内置 IAM backend-api | 混淆平台框架与 IAM 产品 |
-| claw-router 与框架并列两套 HTTP 基座 | 重复维护 |
+| cloud-router 与框架并列两套 HTTP 基座 | 重复维护 |
 
 ## Consequences
 

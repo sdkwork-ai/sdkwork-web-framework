@@ -25,7 +25,7 @@
 ## 依赖关系
 
 ```text
-sdkwork-specs (L0) → sdkwork-web-framework (L1/L2) → appbase / claw-router / …
+sdkwork-specs (L0) → sdkwork-web-framework (L1/L2) → appbase / cloud-router / …
 ```
 
 ## 完整索引

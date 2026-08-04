@@ -101,7 +101,7 @@ WebCallInterceptorChain::standard()
 
 ## 7. Domain Pipeline（不属于本框架）
 
-Gateway 计费等 `InvocationPipeline` 留在业务仓库（claw-router）；HTTP 链必须先完成。
+Gateway 计费等 `InvocationPipeline` 留在业务仓库（cloud-router）；HTTP 链必须先完成。
 
 ## 8. 测试（框架仓库）
 

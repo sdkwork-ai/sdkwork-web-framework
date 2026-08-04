@@ -34,7 +34,7 @@
 | 仓库 | Route crate |
 | --- | --- |
 | sdkwork-appbase | `sdkwork-routes-iam-app-api` |
-| sdkwork-clawrouter | `sdkwork-routes-clawrouter-app-api`（产品域） |
+| sdkwork-cloudrouter | `sdkwork-routes-cloudrouter-app-api`（产品域） |
 | sdkwork-commerce (deleted) | `sdkwork-routes-commerce-app-api` |
 
 ## 4. 框架基础设施路径（sdkwork-web-bootstrap）
@@ -99,4 +99,4 @@ x-sdkwork-api-surface: app-api
 
 - [x] 无 **业务** `sdkwork-routes-*` crate（允许 `sdkwork-routes-web-framework-backend-api` control-plane 例外）
 - [x] 框架 manifest 仅含 `webFramework.*` operationId（`routes_contract` / `openapi_authority`）
-- [ ] appbase/claw-router 各自 manifest 使用 `HttpRoute` 类型（消费者仓库验收）
+- [ ] appbase/cloud-router 各自 manifest 使用 `HttpRoute` 类型（消费者仓库验收）

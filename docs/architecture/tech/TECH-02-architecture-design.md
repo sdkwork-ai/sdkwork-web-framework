@@ -20,7 +20,7 @@
 ┌──────────────────────────────────────────────────────────────────┐
 │ L3  Application Roots（apps/、Tauri host、gateway 装配）            │
 ├──────────────────────────────────────────────────────────────────┤
-│ L2  Business Capability Repos（appbase, claw-router, shop, order, payment…） │
+│ L2  Business Capability Repos（appbase, cloud-router, shop, order, payment…） │
 │     • sdkwork-routes-<capability>-<surface>  （路由+Handler）     │
 │     • *-service / *-repository               （业务逻辑）          │
 │     • *-web-adapter                          （实现框架 trait）    │
@@ -143,17 +143,17 @@ tenant_id → organization_id → app_id → environment → deployment_mode
 | Pipeline | 所属 | 说明 |
 | --- | --- | --- |
 | HTTP `WebCallInterceptorChain` | **框架** | 每个请求必经 |
-| Domain `InvocationPipeline` | **业务**（如 claw-product） | 可选；Gateway 计费等 |
+| Domain `InvocationPipeline` | **业务**（如 cloud-product） | 可选；Gateway 计费等 |
 
 业务 Domain Pipeline **不得**替代 HTTP 链的认证与租户隔离。
 
-## 9. 与 sdkwork-clawrouter 关系
+## 9. 与 sdkwork-cloudrouter 关系
 
 | 项 | 关系 |
 | --- | --- |
-| 依赖方向 | claw-router **依赖** web-framework |
-| `sdkwork-claw-http` | 逐步改为对 `sdkwork-web-bootstrap` 的薄包装或 re-export |
-| `InvocationPipeline` | 留在 claw-product，与框架 HTTP 链正交 |
+| 依赖方向 | cloud-router **依赖** web-framework |
+| `sdkwork-cloudrouter-http` | 逐步改为对 `sdkwork-web-bootstrap` 的薄包装或 re-export |
+| `InvocationPipeline` | 留在 cloud-product，与框架 HTTP 链正交 |
 | 重复 auth middleware | 收敛到框架 Interceptor + 业务 Resolver |
 
 ## 10. 与 sdkwork-appbase 关系

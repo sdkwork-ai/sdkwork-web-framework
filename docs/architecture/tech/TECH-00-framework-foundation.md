@@ -19,7 +19,7 @@
                           │
         ┌─────────────────┼─────────────────┬─────────────────┐
         ▼                 ▼                 ▼                 ▼
- sdkwork-appbase   sdkwork-clawrouter  sdkwork-shop   sdkwork-aiot
+ sdkwork-appbase   sdkwork-cloudrouter  sdkwork-shop   sdkwork-aiot
  （IAM 等业务）      （AI 网关等业务）     （电商等业务）      （物联网等业务）
         │                 │                 │                 │
         └─────────────────┴─────────────────┴─────────────────┘
@@ -32,8 +32,8 @@
 
 | 方向 | 是否允许 | 说明 |
 | --- | --- | --- |
-| 业务仓库 → `sdkwork-web-framework` | ✅ **必须** | appbase、claw-router、shop 等 T1 仓库集成框架 |
-| `sdkwork-web-framework` → 业务仓库 | ❌ **禁止** | 不得依赖 appbase、iam、claw-router、commerce 等业务 crate |
+| 业务仓库 → `sdkwork-web-framework` | ✅ **必须** | appbase、cloud-router、shop 等 T1 仓库集成框架 |
+| `sdkwork-web-framework` → 业务仓库 | ❌ **禁止** | 不得依赖 appbase、iam、cloud-router、commerce 等业务 crate |
 | `sdkwork-web-framework` → `sdkwork-specs` | ✅ 文档引用 | 规范通过相对路径引用，不 cargo 依赖 |
 | `sdkwork-web-framework` → 通用基础设施 | ✅ 受限 | 见 §4 白名单 |
 
@@ -61,7 +61,7 @@
 | 缓存/存储适配 | `redis`, `sqlx`, `sdkwork-database-config`, `sdkwork-database-sqlx` | **仅** `sdkwork-web-store-*` 可选 crate；连接池经 `sdkwork-database-sqlx` 创建，store 实现只访问 `web_*` 表 |
 | 错误 | `thiserror` | 库边界 |
 
-**禁止依赖（示例）**：`sdkwork_iam_context_service`、`sdkwork-claw-*`、`sdkwork-commerce (deleted)-*-service`、任何 `sdkwork-routes-*`。
+**禁止依赖（示例）**：`sdkwork_iam_context_service`、`sdkwork-cloudrouter-*`、`sdkwork-commerce (deleted)-*-service`、任何 `sdkwork-routes-*`。
 
 ## 5. 框架提供的「封装抽象」
 
@@ -163,7 +163,7 @@ sdkwork-appbase 新增/调整:
 
 ## 10. 验收：是否违反基础框架定位
 
-- [x] `cargo tree` 无指向 `sdkwork-appbase`、`sdkwork-iam-*`、`sdkwork-claw-*` 的依赖（architecture test 守护）
+- [x] `cargo tree` 无指向 `sdkwork-appbase`、`sdkwork-iam-*`、`sdkwork-cloudrouter-*` 的依赖（architecture test 守护）
 - [x] 框架 crate 内无 `iam_` 表名、无 OAuth、无业务 operationId（sqlx_migrations 测试守护）
 - [x] `WebRequestContextResolver` 仅有 trait + dev stub；生产 JWT 验签通过 `TenantBoundJwtVerifier` + `TenantSigningKeyLookup`（EP-05d，HS256/RS256）；SaaS 吊销通过 EP-05e；IAM 全量 resolver 由业务 adapter 实现
 - [x] 领域类型注入仅通过 `DomainContextInjector`

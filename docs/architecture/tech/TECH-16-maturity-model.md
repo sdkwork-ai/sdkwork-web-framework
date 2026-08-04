@@ -95,6 +95,6 @@
 | 期 | 范围 | 出口 |
 | --- | --- | --- |
 | **Phase I** | M3 核心 A/C/G/H + 内存 D + K1–K7 | **框架仓库已达成**；appbase 切换见 [TECH-10-migration-from-appbase.md](./TECH-10-migration-from-appbase.md) |
-| **Phase II** | Redis/SQL store M3；E 全项；Java parity | claw-router 接入 |
+| **Phase II** | Redis/SQL store M3；E 全项；Java parity | cloud-router 接入 |
 | **Phase III** | M4 多产品；OTel M2；合规 CI | 对外 GA |
 

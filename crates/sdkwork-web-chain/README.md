@@ -27,14 +27,14 @@ redefines the standard 18-stage HTTP chain semantics.
 - Stage failures and store outages **degrade open** with a warning instead of
   turning infrastructure blips into client rejections; genuine limit
   rejections are always enforced.
-- Config changes are effective within one resolution TTL (the clawrouter
+- Config changes are effective within one resolution TTL (the cloudrouter
   integration caches store reads for 30s; see `CHAIN_POLICY_CACHE_TTL_SECS`).
 
 ## Operational constraints
 
 - Distributed concurrency counters use Redis with a TTL of 2 hours per key;
   streaming invocations longer than the TTL can oversubscribe a budget.
-  The clawrouter default stream timeout is 120s, well below the TTL — if you
+  The cloudrouter default stream timeout is 120s, well below the TTL — if you
   raise the stream timeout beyond 2h, shorten the window or refresh leases.
 - The Redis store degrades to per-node memory when unreachable (logged);
   a fleet of N nodes may then each allow the full budget (same trade-off as

@@ -119,8 +119,8 @@ sdkwork-web-axum = { path = "../sdkwork-web-framework/crates/sdkwork-web-axum" }
 
 ### Phase E — 其它消费者
 
-1. claw-router / api-gateway 嵌入 IAM 路由时使用 router crate 自带的 `WebFramework` 层，**禁止**在 gateway merge 时二次包裹
-2. claw all-in-one：gateway 同时嵌入 `sdkwork-iam-app-api` 与 `sdkwork-iam-backend-api`（`/backend/v3/api/iam/*` 优先于 claw backend 宽前缀）
+1. cloud-router / api-gateway 嵌入 IAM 路由时使用 router crate 自带的 `WebFramework` 层，**禁止**在 gateway merge 时二次包裹
+2. cloud all-in-one：gateway 同时嵌入 `sdkwork-iam-app-api` 与 `sdkwork-iam-backend-api`（`/backend/v3/api/iam/*` 优先于 cloud backend 宽前缀）
 3. **sdkwork-knowledgebase**：app / backend / open-api 通过各自 `web_bootstrap` + domain injector 映射 `WebRequestContext`；生产入口用 `build_*_with_web_framework()`，本地 `main` 仍可用 `dev_auth`
 4. **T1 commerce repos**：各 T1 `*-standalone-gateway` 在装配层包裹 WebFramework（`/health`、`/ready` 公共）
 5. aiot 等自定义 transport 栈可复用 `sdkwork-iam-web-adapter` resolver，按域注入自己的 request context（无需 axum 时可只依赖 `sdkwork-web-core` trait）

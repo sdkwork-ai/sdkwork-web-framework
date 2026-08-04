@@ -164,7 +164,7 @@ router.route("/app/v3/ws", get(|ws, ctx: WebRequestContext| async move {
 | --- | --- |
 | M1 | HTTP 升级 + `WebRequestContext` 注入 + 空 WS 链 |
 | M2 | 标准 WS interceptor（心跳、鉴权复验） |
-| M3 | 与 claw-router 事件总线桥接（业务 crate） |
+| M3 | 与 cloud-router 事件总线桥接（业务 crate） |
 | M4 | 分布式连接元数据 store |
 
 当前实现：**M1**（core + axum 封装，集成测试覆盖升级路径）。
