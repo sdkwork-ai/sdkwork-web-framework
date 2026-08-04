@@ -1,0 +1,24 @@
+[package]
+name = "sdkwork-web-chain"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "SDKWork web framework call chain: composable guard stages (concurrency, IP access) with layered per-scope policy."
+
+[lib]
+name = "sdkwork_web_chain"
+path = "src/lib.rs"
+
+[dependencies]
+async-trait.workspace = true
+ipnet = "2"
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+sdkwork-web-contract.workspace = true
+sdkwork-web-core.workspace = true
+sdkwork-utils-rust.workspace = true
+
+[dev-dependencies]

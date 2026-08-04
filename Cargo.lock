@@ -1219,6 +1219,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "ipnet"
+version = "2.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a756c3fac73139e83f14c2d742155dd2b78d3ee56597b419a0579b7bdd6dd78"
+
+[[package]]
 name = "is_terminal_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2032,7 +2038,7 @@ dependencies = [
 
 [[package]]
 name = "sdkwork-utils-rust"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "aes-gcm",
  "base64",
@@ -2132,6 +2138,21 @@ name = "sdkwork-web-build"
 version = "0.1.0"
 dependencies = [
  "serde_json",
+]
+
+[[package]]
+name = "sdkwork-web-chain"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "ipnet",
+ "sdkwork-utils-rust",
+ "sdkwork-web-contract",
+ "sdkwork-web-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

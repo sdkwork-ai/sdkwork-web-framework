@@ -5,6 +5,7 @@ members = [
     "crates/sdkwork-web-contract",
     "crates/sdkwork-web-build",
     "crates/sdkwork-web-core",
+    "crates/sdkwork-web-chain",
     "crates/sdkwork-web-axum",
     "crates/sdkwork-web-bootstrap",
     "crates/sdkwork-web-store-redis",
@@ -29,6 +30,7 @@ axum = { version = "0.8", features = ["ws"] }
 futures-util = "0.3"
 getrandom = "0.2"
 http = "1"
+ipnet = "2"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.48", features = ["macros", "rt-multi-thread", "sync", "signal"] }
@@ -40,6 +42,7 @@ rsa = { version = "0.9", features = ["sha2", "pkcs8"] }
 sdkwork-web-contract = { path = "crates/sdkwork-web-contract" }
 sdkwork-web-build = { path = "crates/sdkwork-web-build" }
 sdkwork-web-core = { path = "crates/sdkwork-web-core" }
+sdkwork-web-chain = { path = "crates/sdkwork-web-chain" }
 sdkwork-web-axum = { path = "crates/sdkwork-web-axum" }
 sdkwork-web-bootstrap = { path = "crates/sdkwork-web-bootstrap" }
 sdkwork-web-store-redis = { path = "crates/sdkwork-web-store-redis" }

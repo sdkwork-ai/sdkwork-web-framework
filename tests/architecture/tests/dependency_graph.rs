@@ -5,6 +5,7 @@ use std::process::Command;
 const WORKSPACE_CRATES: &[&str] = &[
     "sdkwork-web-contract",
     "sdkwork-web-core",
+    "sdkwork-web-chain",
     "sdkwork-web-axum",
     "sdkwork-web-bootstrap",
     "sdkwork-web-store-redis",
