@@ -279,6 +279,7 @@ pub fn build_openapi_operation(route: &HttpRoute) -> Value {
             RouteAuth::OpenApiFlexible => {
                 json!([{ "ApiKey": [] }, { "OAuthBearer": [] }])
             }
+            RouteAuth::OpenApiBearerFlexible => json!([{ "OAuthBearer": [] }]),
             RouteAuth::ApiKeyOrDualToken => {
                 json!([{ "ApiKey": [] }, { "AuthToken": [], "AccessToken": [] }])
             }
@@ -1080,6 +1081,7 @@ fn route_auth_label(auth: RouteAuth) -> &'static str {
         RouteAuth::IngressToken => "ingress-token",
         RouteAuth::OAuth => "oauth",
         RouteAuth::OpenApiFlexible => "open-api-flexible",
+        RouteAuth::OpenApiBearerFlexible => "open-api-bearer-flexible",
         RouteAuth::ApiKeyOrDualToken => "api-key-or-dual-token",
         RouteAuth::AgentToken => "agent-token",
         RouteAuth::Compatibility => "compatibility",
@@ -1097,6 +1099,7 @@ fn auth_mode_label(auth: RouteAuth) -> &'static str {
         RouteAuth::IngressToken => "ingress-token",
         RouteAuth::OAuth => "oauth",
         RouteAuth::OpenApiFlexible => "open-api-flexible",
+        RouteAuth::OpenApiBearerFlexible => "open-api-bearer-flexible",
         RouteAuth::ApiKeyOrDualToken => "api-key-or-dual-token",
         // AgentToken maps to canonical api-key auth-mode (API_SPEC §19).
         RouteAuth::AgentToken => "agent-token",

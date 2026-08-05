@@ -598,6 +598,7 @@ impl SecurityPolicy {
             RouteAuth::ApiKey => &["x-api-key"],
             RouteAuth::OAuth => &["authorization"],
             RouteAuth::OpenApiFlexible => &["authorization", "x-api-key"],
+            RouteAuth::OpenApiBearerFlexible => &["authorization", "x-api-key"],
             RouteAuth::ApiKeyOrDualToken => &["authorization", "access-token", "x-api-key"],
             RouteAuth::IngressToken => &["x-sdkwork-ingress-token", "access-token"],
             RouteAuth::AgentToken => &["x-sdkwork-agent-token", "access-token"],

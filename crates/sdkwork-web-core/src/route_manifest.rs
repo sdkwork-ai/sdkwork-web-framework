@@ -213,6 +213,7 @@ fn route_auth_label(auth: RouteAuth) -> &'static str {
         RouteAuth::IngressToken => "ingressToken",
         RouteAuth::OAuth => "oauth",
         RouteAuth::OpenApiFlexible => "openApiFlexible",
+        RouteAuth::OpenApiBearerFlexible => "openApiBearerFlexible",
         RouteAuth::ApiKeyOrDualToken => "apiKeyOrDualToken",
         RouteAuth::AgentToken => "agentToken",
         RouteAuth::Compatibility => "compatibility",

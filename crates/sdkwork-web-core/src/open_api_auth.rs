@@ -22,6 +22,96 @@ pub enum OpenApiAuthScheme {
     DualToken,
 }
 
+/// Kind of a single open-api bearer credential after classification.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum OpenApiCredentialKind {
+    /// A gateway/platform API key (conventionally `sk-`/`sp-` prefixed).
+    ApiKey,
+    /// An SDKWork login auth token.
+    AuthToken,
+}
+
+/// Classifies a single `Authorization: Bearer` credential for
+/// [`RouteAuth::OpenApiBearerFlexible`] routes.
+///
+/// Implementations are pluggable: applications override the default
+/// prefix-based classifier to add vendor-specific key formats.
+pub trait OpenApiBearerCredentialClassifier: Send + Sync + 'static {
+    fn classify(&self, raw_credential: &str) -> OpenApiCredentialKind;
+}
+
+/// Default classifier: credentials starting with an API key prefix
+/// (`sk-` or `sp-`) are treated as API keys; everything else is an auth token.
+#[derive(Clone, Debug)]
+pub struct PrefixedOpenApiBearerCredentialClassifier {
+    pub api_key_prefixes: Vec<String>,
+}
+
+impl Default for PrefixedOpenApiBearerCredentialClassifier {
+    fn default() -> Self {
+        Self {
+            api_key_prefixes: vec!["sk-".to_string(), "sp-".to_string()],
+        }
+    }
+}
+
+impl OpenApiBearerCredentialClassifier for PrefixedOpenApiBearerCredentialClassifier {
+    fn classify(&self, raw_credential: &str) -> OpenApiCredentialKind {
+        if self
+            .api_key_prefixes
+            .iter()
+            .any(|prefix| raw_credential.starts_with(prefix.as_str()))
+        {
+            OpenApiCredentialKind::ApiKey
+        } else {
+            OpenApiCredentialKind::AuthToken
+        }
+    }
+}
+
+/// Type-erased classifier for runtime wiring.
+pub type DynOpenApiBearerCredentialClassifier = Arc<dyn OpenApiBearerCredentialClassifier>;
+
+pub fn default_open_api_bearer_classifier() -> DynOpenApiBearerCredentialClassifier {
+    Arc::new(PrefixedOpenApiBearerCredentialClassifier::default())
+}
+
+/// Resolves a single bearer credential for [`RouteAuth::OpenApiBearerFlexible`]
+/// routes: the classifier picks the credential kind, then the matching resolver
+/// channel authenticates it.
+///
+/// The bearer credential is read from `Authorization: Bearer`
+/// (`credentials.oauth_bearer`); `X-Api-Key` is accepted as a fallback so the
+/// same flexible route serves both header styles.
+pub async fn resolve_open_api_bearer_flexible<R>(
+    credentials: &WebCallCredentials,
+    classifier: &dyn OpenApiBearerCredentialClassifier,
+    inner: &R,
+) -> Result<(WebAuthMode, WebRequestPrincipal), WebFrameworkError>
+where
+    R: WebRequestContextResolver,
+{
+    let raw = credentials
+        .oauth_bearer
+        .as_deref()
+        .or(credentials.api_key.as_deref())
+        .ok_or_else(|| {
+            WebFrameworkError::missing_credentials(
+                "open-api bearer-flexible routes require Authorization: Bearer or X-Api-Key",
+            )
+        })?;
+    match classifier.classify(raw) {
+        OpenApiCredentialKind::ApiKey => {
+            let principal = inner.resolve_api_key(raw).await?;
+            Ok((WebAuthMode::ApiKey, principal))
+        }
+        OpenApiCredentialKind::AuthToken => {
+            let principal = inner.resolve_bearer_auth_token(raw).await?;
+            Ok((WebAuthMode::OAuth, principal))
+        }
+    }
+}
+
 /// Header-driven detection of which open-api auth scheme a client is using.
 pub trait OpenApiCredentialSchemeDetector: Send + Sync + 'static {
     /// Returns the detected scheme, or `None` when no supported credentials are present.
@@ -124,6 +214,24 @@ impl OpenApiCredentialSchemeDetector for DefaultOpenApiCredentialSchemeDetector 
                 }
                 return Ok(None);
             }
+            Some(RouteAuth::OpenApiBearerFlexible) => {
+                if access_token_present {
+                    return Err(WebFrameworkError::invalid_credentials(
+                        "open-api bearer-flexible routes accept a single bearer credential; Access-Token is not allowed",
+                    )
+                    .with_reason("credential-profile-contamination"));
+                }
+                if api_key_present && auth_token_present {
+                    return Err(WebFrameworkError::invalid_credentials(
+                        "open-api bearer-flexible routes do not accept mixed credential headers",
+                    )
+                    .with_reason("credential-profile-contamination"));
+                }
+                if api_key_present || oauth_present {
+                    return Ok(Some(OpenApiAuthScheme::OAuthBearer));
+                }
+                return Ok(None);
+            }
             Some(RouteAuth::OpenApiFlexible) | None => {}
             Some(
                 RouteAuth::Public
@@ -216,6 +324,7 @@ pub fn allowed_open_api_schemes(route_auth: RouteAuth) -> &'static [OpenApiAuthS
         RouteAuth::ApiKey => &[OpenApiAuthScheme::ApiKey],
         RouteAuth::OAuth => &[OpenApiAuthScheme::OAuthBearer],
         RouteAuth::OpenApiFlexible => &[OpenApiAuthScheme::ApiKey, OpenApiAuthScheme::OAuthBearer],
+        RouteAuth::OpenApiBearerFlexible => &[OpenApiAuthScheme::OAuthBearer],
         RouteAuth::ApiKeyOrDualToken => &[OpenApiAuthScheme::ApiKey, OpenApiAuthScheme::DualToken],
         RouteAuth::Public
         | RouteAuth::BootstrapBody
@@ -384,11 +493,71 @@ mod tests {
         assert_eq!("100001", principal.tenant_id());
     }
 
+    #[test]
+    fn prefixed_classifier_distinguishes_api_keys_from_auth_tokens() {
+        let classifier = PrefixedOpenApiBearerCredentialClassifier::default();
+        assert_eq!(
+            OpenApiCredentialKind::ApiKey,
+            classifier.classify("sk-0123456789abcdef")
+        );
+        assert_eq!(
+            OpenApiCredentialKind::ApiKey,
+            classifier.classify("sp-0123456789abcdef")
+        );
+        assert_eq!(
+            OpenApiCredentialKind::AuthToken,
+            classifier.classify("eyJhbGciOiJIUzI1NiJ9.eyJ0ZW5hbnQiOiIxIn0.signature")
+        );
+        assert_eq!(
+            OpenApiCredentialKind::AuthToken,
+            classifier.classify("random-non-prefixed-value")
+        );
+    }
+
+    #[test]
+    fn classifier_prefixes_are_extensible_and_overridable() {
+        let classifier = PrefixedOpenApiBearerCredentialClassifier {
+            api_key_prefixes: vec!["ak-".to_string()],
+        };
+        assert_eq!(
+            OpenApiCredentialKind::ApiKey,
+            classifier.classify("ak-custom-prefixed-key")
+        );
+        assert_eq!(
+            OpenApiCredentialKind::AuthToken,
+            classifier.classify("sk-not-an-api-key-with-this-policy")
+        );
+    }
+
     #[tokio::test]
-    async fn resolve_open_api_with_oauth_bearer_claims() {
+    async fn bearer_flexible_routes_api_key_prefix_through_api_key_channel() {
+        let resolver = DefaultWebRequestContextResolver::default();
+        let credentials = WebCallCredentials {
+            auth_token: None,
+            access_token: None,
+            api_key: None,
+            ingress_token: None,
+            oauth_bearer: Some(
+                "sk-claims;api_key_id=key-1;tenant_id=100001;user_id=30;app_id=appbase".to_owned(),
+            ),
+            agent_token: None,
+        };
+        let (auth_mode, principal) = resolve_open_api_bearer_flexible(
+            &credentials,
+            &PrefixedOpenApiBearerCredentialClassifier::default(),
+            &resolver,
+        )
+        .await
+        .expect("api key channel resolves");
+        assert_eq!(WebAuthMode::ApiKey, auth_mode);
+        assert_eq!("100001", principal.tenant_id());
+    }
+
+    #[tokio::test]
+    async fn bearer_flexible_routes_non_prefixed_credential_through_auth_token_channel() {
         let resolver = DefaultOpenApiWebRequestContextResolver::default();
         let credentials = WebCallCredentials {
-            auth_token: Some("oauth-token".to_owned()),
+            auth_token: Some("auth-token".to_owned()),
             access_token: None,
             api_key: None,
             ingress_token: None,
@@ -397,16 +566,38 @@ mod tests {
             ),
             agent_token: None,
         };
-        let (auth_mode, principal) = resolve_open_api_request_context(
+        let (auth_mode, principal) = resolve_open_api_bearer_flexible(
             &credentials,
-            &HeaderMap::new(),
-            Some(RouteAuth::OpenApiFlexible),
-            &DefaultOpenApiCredentialSchemeDetector::default(),
+            &PrefixedOpenApiBearerCredentialClassifier::default(),
             &resolver,
         )
         .await
-        .expect("resolved");
+        .expect("auth token channel resolves");
         assert_eq!(WebAuthMode::OAuth, auth_mode);
         assert_eq!("100001", principal.tenant_id());
+    }
+
+    #[tokio::test]
+    async fn bearer_flexible_missing_credentials_fails_closed() {
+        let resolver = DefaultOpenApiWebRequestContextResolver::default();
+        let credentials = WebCallCredentials {
+            auth_token: None,
+            access_token: None,
+            api_key: None,
+            ingress_token: None,
+            oauth_bearer: None,
+            agent_token: None,
+        };
+        let error = resolve_open_api_bearer_flexible(
+            &credentials,
+            &PrefixedOpenApiBearerCredentialClassifier::default(),
+            &resolver,
+        )
+        .await
+        .expect_err("missing credentials must fail");
+        assert_eq!(
+            crate::error::WebFrameworkErrorKind::MissingCredentials,
+            error.kind
+        );
     }
 }

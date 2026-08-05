@@ -81,6 +81,20 @@ pub trait WebRequestContextResolver: Clone + Send + Sync + 'static {
         ))
     }
 
+    /// Single bearer credential treated as an SDKWork auth token for
+    /// [`RouteAuth::OpenApiBearerFlexible`] routes (when the classifier does
+    /// not match an API key prefix). Default returns dependency-unavailable;
+    /// resolvers that authenticate user auth tokens (e.g. IAM) override this.
+    async fn resolve_bearer_auth_token(
+        &self,
+        raw_bearer_token: &str,
+    ) -> Result<WebRequestPrincipal, WebFrameworkError> {
+        let _ = raw_bearer_token;
+        Err(WebFrameworkError::dependency_unavailable(
+            "auth token bearer resolution is not configured; override resolve_bearer_auth_token",
+        ))
+    }
+
     /// Resolves a vendor-compatibility credential through an approved protocol adapter.
     async fn resolve_compatibility(
         &self,
@@ -436,6 +450,13 @@ where
             .permission_scope(record.permission_scope)
             .subject_type(parse_subject_type(record.subject_type.as_deref()))
             .build())
+    }
+
+    async fn resolve_bearer_auth_token(
+        &self,
+        raw_bearer_token: &str,
+    ) -> Result<WebRequestPrincipal, WebFrameworkError> {
+        self.resolve_oauth_bearer(raw_bearer_token).await
     }
 }
 

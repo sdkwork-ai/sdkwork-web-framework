@@ -70,6 +70,11 @@ pub enum RouteAuth {
     OpenApiFlexible,
     /// Header-driven open-api auth: API key or a complete auth/access token pair.
     ApiKeyOrDualToken,
+    /// Header-driven open-api auth: a single `Authorization: Bearer` credential
+    /// is classified by [`OpenApiBearerCredentialClassifier`] — API keys
+    /// (`sk-`/`sp-` prefixed) resolve through the API key channel, any other
+    /// value is treated as an SDKWork auth token.
+    OpenApiBearerFlexible,
     /// Refresh-token proof supplied in the typed request body without credential headers.
     RefreshToken,
     /// Agent bootstrap token (`X-SDKWork-Agent-Token`) on backend-api agent routes.
@@ -543,6 +548,7 @@ impl RouteAuth {
             Self::IngressToken => "ingress-token",
             Self::OAuth => "oauth",
             Self::OpenApiFlexible => "open-api-flexible",
+            Self::OpenApiBearerFlexible => "open-api-bearer-flexible",
             Self::ApiKeyOrDualToken => "api-key-or-dual-token",
             Self::AgentToken => "agent-token",
             Self::Compatibility => "compatibility",

@@ -5,7 +5,9 @@ use crate::cors_policy::CorsPolicyContext;
 use crate::error::{WebFrameworkError, WebFrameworkErrorKind};
 use crate::extractors::header_value;
 use crate::idempotency::{resolve_idempotency_fingerprint, IdempotencyBeginOutcome};
-use crate::open_api_auth::resolve_open_api_request_context;
+use crate::open_api_auth::{
+    resolve_open_api_bearer_flexible, resolve_open_api_request_context,
+};
 use crate::policies::{AuditFact, SecurityEvent, SecurityEventKind};
 use crate::problem::redact_path_template;
 use crate::rate_limit_policy::RateLimitPolicyContext;
@@ -697,6 +699,20 @@ where
                     return Ok(());
                 }
                 _ => {}
+            }
+            // OpenApiBearerFlexible: a single bearer credential is classified
+            // into the API key channel (sk-/sp- prefixes) or the auth token
+            // channel, resolved by the configured classifier.
+            if state.route_auth == Some(RouteAuth::OpenApiBearerFlexible) {
+                let (auth_mode, principal) = resolve_open_api_bearer_flexible(
+                    &state.credentials,
+                    runtime.open_api_bearer_classifier.as_ref(),
+                    &runtime.resolver,
+                )
+                .await?;
+                state.auth_mode = auth_mode;
+                state.principal = Some(principal);
+                return Ok(());
             }
             let route_auth = state.route_auth.or_else(|| {
                 if state.credentials.access_token.is_some() {

@@ -184,6 +184,7 @@ fn auth_mode(mode: &str) -> Result<&'static str, String> {
         "ingress-token" => Ok("RouteAuth::IngressToken"),
         "oauth" => Ok("RouteAuth::OAuth"),
         "open-api-flexible" => Ok("RouteAuth::OpenApiFlexible"),
+        "open-api-bearer-flexible" => Ok("RouteAuth::OpenApiBearerFlexible"),
         "api-key-or-dual-token" => Ok("RouteAuth::ApiKeyOrDualToken"),
         "refresh-token" => Ok("RouteAuth::RefreshToken"),
         "agent-token" => Ok("RouteAuth::AgentToken"),

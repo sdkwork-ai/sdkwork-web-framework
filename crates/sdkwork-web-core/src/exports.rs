@@ -67,9 +67,12 @@ pub use crate::metrics::{
     HttpMetricsRegistry, HttpRequestLabels,
 };
 pub use crate::open_api_auth::{
-    allowed_open_api_schemes, default_open_api_scheme_detector, resolve_open_api_request_context,
-    DefaultOpenApiCredentialSchemeDetector, DynOpenApiCredentialSchemeDetector, OpenApiAuthPolicy,
-    OpenApiAuthScheme, OpenApiCredentialSchemeDetector,
+    allowed_open_api_schemes, default_open_api_bearer_classifier, default_open_api_scheme_detector,
+    resolve_open_api_bearer_flexible, resolve_open_api_request_context,
+    DefaultOpenApiCredentialSchemeDetector, DynOpenApiBearerCredentialClassifier,
+    DynOpenApiCredentialSchemeDetector, OpenApiAuthPolicy, OpenApiAuthScheme,
+    OpenApiBearerCredentialClassifier, OpenApiCredentialKind, OpenApiCredentialSchemeDetector,
+    PrefixedOpenApiBearerCredentialClassifier,
 };
 pub use crate::parsers::{
     AccessTokenClaims, AccessTokenParser, ApiKeyCredential, ApiKeyParser, AuthTokenClaims,

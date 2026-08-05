@@ -5,7 +5,10 @@ use crate::extractors::{
     access_token, agent_token, api_key, bearer_token, header_value, idempotency_key, ingress_token,
 };
 use crate::idempotency::IdempotencyResponseRecord;
-use crate::open_api_auth::{default_open_api_scheme_detector, DynOpenApiCredentialSchemeDetector};
+use crate::open_api_auth::{
+    default_open_api_bearer_classifier, default_open_api_scheme_detector,
+    DynOpenApiBearerCredentialClassifier, DynOpenApiCredentialSchemeDetector,
+};
 use crate::policies::{
     AllowAllAuthorizationPolicy, AuditEmitter, AuthorizationPolicy, NoOpAuditEmitter,
     NoOpSecurityEventEmitter, PassThroughTenantIsolationPolicy, SecurityEventEmitter,
@@ -164,6 +167,7 @@ where
     pub route_manifest: Option<HttpRouteManifest>,
     pub metrics: Option<Arc<crate::metrics::HttpMetricsRegistry>>,
     pub open_api_scheme_detector: DynOpenApiCredentialSchemeDetector,
+    pub open_api_bearer_classifier: DynOpenApiBearerCredentialClassifier,
     pub request_timeout: Option<std::time::Duration>,
 }
 
@@ -204,6 +208,7 @@ where
             route_manifest: None,
             metrics: None,
             open_api_scheme_detector: default_open_api_scheme_detector(),
+            open_api_bearer_classifier: default_open_api_bearer_classifier(),
             request_timeout: None,
         }
     }
@@ -362,6 +367,16 @@ where
         detector: DynOpenApiCredentialSchemeDetector,
     ) -> Self {
         self.open_api_scheme_detector = detector;
+        self
+    }
+
+    /// Overrides the bearer credential classifier used by
+    /// [`RouteAuth::OpenApiBearerFlexible`] routes (default: `sk-`/`sp-` prefixes).
+    pub fn with_open_api_bearer_classifier(
+        mut self,
+        classifier: DynOpenApiBearerCredentialClassifier,
+    ) -> Self {
+        self.open_api_bearer_classifier = classifier;
         self
     }
 
