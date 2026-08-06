@@ -19,12 +19,12 @@ sdkwork-routes-web-framework-backend-api.workspace = true
 sdkwork-web-bootstrap = { workspace = true, features = ["admin-api", "sqlx", "redis", "otel"] }
 sdkwork-web-core.workspace = true
 sdkwork-web-framework-admin-repository-sqlx.workspace = true
-sdkwork-web-store-sqlx = { workspace = true, features = ["sqlite"] }
+sdkwork-web-store-sqlx = { workspace = true }
 sdkwork-web-store-redis.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-sqlx = { version = "0.9", features = ["runtime-tokio", "sqlite"] }
+sqlx = { version = "0.9", features = ["runtime-tokio", "postgres"] }
 
 [dev-dependencies]
 axum = { workspace = true }

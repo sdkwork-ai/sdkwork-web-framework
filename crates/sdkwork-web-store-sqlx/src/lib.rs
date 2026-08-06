@@ -30,7 +30,7 @@ pub use bootstrap::{
 };
 
 use sdkwork_database_config::{DatabaseConfig, DatabaseEngine, DeploymentMode};
-use sdkwork_database_sqlx::PoolBuilder;
+use sdkwork_database_sqlx::{DatabasePool, PoolBuilder, PoolContext};
 use sdkwork_web_core::{
     CachingDynamicCorsPolicySource, CachingDynamicRateLimitPolicySource,
     CachingDynamicTenantRuntimeProfileSource, DynamicPolicyCaches, DYNAMIC_POLICY_CACHE_TTL_SECS,
@@ -69,7 +69,13 @@ pub async fn connect_sqlite(
     Ok(pool)
 }
 
-/// Open a PostgreSQL pool through `sdkwork-database-sqlx`, run embedded migrations, and return it.
+/// Open a PostgreSQL pool through `sdkwork-database-sqlx`, apply the module
+/// baseline through the lifecycle orchestrator, and return it.
+///
+/// Initialization state: authoritative PostgreSQL DDL lives in the module
+/// baseline (`database/ddl/baseline/postgres/0001_web_baseline.sql`) and is
+/// applied by `sdkwork-webstore-database-host`; this crate never runs sqlx
+/// migrations on PostgreSQL.
 #[cfg(feature = "postgres")]
 pub async fn connect_postgres(
     database_url: &str,
@@ -84,7 +90,7 @@ pub async fn connect_postgres(
     };
     config.postgres.application_name = Some("sdkwork-web-store".to_owned());
 
-    let db_pool = PoolBuilder::new(config)
+    let db_pool = PoolBuilder::new(config.clone())
         .build()
         .await
         .map_err(|error| sqlx::Error::Configuration(error.to_string().into()))?;
@@ -94,7 +100,13 @@ pub async fn connect_postgres(
         .cloned()
         .ok_or_else(|| sqlx::Error::Configuration("expected postgres pool".into()))?;
 
-    sqlx::migrate!("./migrations").run(&pool).await?;
+    bootstrap::bootstrap_webstore_database(DatabasePool::Postgres(
+        pool.clone(),
+        PoolContext { config },
+    ))
+    .await
+    .map_err(|error| sqlx::Error::Configuration(error.into()))?;
+
     Ok(pool)
 }
 

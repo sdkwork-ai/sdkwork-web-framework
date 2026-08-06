@@ -5,9 +5,7 @@ use crate::cors_policy::CorsPolicyContext;
 use crate::error::{WebFrameworkError, WebFrameworkErrorKind};
 use crate::extractors::header_value;
 use crate::idempotency::{resolve_idempotency_fingerprint, IdempotencyBeginOutcome};
-use crate::open_api_auth::{
-    resolve_open_api_bearer_flexible, resolve_open_api_request_context,
-};
+use crate::open_api_auth::{resolve_open_api_bearer_flexible, resolve_open_api_request_context};
 use crate::policies::{AuditFact, SecurityEvent, SecurityEventKind};
 use crate::problem::redact_path_template;
 use crate::rate_limit_policy::RateLimitPolicyContext;

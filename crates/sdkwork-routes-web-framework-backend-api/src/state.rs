@@ -15,10 +15,6 @@ impl WebFrameworkAdminState {
         Self::from_repository(Arc::new(SqlxWebFrameworkAdminRepository::new(pool)))
     }
 
-    pub fn from_sqlite(pool: sqlx::SqlitePool) -> Self {
-        Self::new(AdminStorePool::Sqlite(pool))
-    }
-
     pub fn from_repository(repository: Arc<dyn WebFrameworkAdminRepository>) -> Self {
         Self {
             service: WebFrameworkAdminService::new(repository),

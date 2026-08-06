@@ -2,7 +2,7 @@
 
 use sdkwork_routes_web_framework_backend_api::ROUTES;
 use sdkwork_web_bootstrap::{
-    connect_sqlite, CompositeReadinessCheck, RedisReadinessCheck, SqliteReadinessCheck,
+    connect_postgres, CompositeReadinessCheck, PgPoolReadinessCheck, RedisReadinessCheck,
     WebFramework, WebFrameworkEnv,
 };
 use sdkwork_web_core::{
@@ -12,11 +12,11 @@ use sdkwork_web_core::{
 };
 use sdkwork_web_framework_admin_repository_sqlx::AdminStorePool;
 use sdkwork_web_store_sqlx::{
-    shared_audit_emitter, shared_dynamic_policy_bundle,
-    shared_idempotency_store as sqlx_idempotency_store,
-    shared_rate_limit_store as sqlx_rate_limit_store, shared_security_event_emitter,
+    shared_audit_emitter_pg, shared_dynamic_policy_bundle_pg,
+    shared_idempotency_store_pg as sqlx_idempotency_store,
+    shared_rate_limit_store_pg as sqlx_rate_limit_store, shared_security_event_emitter_pg,
 };
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 use std::any::Any;
 use std::sync::Arc;
 
@@ -26,7 +26,7 @@ where
     R: WebRequestContextResolver + Clone + Any,
 {
     pub framework: WebFramework<R>,
-    pub pool: SqlitePool,
+    pub pool: PgPool,
 }
 
 /// Assembles the standalone admin/control-plane `WebFramework` profile.
@@ -43,7 +43,7 @@ pub async fn assemble_control_plane(
         .store_url
         .as_deref()
         .filter(|value| !value.trim().is_empty())
-        .unwrap_or("sqlite:./data/web-framework.db?mode=rwc");
+        .unwrap_or("postgres://localhost:5432/web_framework");
     let jwt_secret = env
         .jwt_hs256_secret
         .as_deref()
@@ -63,8 +63,8 @@ pub async fn assemble_control_plane(
         .unwrap_or("bootstrap");
 
     let pool_size = env.store_pool_size.unwrap_or(8);
-    let pool = connect_sqlite(database_url, pool_size).await?;
-    let policy_bundle = shared_dynamic_policy_bundle(pool.clone());
+    let pool = connect_postgres(database_url, pool_size).await?;
+    let policy_bundle = shared_dynamic_policy_bundle_pg(pool.clone());
     let manifest = HttpRouteManifest::new(ROUTES);
     let lookup =
         EnvBootstrapTenantSigningKeyLookup::new(bootstrap_tenant_id, bootstrap_key_id, jwt_secret);
@@ -96,7 +96,7 @@ pub async fn assemble_control_plane(
         )
     };
 
-    let sqlite_readiness = Arc::new(SqliteReadinessCheck::new(pool.clone()))
+    let postgres_readiness = Arc::new(PgPoolReadinessCheck::new(pool.clone()))
         as Arc<dyn sdkwork_web_bootstrap::ReadinessCheck>;
     let readiness: Arc<dyn sdkwork_web_bootstrap::ReadinessCheck> = match env
         .redis_url
@@ -107,11 +107,11 @@ pub async fn assemble_control_plane(
             let redis_readiness = Arc::new(RedisReadinessCheck::new(redis_url)?)
                 as Arc<dyn sdkwork_web_bootstrap::ReadinessCheck>;
             Arc::new(CompositeReadinessCheck::new(vec![
-                sqlite_readiness,
+                postgres_readiness,
                 redis_readiness,
             ]))
         }
-        None => sqlite_readiness,
+        None => postgres_readiness,
     };
 
     let mut builder = WebFramework::builder(resolver)
@@ -126,94 +126,16 @@ pub async fn assemble_control_plane(
         builder = builder.concurrent_admission_store(store);
     }
     let framework = builder
-        .audit_emitter(shared_audit_emitter(pool.clone()))
-        .security_event_emitter(shared_security_event_emitter(pool.clone()))
+        .audit_emitter(shared_audit_emitter_pg(pool.clone()))
+        .security_event_emitter(shared_security_event_emitter_pg(pool.clone()))
         .dynamic_cors_policy_source(policy_bundle.cors_policy_source)
         .dynamic_rate_limit_policy_source(policy_bundle.rate_limit_policy_source)
         .dynamic_tenant_runtime_profile_source(policy_bundle.tenant_runtime_profile_source)
         .readiness_check(readiness)
-        .enable_admin_api(AdminStorePool::Sqlite(pool.clone()))
+        .enable_admin_api(AdminStorePool::Postgres(pool.clone()))
         .admin_policy_caches(policy_bundle.caches)
         .build();
 
     Ok(ControlPlaneAssembly { framework, pool })
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn assembles_sqlite_control_plane_without_redis() {
-        let env = WebFrameworkEnv {
-            store_url: Some("sqlite::memory:".to_owned()),
-            store_pool_size: Some(1),
-            jwt_hs256_secret: Some("test-bootstrap-secret-with-sufficient-length".to_owned()),
-            ..WebFrameworkEnv::default()
-        };
-        let assembly = assemble_control_plane(&env)
-            .await
-            .expect("control plane assembly");
-        let router = assembly.framework.mount_admin_routes(axum::Router::new());
-        assert!(!format!("{router:?}").is_empty());
-    }
-
-    #[tokio::test]
-    async fn control_plane_mount_serves_health_and_readyz() {
-        use axum::body::Body;
-        use axum::http::{Request, StatusCode};
-        use axum::Router;
-        use tower::ServiceExt;
-
-        let env = WebFrameworkEnv {
-            store_url: Some("sqlite::memory:".to_owned()),
-            store_pool_size: Some(1),
-            jwt_hs256_secret: Some("test-bootstrap-secret-with-sufficient-length".to_owned()),
-            ..WebFrameworkEnv::default()
-        };
-        let assembly = assemble_control_plane(&env)
-            .await
-            .expect("control plane assembly");
-        let app = assembly
-            .framework
-            .mount_service_routes(assembly.framework.mount_admin_routes(Router::new()));
-
-        let health = app
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .uri("/healthz")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .expect("healthz");
-        assert_eq!(StatusCode::OK, health.status());
-
-        let ready = app
-            .oneshot(
-                Request::builder()
-                    .uri("/readyz")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .expect("readyz");
-        assert_eq!(StatusCode::OK, ready.status());
-    }
-
-    #[tokio::test]
-    async fn rejects_missing_jwt_secret() {
-        let env = WebFrameworkEnv {
-            store_url: Some("sqlite::memory:".to_owned()),
-            ..WebFrameworkEnv::default()
-        };
-        let result = assemble_control_plane(&env).await;
-        assert!(result.is_err());
-        assert!(result
-            .err()
-            .expect("error")
-            .to_string()
-            .contains("JWT_HS256_SECRET"));
-    }
-}

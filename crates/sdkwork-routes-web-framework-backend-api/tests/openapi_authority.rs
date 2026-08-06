@@ -405,6 +405,7 @@ fn auth_mode_label(auth: sdkwork_web_contract::RouteAuth) -> &'static str {
         RouteAuth::ApiKey => "api-key",
         RouteAuth::OAuth => "oauth",
         RouteAuth::OpenApiFlexible => "open-api-flexible",
+        RouteAuth::OpenApiBearerFlexible => "open-api-bearer-flexible",
         RouteAuth::ApiKeyOrDualToken => "api-key-or-dual-token",
         RouteAuth::RefreshToken => "refresh-token",
         // AgentToken maps to canonical api-key auth-mode (API_SPEC §19).

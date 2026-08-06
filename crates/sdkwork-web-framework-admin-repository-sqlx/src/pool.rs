@@ -1,15 +1,15 @@
-//! Admin control-plane SQL pool — SQLite (dev/standalone) and PostgreSQL (HA production).
+//! Admin control-plane SQL pool — PostgreSQL (HA production; DATABASE_SPEC:
+//! authoritative-server persistence is PostgreSQL-only).
 
 #[derive(Clone)]
 pub enum AdminStorePool {
-    Sqlite(sqlx::SqlitePool),
     #[cfg(feature = "postgres")]
     Postgres(sqlx::PgPool),
 }
 
 impl AdminStorePool {
     pub fn is_sqlite(&self) -> bool {
-        matches!(self, Self::Sqlite(_))
+        false
     }
 
     pub fn is_postgres(&self) -> bool {
@@ -25,12 +25,6 @@ impl AdminStorePool {
 
     pub fn is_distributed_ha(&self) -> bool {
         self.is_postgres()
-    }
-}
-
-impl From<sqlx::SqlitePool> for AdminStorePool {
-    fn from(pool: sqlx::SqlitePool) -> Self {
-        Self::Sqlite(pool)
     }
 }
 

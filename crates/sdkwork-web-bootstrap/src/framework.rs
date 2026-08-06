@@ -245,8 +245,9 @@ where
     pub fn enable_admin_api(mut self, pool: AdminStorePool) -> Self {
         if self.readiness_check.is_none() {
             self.readiness_check = Some(match pool.clone() {
-                AdminStorePool::Sqlite(sqlite) => {
-                    Arc::new(crate::sqlx_readiness::SqliteReadinessCheck::new(sqlite))
+                // 服务端权威持久化仅支持 PostgreSQL（DATABASE_SPEC：authoritative-server）
+                AdminStorePool::Postgres(pool) => {
+                    Arc::new(crate::sqlx_readiness::PgPoolReadinessCheck::new(pool))
                 }
             });
         }

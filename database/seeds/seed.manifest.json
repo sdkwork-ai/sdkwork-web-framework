@@ -22,7 +22,9 @@
       }
     },
     "standard": {
-      "common": [],
+      "common": [
+        "001_bootstrap.sql"
+      ],
       "locales": {
         "zh-CN": []
       }

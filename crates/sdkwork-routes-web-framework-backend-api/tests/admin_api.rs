@@ -7,23 +7,25 @@ use sdkwork_routes_web_framework_backend_api::ROUTES;
 use sdkwork_web_axum::with_web_request_context;
 use sdkwork_web_core::DefaultWebRequestContextResolver;
 use sdkwork_web_core::{HttpRouteManifest, ManifestAuthorizationPolicy};
-use sdkwork_web_store_sqlx::connect_sqlite;
+use sdkwork_web_store_sqlx::connect_postgres;
 use sdkwork_web_test_utils::{fixtures, TestRuntimeBuilder};
 use std::sync::Arc;
 use tower::ServiceExt;
 
-async fn test_pool() -> sqlx::SqlitePool {
-    connect_sqlite("sqlite::memory:", 1).await.expect("pool")
+async fn test_pool() -> Option<sqlx::PgPool> {
+    // 服务端测试必须使用 PostgreSQL（DATABASE_SPEC：authoritative-server）
+    let url = std::env::var("SDKWORK_DATABASE_TEST_POSTGRES_URL").ok()?;
+    connect_postgres(&url, 1).await.ok()
 }
 
-fn protected_app(pool: sqlx::SqlitePool) -> Router {
+fn protected_app(pool: sqlx::PgPool) -> Router {
     let manifest = HttpRouteManifest::new(ROUTES);
     let layer = TestRuntimeBuilder::new(DefaultWebRequestContextResolver::default())
         .build_layer()
         .with_authorization_policy(Arc::new(ManifestAuthorizationPolicy::new(manifest)));
     with_web_request_context(
         build_admin_router(
-            sdkwork_web_framework_admin_repository_sqlx::AdminStorePool::Sqlite(pool.clone()),
+            sdkwork_web_framework_admin_repository_sqlx::AdminStorePool::Postgres(pool.clone()),
         ),
         layer,
     )
@@ -86,7 +88,10 @@ fn list_items(payload: &serde_json::Value) -> Vec<&serde_json::Value> {
 
 #[tokio::test]
 async fn admin_api_rejects_unauthenticated_requests() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = protected_app(pool);
     let response = app
         .oneshot(
@@ -102,7 +107,10 @@ async fn admin_api_rejects_unauthenticated_requests() {
 
 #[tokio::test]
 async fn admin_api_lists_runtime_defaults() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = protected_app(pool);
     let response = app
         .oneshot(dual_token_request(
@@ -117,7 +125,10 @@ async fn admin_api_lists_runtime_defaults() {
 
 #[tokio::test]
 async fn admin_api_upserts_cors_policy() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = protected_app(pool);
     let response = app
         .oneshot(
@@ -136,7 +147,10 @@ async fn admin_api_upserts_cors_policy() {
 
 #[tokio::test]
 async fn admin_api_upserts_rate_limit_policy() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = protected_app(pool);
     let response = app
         .oneshot(dual_token_request(
@@ -155,7 +169,10 @@ async fn admin_api_upserts_rate_limit_policy() {
 
 #[tokio::test]
 async fn admin_api_upserts_tenant_runtime_profile() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = protected_app(pool);
     let response = app
         .oneshot(dual_token_request(
@@ -177,7 +194,10 @@ async fn admin_api_upserts_tenant_runtime_profile() {
 
 #[tokio::test]
 async fn admin_api_rejects_cross_tenant_cors_upsert() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = protected_app(pool);
     let response = app
         .oneshot(
@@ -196,7 +216,10 @@ async fn admin_api_rejects_cross_tenant_cors_upsert() {
 
 #[tokio::test]
 async fn admin_api_rejects_unsafe_prod_cors_policy() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = protected_app(pool);
     let response = app
         .oneshot(
@@ -215,7 +238,10 @@ async fn admin_api_rejects_unsafe_prod_cors_policy() {
 
 #[tokio::test]
 async fn admin_api_rejects_invalid_tenant_runtime_profile() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = protected_app(pool);
     let response = app
         .oneshot(dual_token_request(
@@ -230,7 +256,10 @@ async fn admin_api_rejects_invalid_tenant_runtime_profile() {
 
 #[tokio::test]
 async fn admin_api_rejects_invalid_rate_limit_policy() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = protected_app(pool);
     let response = app
         .oneshot(
@@ -249,7 +278,10 @@ async fn admin_api_rejects_invalid_rate_limit_policy() {
 
 #[tokio::test]
 async fn admin_api_registers_control_node() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = protected_app(pool);
     let response = app
         .oneshot(dual_token_request_with_auth(
@@ -265,7 +297,10 @@ async fn admin_api_registers_control_node() {
 
 #[tokio::test]
 async fn admin_api_reregister_control_node_returns_ok_and_preserves_created_at() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = protected_app(pool.clone());
     let body =
         r#"{"nodeId":"node-reregister","baseUrl":"https://node.example","environment":"prod"}"#;
@@ -320,7 +355,10 @@ async fn admin_api_reregister_control_node_returns_ok_and_preserves_created_at()
 
 #[tokio::test]
 async fn admin_api_heartbeats_and_deletes_control_node() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = protected_app(pool);
     let register = app
         .clone()
@@ -360,7 +398,10 @@ async fn admin_api_heartbeats_and_deletes_control_node() {
 
 #[tokio::test]
 async fn admin_api_returns_not_found_for_missing_control_node() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = protected_app(pool);
     let response = app
         .oneshot(dual_token_request_with_auth(
@@ -381,7 +422,10 @@ async fn admin_api_returns_not_found_for_missing_control_node() {
 
 #[tokio::test]
 async fn admin_api_audit_events_exclude_null_tenant_rows_for_tenant_admin() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     sqlx::query(
         "INSERT INTO web_audit_event (request_id, tenant_id, user_id, api_surface, path, method, operation_id, status_code, duration_ms, created_at) \
          VALUES ('req-global', NULL, NULL, 'backendApi', '/healthz', 'GET', NULL, 200, 1, 1)",
@@ -416,7 +460,10 @@ async fn admin_api_audit_events_exclude_null_tenant_rows_for_tenant_admin() {
 
 #[tokio::test]
 async fn admin_api_platform_read_can_list_global_audit_rows() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     sqlx::query(
         "INSERT INTO web_audit_event (request_id, tenant_id, user_id, api_surface, path, method, operation_id, status_code, duration_ms, created_at) \
          VALUES ('req-global', NULL, NULL, 'backendApi', '/healthz', 'GET', NULL, 200, 1, 1)",
@@ -444,7 +491,10 @@ async fn admin_api_platform_read_can_list_global_audit_rows() {
 
 #[tokio::test]
 async fn admin_api_maps_database_errors_to_503_problem_json() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = protected_app(pool.clone());
     pool.close().await;
     let response = app
@@ -462,7 +512,10 @@ async fn admin_api_maps_database_errors_to_503_problem_json() {
 
 #[tokio::test]
 async fn admin_api_rejects_invalid_control_node_base_url() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = protected_app(pool);
     let response = app
         .oneshot(dual_token_request_with_auth(
@@ -478,7 +531,10 @@ async fn admin_api_rejects_invalid_control_node_base_url() {
 
 #[tokio::test]
 async fn admin_api_rejects_tenant_admin_on_control_plane_routes() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = protected_app(pool);
     for uri in [
         paths::security_events::PATH,
@@ -509,7 +565,10 @@ async fn admin_api_rejects_tenant_admin_on_control_plane_routes() {
 async fn admin_handler_problem_includes_trace_id_from_context() {
     use sdkwork_web_core::{REQUEST_ID_HEADER, TRACEPARENT_HEADER};
 
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = protected_app(pool);
     let response = app
         .oneshot(
@@ -547,7 +606,10 @@ async fn admin_handler_problem_includes_trace_id_from_context() {
 
 #[tokio::test]
 async fn admin_api_rejects_oversized_cors_origin_list() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = protected_app(pool);
     let origins = (0..257)
         .map(|index| format!("https://origin-{index}.example"))
@@ -572,7 +634,10 @@ async fn admin_api_rejects_oversized_cors_origin_list() {
 
 #[tokio::test]
 async fn admin_api_rejects_empty_tenant_id_on_upsert() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = protected_app(pool);
     let response = app
         .oneshot(dual_token_request(
@@ -589,7 +654,10 @@ async fn admin_api_rejects_empty_tenant_id_on_upsert() {
 
 #[tokio::test]
 async fn admin_api_rejects_zero_page_size() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = protected_app(pool);
     let response = app
         .oneshot(dual_token_request(
@@ -602,7 +670,7 @@ async fn admin_api_rejects_zero_page_size() {
     assert_eq!(StatusCode::BAD_REQUEST, response.status());
 }
 
-async fn seed_tenant_audit_rows(pool: &sqlx::SqlitePool, count: usize) {
+async fn seed_tenant_audit_rows(pool: &sqlx::PgPool, count: usize) {
     for index in 0..count {
         sqlx::query(
             "INSERT INTO web_audit_event (request_id, tenant_id, user_id, api_surface, path, method, operation_id, status_code, duration_ms, created_at) \
@@ -619,7 +687,10 @@ async fn seed_tenant_audit_rows(pool: &sqlx::SqlitePool, count: usize) {
 
 #[tokio::test]
 async fn admin_api_defaults_page_size_to_twenty() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     seed_tenant_audit_rows(&pool, 60).await;
     let app = protected_app(pool);
     let response = app
@@ -638,7 +709,10 @@ async fn admin_api_defaults_page_size_to_twenty() {
 
 #[tokio::test]
 async fn admin_api_rejects_page_size_above_two_hundred() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     seed_tenant_audit_rows(&pool, 210).await;
     let app = protected_app(pool);
     let response = app
@@ -654,7 +728,10 @@ async fn admin_api_rejects_page_size_above_two_hundred() {
 
 #[tokio::test]
 async fn admin_api_keyset_page_size_two_hundred_returns_up_to_two_hundred() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     seed_tenant_audit_rows(&pool, 210).await;
     let app = protected_app(pool);
     let response = app
@@ -674,7 +751,10 @@ async fn admin_api_keyset_page_size_two_hundred_returns_up_to_two_hundred() {
 
 #[tokio::test]
 async fn admin_api_rejects_allow_all_origins_without_credentials_in_prod() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = protected_app(pool);
     let response = app
         .oneshot(dual_token_request_with_auth(
@@ -692,7 +772,10 @@ async fn admin_api_rejects_allow_all_origins_without_credentials_in_prod() {
 
 #[tokio::test]
 async fn admin_api_platform_read_can_upsert_other_tenant_cors_policy() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = protected_app(pool);
     let response = app
         .oneshot(dual_token_request_with_auth(
@@ -712,7 +795,10 @@ async fn admin_api_platform_read_can_upsert_other_tenant_cors_policy() {
 
 #[tokio::test]
 async fn admin_api_lists_cors_policies() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = protected_app(pool);
     let response = app
         .oneshot(dual_token_request("GET", paths::cors::PATH, None))
@@ -724,7 +810,10 @@ async fn admin_api_lists_cors_policies() {
 
 #[tokio::test]
 async fn admin_api_lists_rate_limit_policies() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = protected_app(pool);
     let response = app
         .oneshot(dual_token_request("GET", paths::rate_limit::PATH, None))
@@ -736,7 +825,10 @@ async fn admin_api_lists_rate_limit_policies() {
 
 #[tokio::test]
 async fn admin_api_lists_tenant_runtime_profiles() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = protected_app(pool);
     let response = app
         .oneshot(dual_token_request("GET", paths::tenant_runtime::PATH, None))
@@ -748,7 +840,10 @@ async fn admin_api_lists_tenant_runtime_profiles() {
 
 #[tokio::test]
 async fn admin_api_lists_control_nodes() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = protected_app(pool);
     let response = app
         .oneshot(dual_token_request_with_auth(
@@ -765,7 +860,10 @@ async fn admin_api_lists_control_nodes() {
 
 #[tokio::test]
 async fn admin_api_lists_optional_features_snapshot() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = protected_app(pool);
     let response = app
         .oneshot(dual_token_request(
@@ -780,7 +878,10 @@ async fn admin_api_lists_optional_features_snapshot() {
 
 #[tokio::test]
 async fn admin_api_control_plane_can_list_security_events() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = protected_app(pool);
     let response = app
         .oneshot(dual_token_request_with_auth(
@@ -804,7 +905,10 @@ async fn admin_api_control_plane_can_list_security_events() {
 async fn admin_api_security_event_scope_narrows_to_requested_tenant() {
     // SECURITY_SPEC §5.1 / DATABASE_SPEC §6.3：tenant_id 隔离字段生效，
     // control-plane 可下钻到指定租户视图。
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     sqlx::query(
         "INSERT INTO web_security_event \
          (kind, request_id, tenant_id, path, method, api_surface, origin, detail, created_at, expires_at) \
@@ -853,7 +957,10 @@ async fn admin_api_security_event_scope_narrows_to_requested_tenant() {
 #[tokio::test]
 async fn admin_api_security_event_rejects_tenant_admin() {
     // SECURITY_SPEC §5.1：安全事件为平台级敏感数据，tenant_admin 不可访问。
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = protected_app(pool);
     let response = app
         .oneshot(dual_token_request(
@@ -868,7 +975,10 @@ async fn admin_api_security_event_rejects_tenant_admin() {
 
 #[tokio::test]
 async fn admin_api_rejects_cross_tenant_audit_query_for_tenant_admin() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = protected_app(pool);
     let uri = format!(
         "{}?tenant_id=100002&page_size=10",
@@ -883,7 +993,10 @@ async fn admin_api_rejects_cross_tenant_audit_query_for_tenant_admin() {
 
 #[tokio::test]
 async fn admin_api_rejects_invalid_control_node_id_in_path() {
-    let pool = test_pool().await;
+    let Some(pool) = test_pool().await else {
+        eprintln!("SKIP: SDKWORK_DATABASE_TEST_POSTGRES_URL is not configured");
+        return;
+    };
     let app = protected_app(pool);
     let response = app
         .oneshot(dual_token_request_with_auth(
