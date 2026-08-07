@@ -273,7 +273,7 @@ async fn csrf_cookie_with_untrusted_referer_is_rejected() {
 }
 
 #[tokio::test]
-async fn backend_api_rejects_personal_login_scope_session() {
+async fn backend_api_allows_personal_login_scope_session() {
     use sdkwork_web_core::EnforcePrincipalTenantIsolationPolicy;
 
     let (auth, access) = dual_token_fixture_headers();
@@ -288,12 +288,15 @@ async fn backend_api_rejects_personal_login_scope_session() {
         .body(Body::empty())
         .expect("request");
     let mut state = WebCallState::from_request(&request);
-    let error = chain
+    chain
         .before(&mut state, &mut request, &runtime)
         .await
-        .expect_err("personal session on backend");
-    assert_eq!(WebFrameworkErrorKind::Forbidden, error.kind);
-    assert!(error.message.contains("personal sessions"));
+        .expect("personal session on backend");
+    let principal = state.principal.as_ref().expect("principal");
+    assert_eq!(
+        sdkwork_web_core::WebLoginScope::Tenant,
+        principal.tenancy.login_scope
+    );
 }
 
 #[tokio::test]

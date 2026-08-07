@@ -169,13 +169,6 @@ impl TenantIsolationPolicy for EnforcePrincipalTenantIsolationPolicy {
         ctx.require_principal()?;
         ctx.require_tenant_id()?;
         ctx.require_app_id()?;
-        if ctx.api_surface == crate::request_context::WebApiSurface::BackendApi
-            && ctx.login_scope() == Some(crate::request_context::WebLoginScope::Tenant)
-        {
-            return Err(WebFrameworkError::forbidden(
-                "backend API rejects personal sessions (login_scope TENANT)",
-            ));
-        }
         Ok(())
     }
 }
