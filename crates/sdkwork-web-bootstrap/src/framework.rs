@@ -52,6 +52,7 @@ where
     admin_policy_caches: Option<Arc<DynamicPolicyCaches>>,
     route_manifest: Option<HttpRouteManifest>,
     metrics: Option<Arc<HttpMetricsRegistry>>,
+    skip_infra_metrics: bool,
     readiness_check: Option<Arc<dyn ReadinessCheck>>,
     request_timeout: Option<Duration>,
     shutdown_grace_period: Option<Duration>,
@@ -67,6 +68,7 @@ where
     pub metrics: Arc<HttpMetricsRegistry>,
     readiness_check: Option<Arc<dyn ReadinessCheck>>,
     contract_fallback: Option<ContractFallbackConfig>,
+    skip_infra_metrics: bool,
     request_timeout: Option<Duration>,
     shutdown_grace_period: Option<Duration>,
     lifecycle: Arc<dyn WebFrameworkLifecycle>,
@@ -102,6 +104,9 @@ where
 
     pub fn service_router_config(&self) -> ServiceRouterConfig {
         let mut config = ServiceRouterConfig::default().with_metrics(self.metrics.clone());
+        if self.skip_infra_metrics {
+            config = config.skip_metrics();
+        }
         if let Some(readiness) = self.readiness_check.clone() {
             config = config.with_readiness_check(readiness);
         }
@@ -191,6 +196,7 @@ where
             admin_policy_caches: None,
             route_manifest: None,
             metrics: None,
+            skip_infra_metrics: false,
             readiness_check: None,
             request_timeout: None,
             shutdown_grace_period: None,
@@ -339,6 +345,15 @@ where
 
     pub fn metrics_registry(mut self, metrics: Arc<HttpMetricsRegistry>) -> Self {
         self.metrics = Some(metrics);
+        self
+    }
+
+    /// Skip the framework's `/metrics` infra route so a process-level
+    /// observability surface can own it instead (HEALTH_CHECK_SPEC metrics
+    /// ownership). Applies to [`WebFrameworkBuilder::service_router_config`]
+    /// and every mount helper derived from it.
+    pub fn skip_infra_metrics(mut self) -> Self {
+        self.skip_infra_metrics = true;
         self
     }
 
@@ -504,6 +519,7 @@ where
             metrics,
             readiness_check: self.readiness_check,
             contract_fallback,
+            skip_infra_metrics: self.skip_infra_metrics,
             request_timeout: self.request_timeout,
             shutdown_grace_period: self.shutdown_grace_period,
             lifecycle: self

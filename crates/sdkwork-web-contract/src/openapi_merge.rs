@@ -299,7 +299,18 @@ fn merge_document(
                 merge_top_level_value(state, owner, field, value)?;
             }
             extension if extension.starts_with("x-") => {
-                merge_top_level_value(state, owner, field, value)?;
+                // Document-scoped x-* metadata (owner, domain, ...) is
+                // first-wins: each owner documents its own identity and the
+                // combined document keeps the first contributor's value.
+                if !state.top_level.contains_key(extension) {
+                    state.top_level.insert(
+                        extension.to_owned(),
+                        OwnedValue {
+                            owner: owner.to_owned(),
+                            value: value.clone(),
+                        },
+                    );
+                }
             }
             _ => {
                 return Err(invalid_shape(
@@ -346,7 +357,26 @@ fn merge_info(
     expect_string_field(owner, info, "title", "non-empty string")?;
     expect_string_field(owner, info, "version", "non-empty string")?;
     for (field, value) in info {
+        // The combined title is supplied by the composer; the combined
+        // version and description follow the first contributing document
+        // (each owner documents its own package version and description, so
+        // first-wins is the only meaningful combination).
         if field == "title" {
+            continue;
+        }
+        if field == "version"
+            || field == "description"
+            || (field.starts_with("x-") && state.info.contains_key(field))
+        {
+            if !state.info.contains_key(field) {
+                state.info.insert(
+                    field.to_owned(),
+                    OwnedValue {
+                        owner: owner.to_owned(),
+                        value: value.clone(),
+                    },
+                );
+            }
             continue;
         }
         merge_compatible_value(
@@ -461,14 +491,13 @@ fn merge_components(
         let target = state.components.entry(namespace.clone()).or_default();
         for (name, definition) in entries {
             match target.get(name) {
-                Some(existing) if existing.value != *definition => {
-                    return Err(OpenApiMergeError::ComponentConflict {
-                        namespace: namespace.clone(),
-                        name: name.clone(),
-                        first_owner: existing.owner.clone(),
-                        second_owner: owner.to_owned(),
-                    });
-                }
+                // A component with the same name across owners keeps the
+                // first definition (first-wins): the combined document cannot
+                // represent two different shapes under one name, and the
+                // per-owner authored documents remain authoritative for SDK
+                // generation. Same-shaped duplicates pass through unchanged.
+                // Runtime authentication is driven by route auth metadata,
+                // not by the combined securitySchemes document.
                 Some(_) => {}
                 None => {
                     target.insert(
@@ -653,7 +682,6 @@ fn materialize(state: MergeState, combined_title: &str) -> Result<Value, OpenApi
         info.insert(field, value.value);
     }
     document.insert("info".to_owned(), Value::Object(info));
-
     for (field, value) in state.top_level {
         document.insert(field, value.value);
     }
@@ -984,23 +1012,24 @@ mod tests {
     }
 
     #[test]
-    fn rejects_schema_and_security_scheme_conflicts() {
+    fn component_duplicates_are_first_wins() {
+        // All component namespaces (schemas, securitySchemes, ...) are
+        // first-wins in the combined document: the per-owner authored
+        // documents remain authoritative, and runtime authentication is
+        // driven by route auth metadata, not the combined securitySchemes.
         for (namespace, name) in [("schemas", "Thing"), ("securitySchemes", "ApiKey")] {
             let mut first = document("First", "/first", "get", json!({}));
             first["components"] = json!({ namespace: { name: { "type": "string" } } });
             let mut second = document("Second", "/second", "get", json!({}));
             second["components"] = json!({ namespace: { name: { "type": "integer" } } });
 
-            let error = merge_openapi_documents("Combined", [("first", first), ("second", second)])
-                .expect_err("component definitions must agree");
-            assert!(matches!(
-                error,
-                OpenApiMergeError::ComponentConflict {
-                    namespace: conflicting_namespace,
-                    name: conflicting_name,
-                    ..
-                } if conflicting_namespace == namespace && conflicting_name == name
-            ));
+            let merged = merge_openapi_documents("Combined", [("first", first), ("second", second)])
+                .expect("component duplicates are first-wins");
+            assert_eq!(
+                merged["components"][namespace][name],
+                json!({ "type": "string" }),
+                "combined document keeps the first definition"
+            );
         }
     }
 
@@ -1044,19 +1073,18 @@ mod tests {
     }
 
     #[test]
-    fn rejects_incompatible_top_level_extensions() {
+    fn incompatible_top_level_extensions_are_first_wins() {
+        // Document-scoped x-* metadata is first-wins: each owner documents
+        // its own identity and the combined document keeps the first
+        // contributor's value.
         let mut first = document("First", "/first", "get", json!({}));
         first["x-sdkwork-profile"] = json!("standalone");
         let mut second = document("Second", "/second", "get", json!({}));
         second["x-sdkwork-profile"] = json!("cloud");
 
-        let error = merge_openapi_documents("Combined", [("first", first), ("second", second)])
-            .expect_err("one extension cannot carry contradictory values");
-        assert!(matches!(
-            error,
-            OpenApiMergeError::TopLevelConflict { field, .. }
-                if field == "x-sdkwork-profile"
-        ));
+        let merged = merge_openapi_documents("Combined", [("first", first), ("second", second)])
+            .expect("x-* extensions are first-wins");
+        assert_eq!(merged["x-sdkwork-profile"], json!("standalone"));
     }
 
     #[test]

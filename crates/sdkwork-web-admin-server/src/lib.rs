@@ -138,4 +138,3 @@ pub async fn assemble_control_plane(
 
     Ok(ControlPlaneAssembly { framework, pool })
 }
-

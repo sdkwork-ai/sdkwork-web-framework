@@ -4,6 +4,14 @@ use std::env;
 
 use sdkwork_web_core::{CorsPolicy, SecurityPolicy, WebEnvironment};
 
+/// Canonical browser CORS allow-list environment key shared by every service.
+///
+/// Deployment configurations set exactly this key; domain-specific legacy keys
+/// (`SDKWORK_<DOMAIN>_CORS_ALLOWED_ORIGINS`, bare `*_CORS_ALLOW_ORIGINS`, ...)
+/// still resolve as a compatibility fallback while emitting a deprecation
+/// warning, and must not be relied on for new deployments.
+pub const SHARED_CORS_ALLOWED_ORIGINS_ENV_KEY: &str = "SDKWORK_CORS_ALLOWED_ORIGINS";
+
 pub fn web_environment_from_env(keys: &[&str]) -> WebEnvironment {
     let value = keys
         .iter()
@@ -16,10 +24,39 @@ pub fn web_environment_from_env(keys: &[&str]) -> WebEnvironment {
     }
 }
 
+/// Resolves the browser CORS allow-list from the environment.
+///
+/// The caller-provided keys are tried first for compatibility with legacy
+/// deployments; the canonical [`SHARED_CORS_ALLOWED_ORIGINS_ENV_KEY`] always
+/// wins when it is set and otherwise acts as the final fallback, so every
+/// service converges on a single configuration key. Matching a legacy key
+/// emits a deprecation warning.
 pub fn cors_allowed_origins_from_env(keys: &[&str]) -> Vec<String> {
-    keys.iter()
-        .find_map(|key| env::var(key).ok())
-        .map(|value| {
+    if let Some(origins) = read_env_list(&[SHARED_CORS_ALLOWED_ORIGINS_ENV_KEY]) {
+        return origins;
+    }
+    if let Some(legacy_key) = keys
+        .iter()
+        .find(|key| **key != SHARED_CORS_ALLOWED_ORIGINS_ENV_KEY && env::var(key).is_ok())
+    {
+        tracing::warn!(
+            key = *legacy_key,
+            "CORS origins configured through a legacy key; set {} instead",
+            SHARED_CORS_ALLOWED_ORIGINS_ENV_KEY,
+        );
+        return read_env_list(&[*legacy_key]).unwrap_or_default();
+    }
+    Vec::new()
+}
+
+/// Resolves the CORS allow-list from the canonical shared key only.
+pub fn cors_allowed_origins_from_process_env() -> Vec<String> {
+    read_env_list(&[SHARED_CORS_ALLOWED_ORIGINS_ENV_KEY]).unwrap_or_default()
+}
+
+fn read_env_list(keys: &[&str]) -> Option<Vec<String>> {
+    keys.iter().find_map(|key| {
+        env::var(key).ok().map(|value| {
             value
                 .split(',')
                 .map(str::trim)
@@ -27,7 +64,7 @@ pub fn cors_allowed_origins_from_env(keys: &[&str]) -> Vec<String> {
                 .map(str::to_owned)
                 .collect()
         })
-        .unwrap_or_default()
+    })
 }
 
 pub fn security_policy_for_environment(

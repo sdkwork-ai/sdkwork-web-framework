@@ -91,6 +91,7 @@ fn row_to_policy(row: Option<CorsPolicyRow>) -> Result<Option<CorsPolicy>, WebFr
         allowed_origins,
         allowed_methods: CorsPolicy::default().allowed_methods,
         allowed_headers: CorsPolicy::default().allowed_headers,
+        expose_headers: CorsPolicy::default().expose_headers,
         allow_credentials: row.allow_credentials != 0,
     }))
 }

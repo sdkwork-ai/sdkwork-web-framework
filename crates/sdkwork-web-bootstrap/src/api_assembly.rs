@@ -102,6 +102,14 @@ impl ApiAssemblyContribution {
         domain_context_injectors: Vec<Arc<dyn DomainContextInjector>>,
         readiness_check: Arc<dyn ReadinessCheck>,
     ) -> Result<Self, String> {
+        // Stamp per-operation ownership/authority extensions so every
+        // contribution (authored files and dynamically built documents alike)
+        // satisfies ownership validation. Idempotent for documents that were
+        // already enriched by from_openapi_documents. Document-scoped
+        // ownership stays removed, matching from_openapi_documents semantics.
+        let mut openapi = enrich_owned_openapi_document(openapi, owner, route_manifest.routes())
+            .map_err(|error| format!("{owner} OpenAPI enrichment failed: {error}"))?;
+        remove_document_scoped_ownership(&mut openapi);
         let contribution = Self {
             owner,
             router,

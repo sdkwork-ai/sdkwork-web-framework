@@ -15,6 +15,9 @@ pub struct CorsPolicy {
     pub allowed_origins: Vec<String>,
     pub allowed_methods: Vec<Method>,
     pub allowed_headers: Vec<String>,
+    /// Response headers exposed to browser clients (written as
+    /// `Access-Control-Expose-Headers` when non-empty).
+    pub expose_headers: Vec<String>,
     pub allow_credentials: bool,
 }
 
@@ -136,6 +139,7 @@ impl Default for CorsPolicy {
                 "x-api-key".to_owned(),
                 "x-sdkwork-access-token".to_owned(),
             ],
+            expose_headers: Vec::new(),
             allow_credentials: true,
         }
     }
@@ -421,6 +425,13 @@ impl CorsPolicy {
                 HeaderName::from_static("access-control-allow-methods"),
                 value,
             );
+        }
+        if !self.expose_headers.is_empty() {
+            if let Ok(value) = HeaderValue::from_str(&self.expose_headers.join(", ")) {
+                response
+                    .headers_mut()
+                    .insert(HeaderName::from_static("access-control-expose-headers"), value);
+            }
         }
     }
 

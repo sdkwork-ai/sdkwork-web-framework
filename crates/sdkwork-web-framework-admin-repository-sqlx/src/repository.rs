@@ -3,7 +3,8 @@ use crate::models::{
     AuditEventListScope, AuditEventRecord, ControlNodeRecord, CorsPolicyRecord,
     RateLimitPolicyRecord, RegisterControlNodeRecord, SecurityEventListScope, SecurityEventRecord,
     TenantRuntimeProfileRecord, UpsertCorsPolicyRecord, UpsertRateLimitPolicyRecord,
-    UpsertTenantRuntimeProfileRecord};
+    UpsertTenantRuntimeProfileRecord,
+};
 use crate::pagination::{RepoKeysetPage, RepoOffsetPage};
 use crate::pool::AdminStorePool;
 use async_trait::async_trait;
@@ -110,13 +111,13 @@ pub trait WebFrameworkAdminRepository: Send + Sync {
 
 #[derive(Clone)]
 pub struct SqlxWebFrameworkAdminRepository {
-    pool: AdminStorePool}
+    pool: AdminStorePool,
+}
 
 impl SqlxWebFrameworkAdminRepository {
     pub fn new(pool: AdminStorePool) -> Self {
         Self { pool }
     }
-
 
     #[cfg(feature = "postgres")]
     pub fn from_postgres(pool: sqlx::PgPool) -> Self {
@@ -145,7 +146,8 @@ impl WebFrameworkAdminRepository for SqlxWebFrameworkAdminRepository {
         body: UpsertCorsPolicyRecord,
     ) -> Result<CorsPolicyRecord, RepositoryError> {
         match &self.pool {
-            AdminStorePool::Postgres(pool) => upsert_cors_policy_postgres(pool, body).await}
+            AdminStorePool::Postgres(pool) => upsert_cors_policy_postgres(pool, body).await,
+        }
     }
 
     async fn list_rate_limit_policies(
@@ -167,7 +169,8 @@ impl WebFrameworkAdminRepository for SqlxWebFrameworkAdminRepository {
         body: UpsertRateLimitPolicyRecord,
     ) -> Result<RateLimitPolicyRecord, RepositoryError> {
         match &self.pool {
-            AdminStorePool::Postgres(pool) => upsert_rate_limit_policy_postgres(pool, body).await}
+            AdminStorePool::Postgres(pool) => upsert_rate_limit_policy_postgres(pool, body).await,
+        }
     }
 
     async fn list_tenant_runtime_profiles(
@@ -238,7 +241,8 @@ impl WebFrameworkAdminRepository for SqlxWebFrameworkAdminRepository {
 
     async fn control_node_exists(&self, node_id: &str) -> Result<bool, RepositoryError> {
         match &self.pool {
-            AdminStorePool::Postgres(pool) => control_node_exists_postgres(pool, node_id).await}
+            AdminStorePool::Postgres(pool) => control_node_exists_postgres(pool, node_id).await,
+        }
     }
 
     async fn register_control_node(
@@ -247,7 +251,8 @@ impl WebFrameworkAdminRepository for SqlxWebFrameworkAdminRepository {
         now: i64,
     ) -> Result<(ControlNodeRecord, bool), RepositoryError> {
         match &self.pool {
-            AdminStorePool::Postgres(pool) => register_control_node_postgres(pool, body, now).await}
+            AdminStorePool::Postgres(pool) => register_control_node_postgres(pool, body, now).await,
+        }
     }
 
     async fn get_control_node(
@@ -255,7 +260,8 @@ impl WebFrameworkAdminRepository for SqlxWebFrameworkAdminRepository {
         node_id: &str,
     ) -> Result<Option<ControlNodeRecord>, RepositoryError> {
         match &self.pool {
-            AdminStorePool::Postgres(pool) => get_control_node_postgres(pool, node_id).await}
+            AdminStorePool::Postgres(pool) => get_control_node_postgres(pool, node_id).await,
+        }
     }
 
     async fn heartbeat_control_node(
@@ -272,19 +278,14 @@ impl WebFrameworkAdminRepository for SqlxWebFrameworkAdminRepository {
 
     async fn delete_control_node(&self, node_id: &str) -> Result<(), RepositoryError> {
         match &self.pool {
-            AdminStorePool::Postgres(pool) => delete_control_node_postgres(pool, node_id).await}
+            AdminStorePool::Postgres(pool) => delete_control_node_postgres(pool, node_id).await,
+        }
     }
 }
 
 // ---------------------------------------------------------------------------
 // SQLite implementations
 // ---------------------------------------------------------------------------
-
-
-
-
-
-
 
 type SecurityEventRow = (
     i64,
@@ -310,9 +311,9 @@ fn map_security_event_row(row: SecurityEventRow) -> SecurityEventRecord {
         api_surface: row.6,
         origin: row.7,
         detail: row.8,
-        created_at: row.9}
+        created_at: row.9,
+    }
 }
-
 
 type AuditEventRow = (
     i64,
@@ -340,9 +341,9 @@ fn map_audit_event_row(row: AuditEventRow) -> AuditEventRecord {
         operation_id: row.7,
         status_code: row.8,
         duration_ms: row.9,
-        created_at: row.10}
+        created_at: row.10,
+    }
 }
-
 
 type ControlNodeRow = (
     String,
@@ -364,14 +365,9 @@ fn map_control_node_row(row: ControlNodeRow) -> ControlNodeRecord {
         status: row.4,
         last_heartbeat_at: row.5,
         created_at: row.6,
-        updated_at: row.7}
+        updated_at: row.7,
+    }
 }
-
-
-
-
-
-
 
 // ---------------------------------------------------------------------------
 // PostgreSQL implementations
@@ -417,7 +413,8 @@ async fn list_cors_policies_postgres(
             allow_all_origins: row.2 != 0,
             allowed_origins: parse_allowed_origins_json(&row.3)?,
             allow_credentials: row.4 != 0,
-            version: row.5});
+            version: row.5,
+        });
     }
 
     Ok(RepoOffsetPage { items, total_items })
@@ -455,7 +452,8 @@ async fn upsert_cors_policy_postgres(
         allow_all_origins: body.allow_all_origins,
         allowed_origins: body.allowed_origins,
         allow_credentials: body.allow_credentials,
-        version: row.0})
+        version: row.0,
+    })
 }
 
 #[cfg(feature = "postgres")]
@@ -499,7 +497,8 @@ async fn list_rate_limit_policies_postgres(
             max_requests: row.3.max(0) as u32,
             window_secs: row.4.max(1) as u64,
             enabled: row.5 != 0,
-            version: row.6})
+            version: row.6,
+        })
         .collect();
 
     Ok(RepoOffsetPage { items, total_items })
@@ -537,7 +536,8 @@ async fn upsert_rate_limit_policy_postgres(
         max_requests: body.max_requests,
         window_secs: body.window_secs,
         enabled: body.enabled,
-        version: row.0})
+        version: row.0,
+    })
 }
 
 #[cfg(feature = "postgres")]
@@ -581,7 +581,8 @@ async fn list_tenant_runtime_profiles_postgres(
             rate_limit_enabled: row.2.map(|value| value != 0),
             max_content_length: row.3,
             max_concurrent_requests: row.4.and_then(|value| u32::try_from(value.max(0)).ok()),
-            version: row.5})
+            version: row.5,
+        })
         .collect();
 
     Ok(RepoOffsetPage { items, total_items })
@@ -619,7 +620,8 @@ async fn upsert_tenant_runtime_profile_postgres(
         rate_limit_enabled: body.rate_limit_enabled,
         max_content_length: body.max_content_length,
         max_concurrent_requests: body.max_concurrent_requests,
-        version: row.0})
+        version: row.0,
+    })
 }
 
 #[cfg(feature = "postgres")]
@@ -914,4 +916,3 @@ async fn delete_control_node_postgres(
     }
     Ok(())
 }
-
