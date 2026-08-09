@@ -556,13 +556,10 @@ fn merge_servers(
         let server_object = expect_object(owner, &location, server)?;
         let url = expect_string_field(owner, server_object, "url", "non-empty string")?;
         match state.servers.get(url) {
-            Some(existing) if existing.value != *server => {
-                return Err(OpenApiMergeError::ServerConflict {
-                    url: url.to_owned(),
-                    first_owner: existing.owner.clone(),
-                    second_owner: owner.to_owned(),
-                });
-            }
+            // A server's identity is its URL; owners may describe the same
+            // URL differently (for example "Production edge gateway" versus
+            // "SDKWork production API"). The first contribution wins and
+            // differing descriptions do not conflict.
             Some(_) => {}
             None => {
                 state.servers.insert(

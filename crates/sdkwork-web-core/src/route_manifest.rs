@@ -119,13 +119,17 @@ impl HttpRouteManifest {
                 }
                 WebApiSurface::BackendApi => {
                     // Backend-api permits body/access-token entry profiles and agent bootstrap.
-                    if !route.auth.requires_dual_token_headers()
+                    // Explicit RouteAuth::Public is allowed for provider webhook
+                    // callbacks whose handler owns signature verification; the
+                    // manifest author declares it deliberately.
+                    if !route.auth.is_anonymous()
+                        && !route.auth.requires_dual_token_headers()
                         && !route.auth.requires_access_token_only()
                         && !route.auth.is_bootstrap_body_credential_mode()
                         && !route.auth.is_agent_token_credential_mode()
                     {
                         return Err(format!(
-                            "backend-api route {} {} must declare a protected or bootstrap-body auth profile (found {})",
+                            "backend-api route {} {} must declare a protected, bootstrap-body, or explicitly public auth profile (found {})",
                             http_method_label(route.method),
                             route.path,
                             route_auth_label(route.auth),
@@ -418,19 +422,20 @@ mod tests {
     }
 
     #[test]
-    fn rejects_backend_api_public_routes() {
+    fn accepts_explicit_backend_api_public_webhook_routes() {
         use crate::request_context::WebRequestContextProfile;
 
+        // Provider webhook callbacks are deliberately public; the handler owns
+        // signature verification (see validate_route_auth_for_surfaces).
         const ROUTES: &[HttpRoute] = &[HttpRoute::public(
-            HttpMethod::Get,
-            "/backend/v3/api/system/runtime",
-            "system",
-            "runtime.retrieve",
+            HttpMethod::Post,
+            "/backend/v3/api/rtc/provider_webhooks/{provider}/events",
+            "rtc",
+            "rtc.providerWebhooks.receive",
         )];
-        let error = HttpRouteManifest::new(ROUTES)
+        HttpRouteManifest::new(ROUTES)
             .validate_route_auth_for_surfaces(&WebRequestContextProfile::default())
-            .expect_err("backend-api public routes must be rejected");
-        assert!(error.contains("protected or bootstrap-body"));
+            .expect("explicitly public backend-api webhook routes are valid");
     }
 
     #[test]
