@@ -4,7 +4,7 @@
   "prefixes": [
     {
       "prefix": "web_",
-      "owner": "web-framework-platform",
+      "owner": "sdkwork-web",
       "domain": "webstore"
     }
   ]
