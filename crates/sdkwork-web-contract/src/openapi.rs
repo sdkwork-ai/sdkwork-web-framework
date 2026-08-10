@@ -16,6 +16,7 @@ pub const OPENAPI_FORBID_CREDENTIAL_HEADERS_EXTENSION: &str = "x-sdkwork-forbid-
 pub const OPENAPI_WIRE_PROTOCOL_EXTENSION: &str = "x-sdkwork-wire-protocol";
 pub const OPENAPI_EXTERNAL_PROTOCOL_ID_EXTENSION: &str = "x-sdkwork-external-protocol-id";
 pub const OPENAPI_RATE_LIMIT_TIER_EXTENSION: &str = "x-sdkwork-rate-limit-tier";
+pub const OPENAPI_LOG_RETENTION_EXTENSION: &str = "x-sdkwork-log-retention";
 
 pub const OPENAPI_PERMISSION_EXTENSION: &str = "x-sdkwork-permission";
 pub const OPENAPI_ALTERNATE_PERMISSIONS_EXTENSION: &str = "x-sdkwork-alternate-permissions";
@@ -180,6 +181,12 @@ pub fn openapi_extensions_for_route(route: &HttpRoute) -> Map<String, Value> {
         extensions.insert(
             OPENAPI_RATE_LIMIT_TIER_EXTENSION.to_owned(),
             Value::String(rate_limit_tier_label(tier).to_owned()),
+        );
+    }
+    if let Some(retention) = route.log_retention {
+        extensions.insert(
+            OPENAPI_LOG_RETENTION_EXTENSION.to_owned(),
+            Value::String(retention.to_owned()),
         );
     }
     if let Some(permission) = route.required_permission {
@@ -1465,6 +1472,59 @@ mod tests {
             Some(&json!([{ "AuthToken": [], "AccessToken": [] }])),
             object.get("security")
         );
+    }
+
+    #[test]
+    fn log_retention_annotation_flows_into_openapi_extension() {
+        let declared = HttpRoute::dual_token(
+            HttpMethod::Get,
+            "/backend/v3/api/billing/records",
+            "billing",
+            "billing.records.list",
+        )
+        .with_log_retention("permanent");
+        let operation = build_openapi_operation(&declared);
+        assert_eq!(
+            Some("permanent"),
+            operation
+                .get(OPENAPI_LOG_RETENTION_EXTENSION)
+                .and_then(Value::as_str)
+        );
+
+        let daily = HttpRoute::dual_token(
+            HttpMethod::Get,
+            "/backend/v3/api/log/request_logs",
+            "log",
+            "log.requestLogs.list",
+        )
+        .with_log_retention("30d");
+        assert_eq!(
+            Some("30d"),
+            build_openapi_operation(&daily)
+                .get(OPENAPI_LOG_RETENTION_EXTENSION)
+                .and_then(Value::as_str)
+        );
+
+        let undeclared =
+            HttpRoute::dual_token(HttpMethod::Get, "/app/v3/api/users", "Users", "listUsers");
+        assert!(!build_openapi_operation(&undeclared)
+            .as_object()
+            .expect("operation")
+            .contains_key(OPENAPI_LOG_RETENTION_EXTENSION));
+    }
+
+    #[test]
+    fn log_retention_validation_accepts_permanent_and_day_counts() {
+        let base =
+            HttpRoute::dual_token(HttpMethod::Get, "/app/v3/api/users", "Users", "listUsers");
+        assert!(base.validate_log_retention().is_ok());
+        assert!(base.with_log_retention("permanent").validate_log_retention().is_ok());
+        assert!(base.with_log_retention("30d").validate_log_retention().is_ok());
+        assert!(base.with_log_retention("1d").validate_log_retention().is_ok());
+        assert!(base.with_log_retention("forever").validate_log_retention().is_err());
+        assert!(base.with_log_retention("0d").validate_log_retention().is_err());
+        assert!(base.with_log_retention("").validate_log_retention().is_err());
+        assert!(base.with_log_retention("d").validate_log_retention().is_err());
     }
 
     #[test]

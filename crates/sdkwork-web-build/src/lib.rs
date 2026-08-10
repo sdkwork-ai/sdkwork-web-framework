@@ -96,6 +96,14 @@ use sdkwork_web_core::{HttpMethod, HttpRoute, RouteAuth};\n\n",
             {
                 output.push_str(".with_forbid_credential_headers(true)");
             }
+            if let Some(retention) = operation
+                .get("x-sdkwork-log-retention")
+                .and_then(Value::as_str)
+                .filter(|retention| !retention.trim().is_empty())
+            {
+                write!(output, ".with_log_retention({retention:?})")
+                    .map_err(|error| error.to_string())?;
+            }
             output.push_str(",\n");
         }
     }
@@ -243,5 +251,21 @@ mod tests {
         let generated = render_http_route_manifest(&source, "WIDGET_ROUTES").unwrap();
 
         assert!(generated.contains("RouteAuth::Public"));
+    }
+
+    #[test]
+    fn round_trips_log_retention_annotation() {
+        let source = json!({
+            "paths": {"/backend/v3/api/billing/records": {"get": {
+                "operationId": "billing.records.list",
+                "tags": ["billing"],
+                "security": [{"AuthToken": [], "AccessToken": []}],
+                "x-sdkwork-log-retention": "permanent"
+            }}}
+        });
+
+        let generated = render_http_route_manifest(&source, "WIDGET_ROUTES").unwrap();
+
+        assert!(generated.contains("with_log_retention(\"permanent\")"));
     }
 }

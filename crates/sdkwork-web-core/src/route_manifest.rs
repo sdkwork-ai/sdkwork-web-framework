@@ -88,6 +88,7 @@ impl HttpRouteManifest {
     ) -> Result<(), String> {
         for route in self.routes.iter() {
             route.validate_compatibility_contract()?;
+            route.validate_log_retention()?;
             let surface = classify_api_surface(route.path, profile);
             match surface {
                 WebApiSurface::AppApi => {

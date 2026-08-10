@@ -317,6 +317,9 @@ fn validate_manifest(owner: &str, manifest: &HttpRouteManifest) -> Result<(), St
         route
             .validate_compatibility_contract()
             .map_err(|error| format!("{owner} route manifest is invalid: {error}"))?;
+        route
+            .validate_log_retention()
+            .map_err(|error| format!("{owner} route manifest is invalid: {error}"))?;
         let normalized = normalize_route_path(route.path);
         if INFRASTRUCTURE_PATHS.contains(&normalized.as_str()) {
             return Err(format!(

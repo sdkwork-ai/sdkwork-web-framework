@@ -215,6 +215,11 @@ pub struct HttpRoute {
     pub auth: RouteAuth,
     pub idempotent: bool,
     pub rate_limit_tier: Option<RateLimitTier>,
+    /// Request-log retention for this route, declared as `"permanent"` or
+    /// `"<n>d"` (days, for example `"30d"`). `None` uses the log module
+    /// default (1 month). Billing/paying API routes typically declare
+    /// `"permanent"` so their request logs are never purged.
+    pub log_retention: Option<&'static str>,
     pub required_permission: Option<&'static str>,
     /// Alternate permissions that also authorize the operation (e.g. platform read for cross-tenant list).
     pub alternate_permissions: Option<&'static [&'static str]>,
@@ -242,6 +247,7 @@ impl HttpRoute {
             auth,
             idempotent: false,
             rate_limit_tier: None,
+            log_retention: None,
             required_permission: None,
             alternate_permissions: None,
             forbid_credential_headers: false,
@@ -270,6 +276,15 @@ impl HttpRoute {
 
     pub const fn with_rate_limit_tier(mut self, tier: RateLimitTier) -> Self {
         self.rate_limit_tier = Some(tier);
+        self
+    }
+
+    /// Declares the request-log retention for this route: `"permanent"` keeps
+    /// request logs forever (billing/paying APIs), `"<n>d"` keeps them for
+    /// `n` days (for example `"30d"`). Undeclared routes use the log module
+    /// default of 1 month.
+    pub const fn with_log_retention(mut self, retention: &'static str) -> Self {
+        self.log_retention = Some(retention);
         self
     }
 
@@ -329,6 +344,25 @@ impl HttpRoute {
         {
             return Err(format!(
                 "compatibility route {} must preserve upstream response definitions",
+                self.operation_id
+            ));
+        }
+        Ok(())
+    }
+
+    /// Validates the declared `log_retention` annotation when present: either
+    /// `"permanent"` or a positive `"<n>d"` day count (for example `"30d"`).
+    pub fn validate_log_retention(&self) -> Result<(), String> {
+        let Some(retention) = self.log_retention else {
+            return Ok(());
+        };
+        let valid = retention == "permanent"
+            || (retention.len() >= 2
+                && retention.ends_with('d')
+                && retention[..retention.len() - 1].parse::<i64>().is_ok_and(|days| days > 0));
+        if !valid {
+            return Err(format!(
+                "route {} declares invalid log_retention {retention:?}: expected \"permanent\" or \"<n>d\"",
                 self.operation_id
             ));
         }
