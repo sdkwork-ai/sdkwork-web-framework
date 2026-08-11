@@ -61,6 +61,13 @@ pub enum RouteAuth {
     BootstrapBody,
     CredentialEntryBootstrap,
     DualToken,
+    /// Dual-token credentials when present, anonymous access otherwise.
+    ///
+    /// Public browsing surfaces (e.g. course catalogs) resolve the signed-in
+    /// principal when a token pair is supplied but must never reject anonymous
+    /// visitors: the authorization policy lets these routes through and the
+    /// credential interceptor falls back to a public context without headers.
+    DualTokenOrAnonymous,
     ApiKey,
     /// Application-ingress token for protected internal-api routes.
     IngressToken,
@@ -359,7 +366,9 @@ impl HttpRoute {
         let valid = retention == "permanent"
             || (retention.len() >= 2
                 && retention.ends_with('d')
-                && retention[..retention.len() - 1].parse::<i64>().is_ok_and(|days| days > 0));
+                && retention[..retention.len() - 1]
+                    .parse::<i64>()
+                    .is_ok_and(|days| days > 0));
         if !valid {
             return Err(format!(
                 "route {} declares invalid log_retention {retention:?}: expected \"permanent\" or \"<n>d\"",
@@ -427,6 +436,16 @@ impl HttpRoute {
         operation_id: &'static str,
     ) -> Self {
         Self::new(method, path, tag, operation_id, RouteAuth::DualToken)
+    }
+
+    /// Dual-token when credentials are present, anonymous otherwise.
+    pub const fn dual_token_or_anonymous(
+        method: HttpMethod,
+        path: &'static str,
+        tag: &'static str,
+        operation_id: &'static str,
+    ) -> Self {
+        Self::new(method, path, tag, operation_id, RouteAuth::DualTokenOrAnonymous)
     }
 
     pub const fn api_key(
@@ -533,6 +552,12 @@ impl RouteAuth {
         matches!(self, Self::Public)
     }
 
+    /// Optional-credential routes accept anonymous visitors while still
+    /// resolving a signed-in principal when credentials are present.
+    pub const fn is_optional_credential(self) -> bool {
+        matches!(self, Self::DualTokenOrAnonymous)
+    }
+
     pub const fn requires_bootstrap_access_token(self) -> bool {
         matches!(self, Self::CredentialEntryBootstrap)
     }
@@ -578,6 +603,7 @@ impl RouteAuth {
             Self::CredentialEntryBootstrap => "credential-entry-bootstrap",
             Self::RefreshToken => "refresh-token",
             Self::DualToken => "dual-token",
+            Self::DualTokenOrAnonymous => "dual-token-or-anonymous",
             Self::ApiKey => "api-key",
             Self::IngressToken => "ingress-token",
             Self::OAuth => "oauth",

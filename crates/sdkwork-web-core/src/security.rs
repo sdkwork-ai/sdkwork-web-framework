@@ -428,9 +428,10 @@ impl CorsPolicy {
         }
         if !self.expose_headers.is_empty() {
             if let Ok(value) = HeaderValue::from_str(&self.expose_headers.join(", ")) {
-                response
-                    .headers_mut()
-                    .insert(HeaderName::from_static("access-control-expose-headers"), value);
+                response.headers_mut().insert(
+                    HeaderName::from_static("access-control-expose-headers"),
+                    value,
+                );
             }
         }
     }
@@ -605,7 +606,7 @@ impl SecurityPolicy {
         let allowed: &[&str] = match route_auth {
             RouteAuth::Public | RouteAuth::BootstrapBody | RouteAuth::RefreshToken => &[],
             RouteAuth::CredentialEntryBootstrap => &["access-token"],
-            RouteAuth::DualToken => &["authorization", "access-token"],
+            RouteAuth::DualToken | RouteAuth::DualTokenOrAnonymous => &["authorization", "access-token"],
             RouteAuth::ApiKey => &["x-api-key"],
             RouteAuth::OAuth => &["authorization"],
             RouteAuth::OpenApiFlexible => &["authorization", "x-api-key"],

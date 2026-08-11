@@ -208,7 +208,7 @@ impl OpenApiCredentialSchemeDetector for DefaultOpenApiCredentialSchemeDetector 
                 }
                 return Ok(None);
             }
-            Some(RouteAuth::DualToken) => {
+            Some(RouteAuth::DualToken) | Some(RouteAuth::DualTokenOrAnonymous) => {
                 if auth_token_present && access_token_present {
                     return Ok(Some(OpenApiAuthScheme::DualToken));
                 }
@@ -326,6 +326,7 @@ pub fn allowed_open_api_schemes(route_auth: RouteAuth) -> &'static [OpenApiAuthS
         RouteAuth::OpenApiFlexible => &[OpenApiAuthScheme::ApiKey, OpenApiAuthScheme::OAuthBearer],
         RouteAuth::OpenApiBearerFlexible => &[OpenApiAuthScheme::OAuthBearer],
         RouteAuth::ApiKeyOrDualToken => &[OpenApiAuthScheme::ApiKey, OpenApiAuthScheme::DualToken],
+        RouteAuth::DualTokenOrAnonymous => &[OpenApiAuthScheme::DualToken],
         RouteAuth::Public
         | RouteAuth::BootstrapBody
         | RouteAuth::CredentialEntryBootstrap

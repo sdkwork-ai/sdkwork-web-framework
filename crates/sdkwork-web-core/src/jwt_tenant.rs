@@ -53,7 +53,6 @@ impl JwtSessionRevocationChecker for StaticJwtSessionRevocationChecker {
 fn session_id_from_claims(claims: &BTreeMap<String, String>) -> Option<String> {
     claims
         .get("session_id")
-        .or_else(|| claims.get("sid"))
         .filter(|value| !value.trim().is_empty())
         .cloned()
 }

@@ -760,6 +760,44 @@ where
                     )
                     .with_reason("invalid-non-open-api-public-route"));
                 }
+                Some(RouteAuth::DualTokenOrAnonymous) => {
+                    if state.api_surface != WebApiSurface::AppApi {
+                        return Err(WebFrameworkError::missing_credentials(
+                            "dual-token-or-anonymous authentication is valid only on app-api routes",
+                        )
+                        .with_reason("invalid-optional-credential-surface"));
+                    }
+                    // Resolve the signed-in principal when a token pair is
+                    // supplied; anonymous visitors fall back to a public
+                    // context (catalog browsing must never be gated).
+                    if state.credentials.access_token.is_some()
+                        && state.credentials.auth_token.is_some()
+                    {
+                        let access_token = state.credentials.access_token.clone().ok_or_else(|| {
+                            WebFrameworkError::missing_credentials(
+                                "dual-token-or-anonymous requests require both tokens",
+                            )
+                        })?;
+                        let auth_token = state
+                            .credentials
+                            .auth_token
+                            .clone()
+                            .ok_or_else(|| WebFrameworkError::missing_credentials(
+                                "dual-token-or-anonymous requests require both tokens",
+                            ))?;
+                        state.principal = Some(
+                            runtime
+                                .resolver
+                                .resolve_dual_token(&auth_token, &access_token)
+                                .await?,
+                        );
+                        state.auth_mode = WebAuthMode::DualToken;
+                    } else {
+                        state.auth_mode = WebAuthMode::Public;
+                        state.principal = None;
+                    }
+                    return Ok(());
+                }
                 Some(RouteAuth::BootstrapBody) => {
                     if state.api_surface != WebApiSurface::BackendApi {
                         return Err(WebFrameworkError::missing_credentials(

@@ -280,7 +280,9 @@ pub fn build_openapi_operation(route: &HttpRoute) -> Value {
         match route.auth {
             RouteAuth::Public | RouteAuth::BootstrapBody | RouteAuth::RefreshToken => json!([]),
             RouteAuth::CredentialEntryBootstrap => json!([{ "AccessToken": [] }]),
-            RouteAuth::DualToken => json!([{ "AuthToken": [], "AccessToken": [] }]),
+            RouteAuth::DualToken | RouteAuth::DualTokenOrAnonymous => {
+                json!([{ "AuthToken": [], "AccessToken": [] }])
+            }
             RouteAuth::ApiKey => json!([{ "ApiKey": [] }]),
             RouteAuth::OAuth => json!([{ "OAuthBearer": [] }]),
             RouteAuth::OpenApiFlexible => {
@@ -1084,6 +1086,7 @@ fn route_auth_label(auth: RouteAuth) -> &'static str {
         RouteAuth::CredentialEntryBootstrap => "credential-entry-bootstrap",
         RouteAuth::RefreshToken => "refresh-token",
         RouteAuth::DualToken => "dual-token",
+        RouteAuth::DualTokenOrAnonymous => "dual-token-or-anonymous",
         RouteAuth::ApiKey => "api-key",
         RouteAuth::IngressToken => "ingress-token",
         RouteAuth::OAuth => "oauth",
@@ -1102,6 +1105,7 @@ fn auth_mode_label(auth: RouteAuth) -> &'static str {
         RouteAuth::CredentialEntryBootstrap => "credential-entry-bootstrap",
         RouteAuth::RefreshToken => "refresh-token",
         RouteAuth::DualToken => "dual-token",
+        RouteAuth::DualTokenOrAnonymous => "dual-token-or-anonymous",
         RouteAuth::ApiKey => "api-key",
         RouteAuth::IngressToken => "ingress-token",
         RouteAuth::OAuth => "oauth",
@@ -1518,13 +1522,34 @@ mod tests {
         let base =
             HttpRoute::dual_token(HttpMethod::Get, "/app/v3/api/users", "Users", "listUsers");
         assert!(base.validate_log_retention().is_ok());
-        assert!(base.with_log_retention("permanent").validate_log_retention().is_ok());
-        assert!(base.with_log_retention("30d").validate_log_retention().is_ok());
-        assert!(base.with_log_retention("1d").validate_log_retention().is_ok());
-        assert!(base.with_log_retention("forever").validate_log_retention().is_err());
-        assert!(base.with_log_retention("0d").validate_log_retention().is_err());
-        assert!(base.with_log_retention("").validate_log_retention().is_err());
-        assert!(base.with_log_retention("d").validate_log_retention().is_err());
+        assert!(base
+            .with_log_retention("permanent")
+            .validate_log_retention()
+            .is_ok());
+        assert!(base
+            .with_log_retention("30d")
+            .validate_log_retention()
+            .is_ok());
+        assert!(base
+            .with_log_retention("1d")
+            .validate_log_retention()
+            .is_ok());
+        assert!(base
+            .with_log_retention("forever")
+            .validate_log_retention()
+            .is_err());
+        assert!(base
+            .with_log_retention("0d")
+            .validate_log_retention()
+            .is_err());
+        assert!(base
+            .with_log_retention("")
+            .validate_log_retention()
+            .is_err());
+        assert!(base
+            .with_log_retention("d")
+            .validate_log_retention()
+            .is_err());
     }
 
     #[test]

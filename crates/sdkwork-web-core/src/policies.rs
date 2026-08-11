@@ -29,6 +29,14 @@ impl AuthorizationPolicy for ManifestAuthorizationPolicy {
             return Ok(());
         }
 
+        // Optional-credential routes (dual-token-or-anonymous) authorize every
+        // visitor: anonymous catalog browsing is the contract, and signed-in
+        // principals keep their resolved context for domain logic without a
+        // permission gate.
+        if route.is_some_and(|matched| matched.auth.is_optional_credential()) {
+            return Ok(());
+        }
+
         ctx.require_principal()?;
 
         if let Some(required) = route.and_then(|matched| matched.required_permission) {

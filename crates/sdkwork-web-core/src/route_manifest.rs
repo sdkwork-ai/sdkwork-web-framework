@@ -214,6 +214,7 @@ fn route_auth_label(auth: RouteAuth) -> &'static str {
         RouteAuth::CredentialEntryBootstrap => "credentialEntryBootstrap",
         RouteAuth::RefreshToken => "refresh-token",
         RouteAuth::DualToken => "dualToken",
+        RouteAuth::DualTokenOrAnonymous => "dualTokenOrAnonymous",
         RouteAuth::ApiKey => "apiKey",
         RouteAuth::IngressToken => "ingressToken",
         RouteAuth::OAuth => "oauth",

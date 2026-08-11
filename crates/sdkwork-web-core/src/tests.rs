@@ -375,3 +375,77 @@ async fn open_api_flexible_detector_selects_oauth_when_only_bearer_present() {
         .expect("scheme");
     assert_eq!(OpenApiAuthScheme::OAuthBearer, scheme);
 }
+
+#[test]
+fn optional_credential_routes_authorize_anonymous_visitors() {
+    // A course catalog route (dual-token-or-anonymous) must authorize a
+    // visitor with no principal and no permission scope at all.
+    let manifest = HttpRouteManifest::new(&[
+        HttpRoute::dual_token_or_anonymous(
+            HttpMethod::Get,
+            "/app/v3/api/courses",
+            "course",
+            "courses.list",
+        )
+        .with_required_permission("course.courses.read"),
+    ]);
+    let policy = ManifestAuthorizationPolicy::new(manifest);
+    let ctx = WebRequestContext {
+        request_id: ServerRequestId("req-anon".to_owned()),
+        api_surface: WebApiSurface::AppApi,
+        auth_mode: WebAuthMode::Public,
+        principal: None,
+        transport: WebTransportFacts {
+            path: "/app/v3/api/courses".to_owned(),
+            method: "GET".to_owned(),
+            auth_token_present: false,
+            access_token_present: false,
+            api_key_present: false,
+            ingress_token_present: false,
+            oauth_bearer_present: false,
+            agent_token_present: false,
+        },
+        locale: None,
+        client_kind: None,
+        operation: None,
+        trace_id: None,
+        idempotency_key: None,
+    };
+    policy
+        .authorize(&ctx, Some("courses.list"))
+        .expect("anonymous visitors must pass optional-credential routes");
+}
+
+#[test]
+fn dual_token_routes_still_reject_anonymous_visitors() {
+    let manifest = HttpRouteManifest::new(&[
+        HttpRoute::dual_token(HttpMethod::Get, "/app/v3/api/course_enrollments", "course", "courseEnrollments.current.list")
+            .with_required_permission("course.enrollments.read"),
+    ]);
+    let policy = ManifestAuthorizationPolicy::new(manifest);
+    let ctx = WebRequestContext {
+        request_id: ServerRequestId("req-anon-2".to_owned()),
+        api_surface: WebApiSurface::AppApi,
+        auth_mode: WebAuthMode::Public,
+        principal: None,
+        transport: WebTransportFacts {
+            path: "/app/v3/api/course_enrollments".to_owned(),
+            method: "GET".to_owned(),
+            auth_token_present: false,
+            access_token_present: false,
+            api_key_present: false,
+            ingress_token_present: false,
+            oauth_bearer_present: false,
+            agent_token_present: false,
+        },
+        locale: None,
+        client_kind: None,
+        operation: None,
+        trace_id: None,
+        idempotency_key: None,
+    };
+    let error = policy
+        .authorize(&ctx, Some("courseEnrollments.current.list"))
+        .expect_err("dual-token routes must still reject anonymous visitors");
+    assert_eq!(WebFrameworkErrorKind::MissingCredentials, error.kind);
+}

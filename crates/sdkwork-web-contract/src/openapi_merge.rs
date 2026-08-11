@@ -1020,8 +1020,9 @@ mod tests {
             let mut second = document("Second", "/second", "get", json!({}));
             second["components"] = json!({ namespace: { name: { "type": "integer" } } });
 
-            let merged = merge_openapi_documents("Combined", [("first", first), ("second", second)])
-                .expect("component duplicates are first-wins");
+            let merged =
+                merge_openapi_documents("Combined", [("first", first), ("second", second)])
+                    .expect("component duplicates are first-wins");
             assert_eq!(
                 merged["components"][namespace][name],
                 json!({ "type": "string" }),
