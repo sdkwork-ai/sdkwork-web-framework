@@ -606,7 +606,9 @@ impl SecurityPolicy {
         let allowed: &[&str] = match route_auth {
             RouteAuth::Public | RouteAuth::BootstrapBody | RouteAuth::RefreshToken => &[],
             RouteAuth::CredentialEntryBootstrap => &["access-token"],
-            RouteAuth::DualToken | RouteAuth::DualTokenOrAnonymous => &["authorization", "access-token"],
+            RouteAuth::DualToken | RouteAuth::DualTokenOrAnonymous => {
+                &["authorization", "access-token"]
+            }
             RouteAuth::ApiKey => &["x-api-key"],
             RouteAuth::OAuth => &["authorization"],
             RouteAuth::OpenApiFlexible => &["authorization", "x-api-key"],

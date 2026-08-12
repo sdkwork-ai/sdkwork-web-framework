@@ -32,6 +32,7 @@ fn map_result_code(code: i32) -> SdkWorkResultCode {
         40501 => SdkWorkResultCode::MethodNotAllowed,
         40801 => SdkWorkResultCode::RequestTimeout,
         40901 => SdkWorkResultCode::Conflict,
+        41101 => SdkWorkResultCode::PaymentGatewayRejected,
         41301 => SdkWorkResultCode::PayloadTooLarge,
         42201 => SdkWorkResultCode::UnprocessableEntity,
         42901 => SdkWorkResultCode::RateLimitExceeded,

@@ -380,15 +380,13 @@ async fn open_api_flexible_detector_selects_oauth_when_only_bearer_present() {
 fn optional_credential_routes_authorize_anonymous_visitors() {
     // A course catalog route (dual-token-or-anonymous) must authorize a
     // visitor with no principal and no permission scope at all.
-    let manifest = HttpRouteManifest::new(&[
-        HttpRoute::dual_token_or_anonymous(
-            HttpMethod::Get,
-            "/app/v3/api/courses",
-            "course",
-            "courses.list",
-        )
-        .with_required_permission("course.courses.read"),
-    ]);
+    let manifest = HttpRouteManifest::new(&[HttpRoute::dual_token_or_anonymous(
+        HttpMethod::Get,
+        "/app/v3/api/courses",
+        "course",
+        "courses.list",
+    )
+    .with_required_permission("course.courses.read")]);
     let policy = ManifestAuthorizationPolicy::new(manifest);
     let ctx = WebRequestContext {
         request_id: ServerRequestId("req-anon".to_owned()),
@@ -418,10 +416,13 @@ fn optional_credential_routes_authorize_anonymous_visitors() {
 
 #[test]
 fn dual_token_routes_still_reject_anonymous_visitors() {
-    let manifest = HttpRouteManifest::new(&[
-        HttpRoute::dual_token(HttpMethod::Get, "/app/v3/api/course_enrollments", "course", "courseEnrollments.current.list")
-            .with_required_permission("course.enrollments.read"),
-    ]);
+    let manifest = HttpRouteManifest::new(&[HttpRoute::dual_token(
+        HttpMethod::Get,
+        "/app/v3/api/course_enrollments",
+        "course",
+        "courseEnrollments.current.list",
+    )
+    .with_required_permission("course.enrollments.read")]);
     let policy = ManifestAuthorizationPolicy::new(manifest);
     let ctx = WebRequestContext {
         request_id: ServerRequestId("req-anon-2".to_owned()),

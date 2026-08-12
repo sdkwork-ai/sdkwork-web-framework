@@ -445,7 +445,13 @@ impl HttpRoute {
         tag: &'static str,
         operation_id: &'static str,
     ) -> Self {
-        Self::new(method, path, tag, operation_id, RouteAuth::DualTokenOrAnonymous)
+        Self::new(
+            method,
+            path,
+            tag,
+            operation_id,
+            RouteAuth::DualTokenOrAnonymous,
+        )
     }
 
     pub const fn api_key(
