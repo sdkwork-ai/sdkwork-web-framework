@@ -4,7 +4,7 @@
   "app": {
     "id": "sdkwork-web-framework",
     "name": "SDKWork Web Framework",
-    "repository": "Sdkwork-Cloud/sdkwork-web-framework",
+    "repository": "sdkwork-ai/sdkwork-web-framework",
     "sourcePath": "."
   },
   "release": {
@@ -18,13 +18,13 @@
   "dependencies": [
     {
       "id": "sdkwork-database",
-      "repository": "Sdkwork-Cloud/sdkwork-database",
+      "repository": "sdkwork-ai/sdkwork-database",
       "refInput": "SDKWORK_DATABASE_REF",
       "tokenSecret": "SDKWORK_RELEASE_TOKEN"
     },
     {
       "id": "sdkwork-utils",
-      "repository": "Sdkwork-Cloud/sdkwork-utils",
+      "repository": "sdkwork-ai/sdkwork-utils",
       "refInput": "SDKWORK_UTILS_REF",
       "tokenSecret": "SDKWORK_RELEASE_TOKEN"
     }

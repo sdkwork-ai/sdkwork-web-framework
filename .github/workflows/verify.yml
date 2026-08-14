@@ -31,9 +31,9 @@ jobs:
       - name: Checkout sibling SDKWork dependencies
         shell: bash
         run: |
-          git clone --depth 1 https://github.com/Sdkwork-Cloud/sdkwork-database.git "${GITHUB_WORKSPACE}/../sdkwork-database"
-          git clone --depth 1 https://github.com/Sdkwork-Cloud/sdkwork-utils.git "${GITHUB_WORKSPACE}/../sdkwork-utils"
-          git clone --depth 1 https://github.com/Sdkwork-Cloud/sdkwork-id.git "${GITHUB_WORKSPACE}/../sdkwork-id" || true
+          git clone --depth 1 https://github.com/sdkwork-ai/sdkwork-database.git "${GITHUB_WORKSPACE}/../sdkwork-database"
+          git clone --depth 1 https://github.com/sdkwork-ai/sdkwork-utils.git "${GITHUB_WORKSPACE}/../sdkwork-utils"
+          git clone --depth 1 https://github.com/sdkwork-ai/sdkwork-id.git "${GITHUB_WORKSPACE}/../sdkwork-id" || true
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -56,9 +56,9 @@ jobs:
       - name: Checkout sibling SDKWork dependencies
         shell: bash
         run: |
-          git clone --depth 1 https://github.com/Sdkwork-Cloud/sdkwork-database.git "${GITHUB_WORKSPACE}/../sdkwork-database"
-          git clone --depth 1 https://github.com/Sdkwork-Cloud/sdkwork-utils.git "${GITHUB_WORKSPACE}/../sdkwork-utils"
-          git clone --depth 1 https://github.com/Sdkwork-Cloud/sdkwork-id.git "${GITHUB_WORKSPACE}/../sdkwork-id" || true
+          git clone --depth 1 https://github.com/sdkwork-ai/sdkwork-database.git "${GITHUB_WORKSPACE}/../sdkwork-database"
+          git clone --depth 1 https://github.com/sdkwork-ai/sdkwork-utils.git "${GITHUB_WORKSPACE}/../sdkwork-utils"
+          git clone --depth 1 https://github.com/sdkwork-ai/sdkwork-id.git "${GITHUB_WORKSPACE}/../sdkwork-id" || true
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
