@@ -17,7 +17,7 @@ sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio",
 sdkwork-database-config.workspace = true
 sdkwork-database-sqlx = { workspace = true, default-features = false }
 sdkwork-web-core.workspace = true
-sdkwork-webstore-database-host = { path = "../sdkwork-webstore-database-host", default-features = false }
+sdkwork-webstore-database-host = { workspace = true, default-features = false }
 tokio.workspace = true
 tracing.workspace = true
 

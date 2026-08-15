@@ -131,9 +131,27 @@ impl ApiAssemblyContribution {
         let openapi_inventory = route_inventory_from_openapi(&self.openapi)
             .map_err(|error| format!("{} OpenAPI inventory is invalid: {error}", self.owner))?;
         if manifest_inventory != openapi_inventory {
+            let manifest_set = manifest_inventory.iter().collect::<BTreeSet<_>>();
+            let openapi_set = openapi_inventory.iter().collect::<BTreeSet<_>>();
+            let manifest_only = manifest_set
+                .difference(&openapi_set)
+                .take(10)
+                .map(|entry| format!("{} {} {} ({}, {})", entry.surface, entry.method, entry.normalized_path, entry.operation_id, entry.auth_profile))
+                .collect::<Vec<_>>()
+                .join("; ");
+            let openapi_only = openapi_set
+                .difference(&manifest_set)
+                .take(10)
+                .map(|entry| format!("{} {} {} ({}, {})", entry.surface, entry.method, entry.normalized_path, entry.operation_id, entry.auth_profile))
+                .collect::<Vec<_>>()
+                .join("; ");
             return Err(format!(
-                "{} route manifest and OpenAPI inventories differ",
-                self.owner
+                "{} route manifest and OpenAPI inventories differ (manifest={}, OpenAPI={}); manifest-only: [{}]; OpenAPI-only: [{}]",
+                self.owner,
+                manifest_inventory.len(),
+                openapi_inventory.len(),
+                manifest_only,
+                openapi_only,
             ));
         }
 

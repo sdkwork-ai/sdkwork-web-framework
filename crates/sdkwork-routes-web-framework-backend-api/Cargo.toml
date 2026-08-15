@@ -16,7 +16,7 @@ serde.workspace = true
 serde_json.workspace = true
 sdkwork-web-core.workspace = true
 sdkwork-web-contract.workspace = true
-sdkwork-web-framework-admin-repository-sqlx = { path = "../sdkwork-web-framework-admin-repository-sqlx" }
+sdkwork-web-framework-admin-repository-sqlx = { workspace = true }
 # serde_int64 helper：API JSON 边界 int64-as-string 强制（API_SPEC §13）。
 sdkwork-utils-rust.workspace = true
 sqlx = { version = "0.9", features = ["runtime-tokio", "postgres"] }
