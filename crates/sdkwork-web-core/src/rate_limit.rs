@@ -108,6 +108,7 @@ mod tests {
             accepted_at: None,
             redacted_query: None,
             safe_request_headers: None,
+            client_ip: None,
             forbid_credential_headers: false,
             before_failure: None,
         }

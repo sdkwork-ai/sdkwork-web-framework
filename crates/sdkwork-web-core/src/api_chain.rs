@@ -135,6 +135,9 @@ pub struct WebCallState {
     pub redacted_query: Option<String>,
     /// 白名单安全请求头捕获（JSON 字符串），同上。
     pub safe_request_headers: Option<String>,
+    /// 客户端 IP（canonical 字符串，来自传输扩展或受信转发头），由可选的
+    /// request-logging 拦截器在 before 阶段填充；仅供日志持久化使用。
+    pub client_ip: Option<String>,
     /// Manifest flag: reject inbound credential/context headers before handler logic.
     pub forbid_credential_headers: bool,
     /// 记录 before 阶段失败时的错误，供 Audit.after 为失败请求留痕使用。
@@ -476,6 +479,7 @@ impl WebCallState {
             accepted_at: None,
             redacted_query: None,
             safe_request_headers: None,
+            client_ip: None,
             forbid_credential_headers: false,
             before_failure: None,
         }

@@ -131,8 +131,21 @@ pub struct WebAppContext {
 #[serde(rename_all = "camelCase")]
 pub struct WebSubjectContext {
     pub user_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub session_id: Option<String>,
     pub subject_type: WebSubjectType,
+    /// Display-name snapshot of the authenticated subject (`iam_user.display_name`)
+    /// resolved when the principal was built. Carried so downstream audit/log
+    /// projections can persist a readable name without a second lookup; `None`
+    /// for token-only or api-key principals that have no name claim.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub display_name: Option<String>,
+}
+
+impl WebSubjectContext {
+    pub fn display_name(&self) -> Option<&str> {
+        self.display_name.as_deref()
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -241,6 +254,10 @@ impl WebRequestPrincipal {
         self.subject.session_id.as_deref()
     }
 
+    pub fn display_name(&self) -> Option<&str> {
+        self.subject.display_name()
+    }
+
     pub fn auth_level(&self) -> WebAuthLevel {
         self.auth.auth_level.clone()
     }
@@ -265,6 +282,7 @@ pub struct WebRequestPrincipalBuilder {
     permission_scope: Vec<String>,
     api_key_id: Option<String>,
     subject_type: Option<WebSubjectType>,
+    display_name: Option<String>,
     workspace_id: Option<String>,
     composition_id: Option<String>,
 }
@@ -335,6 +353,11 @@ impl WebRequestPrincipalBuilder {
         self
     }
 
+    pub fn display_name(mut self, value: Option<String>) -> Self {
+        self.display_name = value;
+        self
+    }
+
     pub fn build(self) -> WebRequestPrincipal {
         let organization_id = self.organization_id;
         let login_scope = self
@@ -357,6 +380,7 @@ impl WebRequestPrincipalBuilder {
                 user_id: self.user_id.unwrap_or_default(),
                 session_id: self.session_id,
                 subject_type: self.subject_type.unwrap_or(WebSubjectType::User),
+                display_name: self.display_name,
             },
             auth: WebAuthContext {
                 auth_level: self.auth_level.unwrap_or(WebAuthLevel::Anonymous),

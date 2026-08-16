@@ -447,17 +447,11 @@ where
             panic!("WebFrameworkBuilder production assembly is unsafe: {message}");
         }
 
-        let metrics = match self.metrics {
-            Some(metrics) => {
-                metrics.set_dimensions(HttpMetricsDimensions::from_profile_environment(
-                    self.profile.environment.clone(),
-                ));
-                metrics
-            }
-            None => HttpMetricsRegistry::with_dimensions(
-                HttpMetricsDimensions::from_profile_environment(self.profile.environment.clone()),
-            ),
-        };
+        let metrics = self.metrics.unwrap_or_else(|| {
+            HttpMetricsRegistry::with_dimensions(HttpMetricsDimensions::from_profile_environment(
+                self.profile.environment.clone(),
+            ))
+        });
         let mut layer = WebFrameworkLayer::new(self.resolver)
             .with_profile(self.profile)
             .with_security_policy(self.security_policy)

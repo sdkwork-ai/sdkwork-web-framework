@@ -538,6 +538,29 @@ async fn web_framework_builder_shares_metrics_with_service_router() {
     assert!(rendered.contains("backend_layer=\"handler\""));
 }
 
+#[test]
+fn web_framework_builder_preserves_explicit_metrics_dimensions() {
+    use sdkwork_web_core::{HttpMetricsDimensions, HttpMetricsRegistry, WebEnvironment};
+
+    let metrics = HttpMetricsRegistry::with_dimensions(
+        HttpMetricsDimensions::from_profile_environment(WebEnvironment::Test)
+            .with_service("sdkwork-test-service")
+            .with_deployment_profile("standalone")
+            .with_runtime_target("server")
+            .with_runtime_profile("postgresql"),
+    );
+    let framework = WebFramework::builder(DefaultWebRequestContextResolver::default())
+        .metrics_registry(metrics)
+        .build();
+
+    let dimensions = framework.metrics().dimensions();
+    assert_eq!(dimensions.service, "sdkwork-test-service");
+    assert_eq!(dimensions.environment, "test");
+    assert_eq!(dimensions.deployment_profile, "standalone");
+    assert_eq!(dimensions.runtime_target, "server");
+    assert_eq!(dimensions.runtime_profile, "postgresql");
+}
+
 #[tokio::test]
 async fn metrics_increment_when_layer_shares_registry() {
     use axum::routing::get;

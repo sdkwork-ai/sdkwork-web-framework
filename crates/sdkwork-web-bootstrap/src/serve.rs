@@ -25,8 +25,14 @@ pub async fn serve_with_lifecycle(
         )));
     }
     let lifecycle_for_shutdown = lifecycle.clone();
-    let serve_future = axum::serve(listener, router)
-        .with_graceful_shutdown(graceful_shutdown_trigger(lifecycle_for_shutdown));
+    // Serve with connect info so the request-log capture interceptor and
+    // rate-limit layers can read the real TCP peer address — plain
+    // `axum::serve` never injects `ConnectInfo<SocketAddr>`.
+    let serve_future = axum::serve(
+        listener,
+        router.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(graceful_shutdown_trigger(lifecycle_for_shutdown));
 
     if let Some(grace) = shutdown_grace_period {
         match tokio::time::timeout(grace, serve_future).await {

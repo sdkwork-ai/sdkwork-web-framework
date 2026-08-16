@@ -47,7 +47,7 @@ sdkwork-web-axum = { path = "crates/sdkwork-web-axum" }
 sdkwork-web-bootstrap = { path = "crates/sdkwork-web-bootstrap" }
 sdkwork-web-store-redis = { path = "crates/sdkwork-web-store-redis" }
 sdkwork-web-store-sqlx = { path = "crates/sdkwork-web-store-sqlx", default-features = false }
-sdkwork-webstore-database-host = { path = "crates/sdkwork-webstore-database-host" }
+sdkwork-webstore-database-host = { path = "crates/sdkwork-webstore-database-host", default-features = false }
 sdkwork-web-test-utils = { path = "crates/sdkwork-web-test-utils" }
 sdkwork-web-schema-registry = { path = "crates/sdkwork-web-schema-registry" }
 sdkwork-routes-web-framework-backend-api = { path = "crates/sdkwork-routes-web-framework-backend-api" }
