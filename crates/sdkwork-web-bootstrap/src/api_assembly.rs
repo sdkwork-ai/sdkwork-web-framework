@@ -9,7 +9,10 @@ use sdkwork_web_contract::{
     normalize_route_path, route_inventory_from_openapi, route_inventory_from_routes, HttpRoute,
     OPENAPI_API_AUTHORITY_EXTENSION, OPENAPI_OWNER_EXTENSION,
 };
-use sdkwork_web_core::{DomainContextInjector, HttpRouteManifest, WebRequestContextResolver};
+use sdkwork_web_core::{
+    DomainContextInjector, HttpRouteManifest, WebRequestContextProfile, WebRequestContextResolver,
+};
+pub use sdkwork_web_core::RouteManifestMount;
 use serde_json::Value;
 
 use crate::{
@@ -17,6 +20,54 @@ use crate::{
 };
 
 const INFRASTRUCTURE_PATHS: &[&str] = &["/healthz", "/livez", "/metrics", "/readyz"];
+
+/// Merges a host-owned manifest with dependency manifests using the shared Web Framework contract.
+pub fn merge_route_manifest_mounts(
+    owner: &str,
+    base: HttpRouteManifest,
+    mounts: &[RouteManifestMount],
+) -> Result<HttpRouteManifest, String> {
+    let composed = HttpRouteManifest::try_merge_mounts(owner, base, mounts)?;
+    composed.validate_includes_dependency_manifests(mounts)?;
+    Ok(composed)
+}
+
+/// Merges dependency manifests and validates the result before binding it to a Web Framework layer.
+///
+/// Host gateways that mount same-origin dependency routers `MUST` use this helper (or
+/// [`merge_route_manifest_mounts`]) so mounted routes keep their declared `RouteAuth`
+/// instead of falling through to dual-token defaults on unmatched app-api paths.
+pub fn prepare_host_route_manifest(
+    owner: &str,
+    base: HttpRouteManifest,
+    mounts: &[RouteManifestMount],
+    profile: &WebRequestContextProfile,
+    public_path_prefixes: &[String],
+) -> Result<HttpRouteManifest, String> {
+    let composed = merge_route_manifest_mounts(owner, base, mounts)?;
+    finalize_host_route_manifest(owner, composed, mounts, profile, public_path_prefixes)
+}
+
+/// Validates an already-composed host manifest before binding it to a Web Framework layer.
+///
+/// Use this when the host already merged dependency manifests through
+/// [`HttpRouteManifest::try_merge_mounts`] and must not merge the same mounts twice.
+pub fn finalize_host_route_manifest(
+    owner: &str,
+    composed: HttpRouteManifest,
+    mounts: &[RouteManifestMount],
+    profile: &WebRequestContextProfile,
+    public_path_prefixes: &[String],
+) -> Result<HttpRouteManifest, String> {
+    composed.validate_includes_dependency_manifests(mounts)?;
+    composed.validate_public_path_prefixes(public_path_prefixes)?;
+    composed
+        .validate_route_auth_for_surfaces(profile)
+        .map_err(|error| {
+            format!("{owner} composed route manifest failed surface auth validation: {error}")
+        })?;
+    Ok(composed)
+}
 
 /// Indivisible host-neutral contribution exported by one application API assembly.
 pub struct ApiAssemblyContribution {
@@ -121,6 +172,35 @@ impl ApiAssemblyContribution {
         };
         contribution.validate()?;
         Ok(contribution)
+    }
+
+    /// Atomically merges a same-origin dependency contribution into this host contribution.
+    ///
+    /// Router and route manifest stay paired so mounted dependency routes cannot lose their
+    /// declared `RouteAuth` when the host binds a Web Framework layer
+    /// (`API_ASSEMBLY_SPEC` §4/§6.1).
+    pub fn merge_dependency_contribution(
+        mut self,
+        dependency: &ApiAssemblyContribution,
+    ) -> Result<Self, String> {
+        self.route_manifest = merge_route_manifest_mounts(
+            self.owner,
+            self.route_manifest,
+            &[RouteManifestMount {
+                owner: dependency.owner,
+                manifest: dependency.route_manifest.clone(),
+            }],
+        )?;
+        self.router = self.router.merge(dependency.router.clone());
+        self.permission_catalog = permission_catalog(self.route_manifest.routes());
+        self.domain_context_injectors
+            .extend(dependency.domain_context_injectors.clone());
+        self.readiness_check = Arc::new(CompositeReadinessCheck::new(vec![
+            self.readiness_check,
+            dependency.readiness_check.clone(),
+        ]));
+        validate_manifest(self.owner, &self.route_manifest)?;
+        Ok(self)
     }
 
     pub fn validate(&self) -> Result<(), String> {
@@ -430,7 +510,7 @@ mod tests {
     use axum::http::{Request, StatusCode};
     use axum::routing::get;
     use sdkwork_web_contract::{HttpMethod, RouteAuth};
-    use sdkwork_web_core::DefaultWebRequestContextResolver;
+    use sdkwork_web_core::{DefaultWebRequestContextResolver, WebRequestContextProfile};
     use tower::ServiceExt;
 
     const ROUTES: &[HttpRoute] = &[HttpRoute::new(
@@ -678,6 +758,88 @@ mod tests {
         .err()
         .expect("collision");
         assert!(error.contains("route collision"), "{error}");
+    }
+
+    #[test]
+    fn finalize_host_route_manifest_accepts_already_composed_manifest() {
+        const HOST_ROUTES: &[HttpRoute] = &[HttpRoute::dual_token(
+            HttpMethod::Get,
+            "/app/v3/api/dashboard/overview",
+            "dashboard",
+            "dashboard.overview.retrieve",
+        )];
+        const DEP_ROUTES: &[HttpRoute] = &[HttpRoute::credential_entry_bootstrap(
+            HttpMethod::Get,
+            "/app/v3/api/system/iam/runtime",
+            "system",
+            "iam.runtime.retrieve",
+        )];
+        let mounts = [RouteManifestMount {
+            owner: "sdkwork-iam",
+            manifest: HttpRouteManifest::new(DEP_ROUTES),
+        }];
+        let composed = HttpRouteManifest::try_merge_mounts(
+            "sdkwork-cloudrouter",
+            HttpRouteManifest::new(HOST_ROUTES),
+            &mounts,
+        )
+        .expect("compose once");
+        let prepared = finalize_host_route_manifest(
+            "sdkwork-cloudrouter",
+            composed,
+            &mounts,
+            &WebRequestContextProfile::default(),
+            &["/healthz".to_owned()],
+        )
+        .expect("finalize composed manifest");
+        let route = prepared
+            .match_route("GET", "/app/v3/api/system/iam/runtime")
+            .expect("dependency route must stay registered");
+        assert_eq!(RouteAuth::CredentialEntryBootstrap, route.auth);
+    }
+
+    #[test]
+    fn merge_dependency_contribution_pairs_router_and_public_auth_manifest() {
+        const HOST_ROUTES: &[HttpRoute] = &[HttpRoute::dual_token(
+            HttpMethod::Get,
+            "/app/v3/api/dashboard/overview",
+            "dashboard",
+            "dashboard.overview.retrieve",
+        )];
+        const DEP_ROUTES: &[HttpRoute] = &[HttpRoute::credential_entry_bootstrap(
+            HttpMethod::Get,
+            "/app/v3/api/system/iam/runtime",
+            "system",
+            "iam.runtime.retrieve",
+        )];
+
+        let host = ApiAssemblyContribution::from_manifest(
+            "sdkwork-cloudrouter",
+            "Cloud Router App API",
+            Router::new(),
+            HttpRouteManifest::new(HOST_ROUTES),
+            Vec::new(),
+            Arc::new(crate::AlwaysReady),
+        )
+        .expect("valid host contribution");
+        let dependency = ApiAssemblyContribution::from_manifest(
+            "sdkwork-iam",
+            "IAM App API",
+            Router::new(),
+            HttpRouteManifest::new(DEP_ROUTES),
+            Vec::new(),
+            Arc::new(crate::AlwaysReady),
+        )
+        .expect("valid dependency contribution");
+
+        let merged = host
+            .merge_dependency_contribution(&dependency)
+            .expect("dependency merge");
+        let route = merged
+            .route_manifest
+            .match_route("GET", "/app/v3/api/system/iam/runtime")
+            .expect("dependency route must stay registered");
+        assert_eq!(RouteAuth::CredentialEntryBootstrap, route.auth);
     }
 
     #[tokio::test]

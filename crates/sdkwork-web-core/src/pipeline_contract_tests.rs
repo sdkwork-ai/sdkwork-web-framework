@@ -777,6 +777,37 @@ async fn manifest_protected_route_still_requires_credentials() {
 }
 
 #[tokio::test]
+async fn bound_manifest_rejects_unregistered_app_api_route_auth_profile() {
+    use sdkwork_web_contract::{HttpMethod, HttpRoute, RouteAuth};
+
+    const ROUTES: &[HttpRoute] = &[HttpRoute::new(
+        HttpMethod::Get,
+        "/app/v3/api/users",
+        "Users",
+        "users.list",
+        RouteAuth::DualToken,
+    )];
+
+    let runtime = WebCallRuntime::new(DefaultWebRequestContextResolver::default())
+        .with_route_manifest(HttpRouteManifest::new(ROUTES));
+    let chain = WebCallInterceptorChain::standard();
+    let mut request = Request::builder()
+        .uri("/app/v3/api/system/iam/runtime")
+        .body(Body::empty())
+        .expect("request");
+    let mut state = WebCallState::from_request(&request);
+    let error = chain
+        .before(&mut state, &mut request, &runtime)
+        .await
+        .expect_err("unregistered app-api route must not default to dual-token");
+    assert_eq!(WebFrameworkErrorKind::MissingCredentials, error.kind);
+    assert_eq!(
+        Some("unregistered-route-auth-profile"),
+        error.reason.as_deref()
+    );
+}
+
+#[tokio::test]
 async fn manifest_app_api_public_route_with_path_parameter_skips_credentials() {
     use sdkwork_web_contract::{HttpMethod, HttpRoute, RouteAuth};
 

@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use sdkwork_web_contract::{HttpMethod, HttpRoute, RateLimitTier, RouteAuth};
@@ -15,6 +16,17 @@ use crate::surface::{classify_api_surface, matches_prefix};
 #[derive(Clone, Debug)]
 pub struct HttpRouteManifest {
     routes: Arc<[HttpRoute]>,
+}
+
+/// Dependency-owned route manifest mounted into a host app/backend surface.
+///
+/// Hosts that merge capability routers into an outer Web Framework layer must
+/// merge the matching manifests through [`HttpRouteManifest::try_merge_mounts`]
+/// so Public and credential-entry declarations are not lost.
+#[derive(Clone, Debug)]
+pub struct RouteManifestMount {
+    pub owner: &'static str,
+    pub manifest: HttpRouteManifest,
 }
 
 impl HttpRouteManifest {
@@ -205,6 +217,106 @@ impl HttpRouteManifest {
         }
         Ok(())
     }
+
+    /// Merges host-owned routes with dependency manifests, rejecting method+path collisions.
+    pub fn try_merge_mounts(
+        owner: &str,
+        base: Self,
+        mounts: &[RouteManifestMount],
+    ) -> Result<Self, String> {
+        let mut routes = base.routes().to_vec();
+        let mut seen = BTreeMap::new();
+        for route in &routes {
+            let key = manifest_route_identity(route);
+            if let Some((_existing_owner, existing_operation)) =
+                seen.insert(key.clone(), (owner.to_owned(), route.operation_id.to_owned()))
+            {
+                return Err(format!(
+                    "{owner} base route collision for {} {} between {existing_operation} and {}",
+                    key.0, key.1, route.operation_id
+                ));
+            }
+        }
+        for mount in mounts {
+            if mount.owner.trim().is_empty() {
+                return Err("route manifest mount owner must not be empty".to_owned());
+            }
+            for route in mount.manifest.routes() {
+                let key = manifest_route_identity(route);
+                if let Some((existing_owner, existing_operation)) = seen.get(&key) {
+                    return Err(format!(
+                        "composed route collision for {} {}: {} ({}) conflicts with {existing_owner} ({existing_operation})",
+                        key.0,
+                        key.1,
+                        mount.owner,
+                        route.operation_id
+                    ));
+                }
+                seen.insert(
+                    key,
+                    (
+                        mount.owner.to_owned(),
+                        route.operation_id.to_owned(),
+                    ),
+                );
+                routes.push(route.clone());
+            }
+        }
+        Ok(Self::from_owned_routes(routes))
+    }
+
+    /// Ensures every dependency route is present in this composed manifest with the same auth profile.
+    pub fn validate_includes_dependency_manifests(
+        &self,
+        mounts: &[RouteManifestMount],
+    ) -> Result<(), String> {
+        for mount in mounts {
+            for route in mount.manifest.routes() {
+                let method = http_method_label(route.method);
+                let Some(composed) = self.match_route(method, route.path) else {
+                    return Err(format!(
+                        "composed manifest missing dependency route from {}: {method} {} ({})",
+                        mount.owner, route.path, route.operation_id
+                    ));
+                };
+                if composed.auth != route.auth {
+                    return Err(format!(
+                        "composed manifest auth mismatch for {} route {method} {}: {} declares {:?}, composed has {:?}",
+                        mount.owner,
+                        route.path,
+                        route.operation_id,
+                        route.auth,
+                        composed.auth
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+fn manifest_route_identity(route: &HttpRoute) -> (String, String) {
+    (
+        http_method_label(route.method).to_owned(),
+        normalized_template_path(route.path),
+    )
+}
+
+fn normalized_template_path(path: &str) -> String {
+    normalize_path(path)
+        .split('/')
+        .map(|segment| {
+            if (segment.starts_with('{') && segment.ends_with('}'))
+                || segment.starts_with(':')
+                || (segment.starts_with('<') && segment.ends_with('>'))
+            {
+                "{}".to_owned()
+            } else {
+                segment.to_owned()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("/")
 }
 
 fn route_auth_label(auth: RouteAuth) -> &'static str {
@@ -373,6 +485,57 @@ mod tests {
             "/app/v3/api/oauth/callbacks/{providerCode}",
             "/app/v3/api/oauth/callbacks/github/extra"
         ));
+    }
+
+    #[test]
+    fn merge_mounts_rejects_cross_owner_collisions() {
+        const HOST_ROUTES: &[HttpRoute] = &[HttpRoute::dual_token(
+            HttpMethod::Get,
+            "/app/v3/api/widgets",
+            "Widgets",
+            "widgets.list",
+        )];
+        const DEP_ROUTES: &[HttpRoute] = &[HttpRoute::public(
+            HttpMethod::Get,
+            "/app/v3/api/widgets",
+            "Widgets",
+            "widgets.public.list",
+        )];
+        let error = HttpRouteManifest::try_merge_mounts(
+            "sdkwork-host",
+            HttpRouteManifest::new(HOST_ROUTES),
+            &[RouteManifestMount {
+                owner: "sdkwork-deps",
+                manifest: HttpRouteManifest::new(DEP_ROUTES),
+            }],
+        )
+        .expect_err("collision");
+        assert!(error.contains("composed route collision"), "{error}");
+    }
+
+    #[test]
+    fn validate_includes_dependency_manifests_requires_matching_auth() {
+        const HOST_ROUTES: &[HttpRoute] = &[HttpRoute::public(
+            HttpMethod::Get,
+            "/app/v3/api/system/runtime",
+            "system",
+            "runtime.retrieve",
+        )];
+        const DEP_ROUTES: &[HttpRoute] = &[HttpRoute::credential_entry_bootstrap(
+            HttpMethod::Get,
+            "/app/v3/api/system/runtime",
+            "system",
+            "runtime.retrieve",
+        )];
+        let composed = HttpRouteManifest::new(HOST_ROUTES);
+        let mounts = [RouteManifestMount {
+            owner: "sdkwork-iam",
+            manifest: HttpRouteManifest::new(DEP_ROUTES),
+        }];
+        let error = composed
+            .validate_includes_dependency_manifests(&mounts)
+            .expect_err("auth mismatch");
+        assert!(error.contains("auth mismatch"), "{error}");
     }
 
     #[test]

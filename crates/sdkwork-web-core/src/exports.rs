@@ -139,7 +139,7 @@ pub use crate::resolvers::{
     WebRequestContextResolver as AppRequestContextResolver, WebRequestParserResolver,
     WebRequestParserResolver as AppRequestParserResolver,
 };
-pub use crate::route_manifest::{route_path_matches, HttpRouteManifest};
+pub use crate::route_manifest::{route_path_matches, HttpRouteManifest, RouteManifestMount};
 pub use crate::runtime_options::WebFrameworkOptionalFeatures;
 pub use crate::security::{
     is_development_private_network_origin, CorsPolicy, CrossSiteRequestPolicy,

@@ -838,6 +838,12 @@ where
                 state.auth_mode = WebAuthMode::AgentToken;
                 return Ok(());
             }
+            if runtime.route_manifest.is_some() && state.route_auth.is_none() {
+                return Err(WebFrameworkError::missing_credentials(
+                    "registered app-api, backend-api, and gateway-api routes must declare RouteAuth in the bound route manifest",
+                )
+                .with_reason("unregistered-route-auth-profile"));
+            }
             let access_token = required_non_open_api_access_token(state)?;
             let auth_token = state.credentials.auth_token.as_deref().ok_or_else(|| {
                 WebFrameworkError::missing_credentials(

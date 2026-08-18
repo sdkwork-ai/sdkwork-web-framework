@@ -26,7 +26,9 @@ mod tracing_init;
 #[cfg(feature = "admin-api")]
 pub use admin_api::{mount_web_framework_admin_api, WebFrameworkAdminMount};
 pub use api_assembly::{
-    permission_catalog, ApiAssemblyContribution, ComposedApiAssembly, HostedApiAssembly,
+    merge_route_manifest_mounts, permission_catalog, prepare_host_route_manifest,
+    finalize_host_route_manifest, ApiAssemblyContribution, ComposedApiAssembly, HostedApiAssembly,
+    RouteManifestMount,
 };
 pub use env_config::{
     application_cors_layer_from_env, application_security_policy_from_env,
