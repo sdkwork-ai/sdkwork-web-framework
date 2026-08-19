@@ -402,6 +402,7 @@ fn auth_mode_label(auth: sdkwork_web_contract::RouteAuth) -> &'static str {
         RouteAuth::BootstrapBody => "bootstrap-body",
         RouteAuth::CredentialEntryBootstrap => "credential-entry-bootstrap",
         RouteAuth::DualToken => "dual-token",
+        RouteAuth::DualTokenOrAnonymous => "dual-token-or-anonymous",
         RouteAuth::ApiKey => "api-key",
         RouteAuth::OAuth => "oauth",
         RouteAuth::OpenApiFlexible => "open-api-flexible",

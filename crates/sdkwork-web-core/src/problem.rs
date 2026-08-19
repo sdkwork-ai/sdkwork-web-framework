@@ -102,7 +102,7 @@ impl<'a> ProblemCorrelation<'a> {
 
     pub fn resolved_trace_id(&self) -> Option<String> {
         if let Some(trace_id) = self.trace_id.filter(|value| !value.is_empty()) {
-            return Some(trace_id.to_owned());
+            return crate::trace::normalize_wire_trace_id(trace_id);
         }
         self.request_id
             .map(|request_id| resolve_problem_trace_id(request_id, None))
@@ -456,7 +456,7 @@ mod tests {
         assert!(payload.get("requestId").is_none());
         assert_eq!(40301, payload["code"].as_i64().unwrap());
         assert_eq!(
-            "4bf92f3577b34da6a3ce929d0e0e4736",
+            "4bf92f35-77b3-4da6-a3ce-929d0e0e4736",
             payload["traceId"].as_str().unwrap()
         );
     }

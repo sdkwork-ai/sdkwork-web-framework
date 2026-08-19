@@ -599,7 +599,7 @@ async fn admin_handler_problem_includes_trace_id_from_context() {
         "handler Problem+json must include traceId"
     );
     assert_eq!(
-        "4bf92f3577b34da6a3ce929d0e0e4736",
+        "4bf92f35-77b3-4da6-a3ce-929d0e0e4736",
         payload["traceId"].as_str().unwrap()
     );
 }

@@ -42,3 +42,7 @@ pub fn is_canonical_uuid(value: &str) -> bool {
             _ => matches!(*byte, b'0'..=b'9' | b'a'..=b'f'),
         })
 }
+
+pub fn collapse_inbound_http_path(path_and_query: &str) -> String {
+    sdkwork_utils_rust::path::collapse_duplicate_surface_prefix(path_and_query)
+}

@@ -750,13 +750,16 @@ where
         WebApiSurface::AppApi | WebApiSurface::BackendApi | WebApiSurface::GatewayApi => {
             match state.route_auth {
                 Some(RouteAuth::Public) => {
-                    if state.api_surface == WebApiSurface::AppApi {
+                    if matches!(
+                        state.api_surface,
+                        WebApiSurface::AppApi | WebApiSurface::BackendApi
+                    ) {
                         state.auth_mode = WebAuthMode::Public;
                         state.principal = None;
                         return Ok(());
                     }
                     return Err(WebFrameworkError::missing_credentials(
-                        "backend-api and gateway-api routes must not declare public authentication",
+                        "gateway-api routes must not declare public authentication",
                     )
                     .with_reason("invalid-non-open-api-public-route"));
                 }
@@ -839,10 +842,14 @@ where
                 return Ok(());
             }
             if runtime.route_manifest.is_some() && state.route_auth.is_none() {
-                return Err(WebFrameworkError::missing_credentials(
-                    "registered app-api, backend-api, and gateway-api routes must declare RouteAuth in the bound route manifest",
+                // Bound manifests are the auth-profile authority. An unmatched
+                // app-api/backend-api/gateway-api path is not "missing tokens";
+                // it is not a registered route (for example a client SDK whose
+                // owner assembly is not embedded in this host).
+                return Err(WebFrameworkError::not_found(
+                    "route is not registered in the gateway route manifest",
                 )
-                .with_reason("unregistered-route-auth-profile"));
+                .with_reason("route-not-in-manifest"));
             }
             let access_token = required_non_open_api_access_token(state)?;
             let auth_token = state.credentials.auth_token.as_deref().ok_or_else(|| {

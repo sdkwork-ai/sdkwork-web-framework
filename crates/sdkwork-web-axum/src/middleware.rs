@@ -250,6 +250,7 @@ where
 }
 
 async fn server_request_identity_middleware(mut request: Request, next: Next) -> Response {
+    normalize_inbound_request_uri(&mut request);
     if request.extensions().get::<WebRequestContext>().is_some() {
         return next.run(request).await;
     }
@@ -272,6 +273,26 @@ async fn server_request_identity_middleware(mut request: Request, next: Next) ->
         HeaderValue::from_str(&request_id).expect("valid request id"),
     );
     response
+}
+
+fn normalize_inbound_request_uri(request: &mut Request) {
+    let uri = request.uri().clone();
+    let original = uri
+        .path_and_query()
+        .map(|value| value.as_str())
+        .unwrap_or("/");
+    let normalized = sdkwork_web_core::collapse_inbound_http_path(original);
+    if normalized == original {
+        return;
+    }
+    let Ok(path_and_query) = normalized.parse::<axum::http::uri::PathAndQuery>() else {
+        return;
+    };
+    let mut parts = uri.into_parts();
+    parts.path_and_query = Some(path_and_query);
+    if let Ok(new_uri) = axum::http::Uri::from_parts(parts) {
+        *request.uri_mut() = new_uri;
+    }
 }
 
 async fn release_idempotency_leader<R>(runtime: &WebCallRuntime<R>, state: &WebCallState)
@@ -372,6 +393,7 @@ async fn web_request_context_middleware<R>(
 where
     R: WebRequestContextResolver + Clone,
 {
+    normalize_inbound_request_uri(&mut request);
     let request_started = std::time::Instant::now();
     let mut state = WebCallState::from_request(&request);
     if let Err(error) = layer

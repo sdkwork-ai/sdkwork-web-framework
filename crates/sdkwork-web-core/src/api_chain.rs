@@ -439,7 +439,9 @@ impl WebCallState {
             api_surface: WebApiSurface::Unknown,
             auth_mode: WebAuthMode::Public,
             principal: None,
-            path: request.uri().path().to_owned(),
+            path: sdkwork_utils_rust::path::collapse_duplicate_surface_prefix(
+                request.uri().path(),
+            ),
             method: request.method().as_str().to_owned(),
             cors_preflight: request.method() == axum::http::Method::OPTIONS
                 && headers.contains_key("origin")

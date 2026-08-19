@@ -800,11 +800,107 @@ async fn bound_manifest_rejects_unregistered_app_api_route_auth_profile() {
         .before(&mut state, &mut request, &runtime)
         .await
         .expect_err("unregistered app-api route must not default to dual-token");
+    assert_eq!(WebFrameworkErrorKind::NotFound, error.kind);
+    assert_eq!(Some("route-not-in-manifest"), error.reason.as_deref());
+}
+
+#[tokio::test]
+async fn unregistered_generations_app_api_is_not_found_not_auth() {
+    use sdkwork_web_contract::{HttpMethod, HttpRoute, RouteAuth};
+
+    const ROUTES: &[HttpRoute] = &[HttpRoute::new(
+        HttpMethod::Get,
+        "/app/v3/api/image/generations",
+        "image",
+        "generations.list",
+        RouteAuth::DualToken,
+    )];
+
+    let runtime = WebCallRuntime::new(DefaultWebRequestContextResolver::default())
+        .with_route_manifest(HttpRouteManifest::new(ROUTES));
+    let chain = WebCallInterceptorChain::standard();
+    let mut request = Request::builder()
+        .uri("/app/v3/api/generations")
+        .header("Authorization", "Bearer auth")
+        .header("Access-Token", "access")
+        .body(Body::empty())
+        .expect("request");
+    let mut state = WebCallState::from_request(&request);
+    let error = chain
+        .before(&mut state, &mut request, &runtime)
+        .await
+        .expect_err("unified generations API is not mounted on this host");
+    assert_eq!(WebFrameworkErrorKind::NotFound, error.kind);
+    assert_eq!(Some("route-not-in-manifest"), error.reason.as_deref());
+}
+
+#[test]
+fn inbound_request_path_collapses_duplicate_app_api_prefix() {
+    let request = Request::builder()
+        .uri("/app/v3/api/app/v3/api/assets?page=1")
+        .body(Body::empty())
+        .expect("request");
+    let state = WebCallState::from_request(&request);
+    assert_eq!("/app/v3/api/assets", state.path);
+}
+
+#[tokio::test]
+async fn collapsed_duplicate_app_api_prefix_resolves_manifest_route_auth() {
+    use sdkwork_web_contract::{HttpMethod, HttpRoute, RouteAuth};
+
+    const ROUTES: &[HttpRoute] = &[HttpRoute::new(
+        HttpMethod::Get,
+        "/app/v3/api/assets",
+        "drive-app-api",
+        "assets.list",
+        RouteAuth::DualToken,
+    )];
+
+    let runtime = WebCallRuntime::new(DefaultWebRequestContextResolver::default())
+        .with_route_manifest(HttpRouteManifest::new(ROUTES));
+    let chain = WebCallInterceptorChain::standard();
+    let mut request = Request::builder()
+        .uri("/app/v3/api/app/v3/api/assets")
+        .body(Body::empty())
+        .expect("request");
+    let mut state = WebCallState::from_request(&request);
+    let error = chain
+        .before(&mut state, &mut request, &runtime)
+        .await
+        .expect_err("doubled-prefix route still requires credentials once manifest matches");
     assert_eq!(WebFrameworkErrorKind::MissingCredentials, error.kind);
-    assert_eq!(
-        Some("unregistered-route-auth-profile"),
-        error.reason.as_deref()
-    );
+    assert_ne!(Some("route-not-in-manifest"), error.reason.as_deref());
+    assert_eq!(Some(RouteAuth::DualToken), state.route_auth);
+}
+
+#[tokio::test]
+async fn manifest_backend_api_public_route_skips_credentials() {
+    use sdkwork_web_contract::{HttpMethod, HttpRoute};
+
+    const ROUTES: &[HttpRoute] = &[HttpRoute::public(
+        HttpMethod::Post,
+        "/backend/v3/api/rtc/provider_webhooks/{provider}/events",
+        "rtc",
+        "rtc.providerWebhooks.events.receive",
+    )];
+
+    let runtime = WebCallRuntime::new(DefaultWebRequestContextResolver::default())
+        .with_route_manifest(HttpRouteManifest::new(ROUTES));
+    let chain = WebCallInterceptorChain::standard();
+    let mut request = Request::builder()
+        .method("POST")
+        .uri("/backend/v3/api/rtc/provider_webhooks/agora/events")
+        .header("content-type", "application/json")
+        .body(Body::from("{}"))
+        .expect("request");
+    let mut state = WebCallState::from_request(&request);
+    chain
+        .before(&mut state, &mut request, &runtime)
+        .await
+        .expect("manifest-declared backend-api public route skips credentials");
+    assert!(state.public_path);
+    assert_eq!(WebAuthMode::Public, state.auth_mode);
+    assert!(state.principal.is_none());
 }
 
 #[tokio::test]

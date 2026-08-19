@@ -280,7 +280,7 @@ async fn pipeline_problem_response_includes_trace_id_from_traceparent() {
         .expect("body");
     let payload: serde_json::Value = serde_json::from_slice(&body).expect("json");
     assert_eq!(
-        "4bf92f3577b34da6a3ce929d0e0e4736",
+        "4bf92f35-77b3-4da6-a3ce-929d0e0e4736",
         payload["traceId"].as_str().unwrap()
     );
     assert!(payload.get("requestId").is_none());
@@ -380,7 +380,7 @@ async fn extractor_rejection_includes_trace_id_without_pipeline_context() {
         payload["type"].as_str().unwrap()
     );
     assert_eq!(
-        "4bf92f3577b34da6a3ce929d0e0e4736",
+        "4bf92f35-77b3-4da6-a3ce-929d0e0e4736",
         payload["traceId"].as_str().unwrap()
     );
     assert!(payload.get("requestId").is_none());

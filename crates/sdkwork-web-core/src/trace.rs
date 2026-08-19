@@ -44,6 +44,26 @@ pub fn trace_id_from_traceparent(traceparent: &str) -> Option<&str> {
     }
 }
 
+/// Normalize a trace id for SDKWork wire responses.
+pub fn normalize_wire_trace_id(trace_id: &str) -> Option<String> {
+    let trace_id = trace_id.trim();
+    if trace_id.is_empty() {
+        return None;
+    }
+    if trace_id.len() == 32 && trace_id.chars().all(|c| c.is_ascii_hexdigit()) {
+        let normalized = trace_id.to_ascii_lowercase();
+        return Some(format!(
+            "{}-{}-{}-{}-{}",
+            &normalized[0..8],
+            &normalized[8..12],
+            &normalized[12..16],
+            &normalized[16..20],
+            &normalized[20..32]
+        ));
+    }
+    Some(trace_id.to_owned())
+}
+
 fn is_valid_traceparent(value: &str) -> bool {
     let parts: Vec<&str> = value.split('-').collect();
     parts.len() == 4
@@ -57,11 +77,11 @@ fn is_valid_traceparent(value: &str) -> bool {
 
 /// Resolve the trace id exposed on Problem+json responses.
 pub fn resolve_problem_trace_id(request_id: &str, trace_id: Option<&str>) -> String {
-    if let Some(trace_id) = trace_id.map(str::trim).filter(|value| !value.is_empty()) {
-        return trace_id.to_owned();
+    if let Some(trace_id) = trace_id.and_then(normalize_wire_trace_id) {
+        return trace_id;
     }
     trace_id_from_traceparent(&synthetic_traceparent(request_id))
-        .map(str::to_owned)
+        .and_then(normalize_wire_trace_id)
         .unwrap_or_else(|| {
             request_id
                 .chars()
@@ -122,6 +142,14 @@ mod tests {
         assert_eq!(
             Some("4bf92f3577b34da6a3ce929d0e0e4736"),
             trace_id_from_traceparent("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
+        );
+    }
+
+    #[test]
+    fn normalizes_w3c_trace_id_to_uuid_for_wire() {
+        assert_eq!(
+            Some("4bf92f35-77b3-4da6-a3ce-929d0e0e4736".to_string()),
+            normalize_wire_trace_id("4bf92f3577b34da6a3ce929d0e0e4736")
         );
     }
 }

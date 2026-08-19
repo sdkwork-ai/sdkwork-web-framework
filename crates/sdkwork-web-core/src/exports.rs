@@ -121,7 +121,8 @@ pub use crate::request_context::{
     WebTenancyContext, WebTransportFacts,
 };
 pub use crate::request_identity::{
-    is_canonical_uuid, new_request_id, resolve_request_id, ServerRequestId,
+    collapse_inbound_http_path, is_canonical_uuid, new_request_id, resolve_request_id,
+    ServerRequestId,
 };
 pub use crate::resolvers::{
     is_tenant_bound_verifying_resolver, tenant_bound_saas_verifying_web_request_resolver,
