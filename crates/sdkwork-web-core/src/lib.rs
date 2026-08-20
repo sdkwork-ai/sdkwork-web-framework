@@ -26,6 +26,7 @@ pub mod problem;
 pub mod production_assembly;
 pub mod rate_limit;
 pub mod rate_limit_policy;
+pub mod registered_client_origins;
 pub mod redact;
 pub mod request_context;
 pub mod request_identity;

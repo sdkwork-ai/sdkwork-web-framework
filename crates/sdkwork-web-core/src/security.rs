@@ -1,4 +1,5 @@
 use crate::error::WebFrameworkError;
+use crate::registered_client_origins::merge_registered_sdkwork_client_origins;
 use axum::extract::Request;
 use axum::http::{HeaderName, HeaderValue, Method, Uri};
 use axum::response::Response;
@@ -297,6 +298,13 @@ impl CorsPolicy {
         policy
     }
 
+    /// Ensures registered SDKWork desktop and mini program client origins are
+    /// present on this policy without removing configured entries.
+    pub fn with_registered_sdkwork_client_origins(mut self) -> Self {
+        merge_registered_sdkwork_client_origins(&mut self.allowed_origins);
+        self
+    }
+
     pub fn validate_origin(&self, request: &Request) -> Result<(), WebFrameworkError> {
         let Some(origin) = request
             .headers()
@@ -460,6 +468,21 @@ fn origin_matches_allowed(allowed: &str, origin: &str) -> bool {
             "https"
         };
         return is_development_private_network_origin_with_scheme(origin, required_scheme);
+    }
+
+    if allowed == "app://*" || allowed == "tauri://*" {
+        let required_prefix = if allowed == "app://*" {
+            "app://"
+        } else {
+            "tauri://"
+        };
+        let Some(authority) = origin.strip_prefix(required_prefix) else {
+            return false;
+        };
+        return !(authority.is_empty()
+            || authority.contains(['/', '?', '#'])
+            || authority.contains('@')
+            || origin != origin.trim());
     }
 
     let Some(base) = allowed.strip_suffix(":*") else {
@@ -1361,5 +1384,21 @@ mod tests {
             .expect("request");
         let error = validate_cookie_authenticated_source(&cors, &request).expect_err("referer");
         assert_eq!(WebFrameworkErrorKind::Forbidden, error.kind);
+    }
+
+    #[test]
+    fn custom_scheme_wildcards_allow_registered_desktop_origins() {
+        let policy = CorsPolicy {
+            allowed_origins: vec!["app://*".to_owned(), "tauri://*".to_owned()],
+            ..CorsPolicy::default()
+        };
+        for origin in ["app://dsh", "app://birdcoder", "tauri://localhost"] {
+            policy
+                .validate_origin_value(origin)
+                .unwrap_or_else(|_| panic!("expected `{origin}` to match custom-scheme wildcard"));
+        }
+        assert!(policy
+            .validate_origin_value("https://evil.example.com")
+            .is_err());
     }
 }

@@ -104,6 +104,10 @@ pub use crate::rate_limit::{
     limits_for_tier, DefaultRateLimitPolicyResolver, RateLimitPolicyResolver,
     ResolvedRateLimitPolicy,
 };
+pub use crate::registered_client_origins::{
+    merge_registered_sdkwork_client_origins, registered_sdkwork_client_cors_origins,
+    REGISTERED_SDKWORK_DESKTOP_CORS_ORIGINS, REGISTERED_SDKWORK_MINI_PROGRAM_CORS_ORIGINS,
+};
 pub use crate::rate_limit_policy::{
     rate_limit_tier_key, DynamicRateLimitPolicySource, NoOpDynamicRateLimitPolicySource,
     RateLimitPolicyContext,

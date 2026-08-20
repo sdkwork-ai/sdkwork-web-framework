@@ -80,6 +80,7 @@ pub fn security_policy_for_environment(
             policy.cors.allowed_origins.push(origin);
         }
     }
+    policy.cors = policy.cors.with_registered_sdkwork_client_origins();
     policy
 }
 
@@ -163,6 +164,14 @@ mod tests {
             .cors
             .validate_origin_value("https://console.example.com")
             .expect("configured production origin");
+        policy
+            .cors
+            .validate_origin_value("app://dsh")
+            .expect("registered desktop origin");
+        policy
+            .cors
+            .validate_origin_value("https://servicewechat.com")
+            .expect("registered mini program origin");
         policy
             .cors
             .validate_origin_value("http://192.168.50.12:5173")
