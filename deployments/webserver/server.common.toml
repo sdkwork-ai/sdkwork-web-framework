@@ -1,6 +1,6 @@
 specVersion = 1
 kind = "sdkwork.webserver.server"
-id = "web-framework"
+id = "web_framework"
 enabled = false
-description = "no public web surface declared in topology (missing specs/topology.spec.json)"
+description = "sdkwork-web-framework webserver placeholder (no cloudPublicHosts in topology)"
 

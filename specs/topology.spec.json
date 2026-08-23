@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 5,
+  "kind": "sdkwork.app.topology",
+  "appId": "sdkwork-web-framework",
+  "applicationCode": "web_framework",
+  "archetype": "application-client-root",
+  "archetypeNotes": "No owned HTTP public-ingress; nginx webserver profile remains disabled.",
+  "cloudPublicHosts": {}
+}
