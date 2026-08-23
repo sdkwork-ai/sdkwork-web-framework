@@ -245,10 +245,35 @@ fn replace_with_standard_problem(
         correlation.routing(),
     );
     problem.status = status.as_u16();
+    let mut payload = serde_json::to_value(problem).expect("problem detail is serializable");
+    // Preserve explicit route-selection diagnostics when the upstream handler
+    // attached `x-sdkwork-route-stage` / `x-sdkwork-route-reason` headers.
+    // Without this the standard `client_safe_detail` remap collapses a Cloud
+    // Router account-pool 503 into the generic "A required dependency is
+    // temporarily unavailable", hiding the exact selector reason ("账号池网关
+    // 暂不可用" is then undebuggable from the wire). The header values were
+    // already scrubbed/length-capped by the emitting handler.
+    if let Some(value) = original_headers
+        .get("x-sdkwork-route-stage")
+        .and_then(|value| value.to_str().ok())
+    {
+        if !value.is_empty() {
+            payload["failedStage"] = serde_json::Value::String(value.to_owned());
+        }
+    }
+    if let Some(value) = original_headers
+        .get("x-sdkwork-route-reason")
+        .and_then(|value| value.to_str().ok())
+    {
+        if !value.is_empty() {
+            payload["detail"] = serde_json::Value::String(value.to_owned());
+            payload["reason"] = serde_json::Value::String(value.to_owned());
+        }
+    }
     let mut normalized = (
         status,
         [(header::CONTENT_TYPE, "application/problem+json")],
-        Json(problem),
+        Json(payload),
     )
         .into_response();
     if let Ok(value) = HeaderValue::from_str(&trace_id) {
@@ -327,6 +352,7 @@ pub fn redact_path_template(path: &str) -> String {
 mod tests {
     use super::*;
     use crate::trace::trace_id_from_traceparent;
+    use axum::http::StatusCode;
 
     #[test]
     fn redacts_numeric_path_segments() {
@@ -553,5 +579,115 @@ mod tests {
         let error = WebFrameworkError::conflict("dup");
         let response = problem_response(&error, None.into());
         assert!(response.headers().get(header::CONTENT_TYPE).is_some());
+    }
+
+    #[test]
+    fn replace_with_standard_problem_preserves_route_reason_headers() {
+        use axum::http::header::CONTENT_TYPE;
+
+        // A 503 response that is NOT problem+json (e.g. an OpenAI-style error
+        // body from the Cloud Router account-pool gateway) gets replaced by
+        // the standard 50301 ProblemDetail. The replacement must carry the
+        // handler-provided `x-sdkwork-route-stage` / `x-sdkwork-route-reason`
+        // headers into the body so the exact selector cause survives.
+        let response = Response::builder()
+            .status(StatusCode::SERVICE_UNAVAILABLE)
+            .header(header::CONTENT_TYPE, "application/json")
+            .header("x-sdkwork-route-stage", "account_not_callable")
+            .header(
+                "x-sdkwork-route-reason",
+                "no upstream account in account group default supports model openai/gpt-4o-mini for api openai.chat_completions (all 1 group-bound account(s) are unhealthy or missing callable base url or credential)",
+            )
+            .body(Body::from(r#"{"error":{"message":"upstream_route_not_available"}}"#))
+            .expect("response");
+        let mut response = response;
+        let correlation = ProblemCorrelation::new(Some("req-1"), Some("trace-1"));
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("runtime");
+        runtime.block_on(async {
+            normalize_problem_response(correlation, &mut response)
+                .await
+                .expect("normalize");
+        });
+        assert_eq!(503, response.status().as_u16());
+        assert_eq!(
+            "application/problem+json",
+            response
+                .headers()
+                .get(CONTENT_TYPE)
+                .and_then(|value| value.to_str().ok())
+                .unwrap_or_default()
+        );
+        let bytes = runtime
+            .block_on(async { axum::body::to_bytes(response.into_body(), usize::MAX).await })
+            .expect("body");
+        let payload: serde_json::Value = serde_json::from_slice(&bytes).expect("problem json");
+        assert_eq!(50301, payload["code"].as_i64().unwrap());
+        assert_eq!(
+            "account_not_callable",
+            payload["failedStage"].as_str().unwrap()
+        );
+        assert!(
+            payload["detail"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("no upstream account in account group default")
+        );
+        assert_eq!(
+            payload["reason"].as_str().unwrap(),
+            payload["detail"].as_str().unwrap()
+        );
+        assert!(
+            payload["detail"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("missing callable base url or credential")
+        );
+    }
+
+    #[test]
+    fn replace_with_standard_problem_keeps_client_safe_detail_without_reason_header() {
+        use axum::http::header::CONTENT_TYPE;
+
+        // Without the explicit route-reason header the standard remap keeps
+        // the safe detail so internal implementation text is not leaked.
+        let response = Response::builder()
+            .status(StatusCode::SERVICE_UNAVAILABLE)
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(r#"{"error":{"message":"secret upstream detail"}}"#))
+            .expect("response");
+        let mut response = response;
+        let correlation = ProblemCorrelation::new(Some("req-2"), Some("trace-2"));
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("runtime");
+        runtime.block_on(async {
+            normalize_problem_response(correlation, &mut response)
+                .await
+                .expect("normalize");
+        });
+        assert_eq!(503, response.status().as_u16());
+        assert_eq!(
+            "application/problem+json",
+            response
+                .headers()
+                .get(CONTENT_TYPE)
+                .and_then(|value| value.to_str().ok())
+                .unwrap_or_default()
+        );
+        let bytes = runtime
+            .block_on(async { axum::body::to_bytes(response.into_body(), usize::MAX).await })
+            .expect("body");
+        let payload: serde_json::Value = serde_json::from_slice(&bytes).expect("problem json");
+        assert_eq!(
+            "A required dependency is temporarily unavailable",
+            payload["detail"].as_str().unwrap()
+        );
+        assert!(!payload["detail"].as_str().unwrap().contains("secret"));
+        assert!(payload.get("failedStage").is_none());
+        assert!(payload.get("reason").is_none());
     }
 }
