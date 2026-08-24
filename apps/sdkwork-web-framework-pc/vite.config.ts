@@ -1,3 +1,11 @@
+import { resolveBrowserDistOutDir } from '../../../sdkwork-specs/tools/browser-dist-layout.mjs';
+function resolveViteEnvironment(mode, processEnv = process.env) {
+  const profileMatch = /^(standalone|cloud)\.(development|test|staging|production)$/u.exec(mode ?? '');
+  return profileMatch?.[2]
+    ?? (['development', 'test', 'staging', 'production'].includes(processEnv.SDKWORK_ENVIRONMENT ?? '')
+      ? processEnv.SDKWORK_ENVIRONMENT
+      : 'production');
+}
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { defineConfig, loadEnv } from 'vite';
@@ -12,6 +20,10 @@ export default defineConfig(({ mode }) => {
     env.SDKWORK_WEB_FRAMEWORK_ADMIN_URL?.trim() ||
     'http://127.0.0.1:3920';
   return {
+    build: {
+      outDir: resolveBrowserDistOutDir(resolveViteEnvironment(mode, process.env)),
+      emptyOutDir: true,
+    },
     define: {
       'process.env.SDKWORK_ACCESS_TOKEN': JSON.stringify(env.SDKWORK_ACCESS_TOKEN ?? ''),
     },
