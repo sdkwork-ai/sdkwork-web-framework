@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "kind": "sdkwork.deployment-index",
+  "application": "web-framework",
+  "environments": {
+    "development": {
+      "cloudApiBaseUrl": "https://api-dev.sdkwork.com"
+    },
+    "test": {
+      "cloudApiBaseUrl": "https://api-test.sdkwork.com"
+    },
+    "staging": {
+      "cloudApiBaseUrl": "https://api-staging.sdkwork.com"
+    },
+    "production": {
+      "cloudApiBaseUrl": "https://api.sdkwork.com"
+    }
+  }
+}

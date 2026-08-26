@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 3,
+  "kind": "sdkwork.app",
+  "app": {
+    "key": "sdkwork-web-framework",
+    "name": "SDKWork Web Framework",
+    "displayName": "SDKWork Web Framework",
+    "description": "SDKWork Web Framework application.",
+    "appType": "SDK"
+  },
+  "runtime": {
+    "family": "server",
+    "framework": "rust-service",
+    "defaultPlatform": "API",
+    "defaultArchitecture": "x64",
+    "supportedDeploymentProfiles": [
+      "standalone",
+      "cloud"
+    ],
+    "defaultDeploymentProfile": "standalone"
+  }
+}

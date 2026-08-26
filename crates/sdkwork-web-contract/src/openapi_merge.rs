@@ -330,15 +330,31 @@ fn merge_openapi_version(
     version: &str,
 ) -> Result<(), OpenApiMergeError> {
     match &state.openapi {
-        Some(existing) if existing.value.as_str() != Some(version) => {
+        Some(existing) => {
+            let expected = existing.value.as_str().unwrap_or_default();
+            if expected == version {
+                return Ok(());
+            }
+            // API_SPEC: OpenAPI SHOULD be 3.1.2; other 3.1.x patch levels are
+            // acceptable toolchain fallbacks. Gateway composition therefore
+            // allows same major.minor with different patch and keeps the
+            // higher patch in the combined document.
+            if openapi_same_minor_line(expected, version) {
+                if openapi_version_rank(version) > openapi_version_rank(expected) {
+                    state.openapi = Some(OwnedValue {
+                        owner: owner.to_owned(),
+                        value: Value::String(version.to_owned()),
+                    });
+                }
+                return Ok(());
+            }
             Err(OpenApiMergeError::OpenApiVersionConflict {
                 expected_owner: existing.owner.clone(),
-                expected: existing.value.as_str().unwrap_or_default().to_owned(),
+                expected: expected.to_owned(),
                 conflicting_owner: owner.to_owned(),
                 actual: version.to_owned(),
             })
         }
-        Some(_) => Ok(()),
         None => {
             state.openapi = Some(OwnedValue {
                 owner: owner.to_owned(),
@@ -347,6 +363,27 @@ fn merge_openapi_version(
             Ok(())
         }
     }
+}
+
+fn openapi_version_parts(version: &str) -> Option<(u32, u32, u32)> {
+    let mut parts = version.split('.');
+    let major = parts.next()?.parse().ok()?;
+    let minor = parts.next()?.parse().ok()?;
+    let patch = parts.next().unwrap_or("0").parse().unwrap_or(0);
+    Some((major, minor, patch))
+}
+
+fn openapi_same_minor_line(left: &str, right: &str) -> bool {
+    match (openapi_version_parts(left), openapi_version_parts(right)) {
+        (Some((l_major, l_minor, _)), Some((r_major, r_minor, _))) => {
+            l_major == r_major && l_minor == r_minor
+        }
+        _ => false,
+    }
+}
+
+fn openapi_version_rank(version: &str) -> (u32, u32, u32) {
+    openapi_version_parts(version).unwrap_or((0, 0, 0))
 }
 
 fn merge_info(
@@ -953,6 +990,17 @@ mod tests {
             error,
             OpenApiMergeError::OpenApiVersionConflict { .. }
         ));
+    }
+
+    #[test]
+    fn accepts_openapi_31_patch_differences_and_keeps_higher_patch() {
+        let first = document("First", "/first", "get", json!({}));
+        let mut second = document("Second", "/second", "get", json!({}));
+        second["openapi"] = json!("3.1.2");
+
+        let merged = merge_openapi_documents("Combined", [("first", first), ("second", second)])
+            .expect("3.1.x patch levels must compose");
+        assert_eq!(merged["openapi"], json!("3.1.2"));
     }
 
     #[test]
