@@ -48,6 +48,9 @@ tools/.gateway-alignment-report.json
 coverage/
 .DS_Store
 Thumbs.db
+
+# Generated runtime files (do not track)
+**/public/runtime-env.json
 .idea/
 .vscode/
 *.log
