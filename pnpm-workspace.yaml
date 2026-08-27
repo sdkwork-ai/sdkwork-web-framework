@@ -1,0 +1,3 @@
+packages:
+  - "apps/sdkwork-web-framework-pc"
+  - "apps/sdkwork-web-framework-pc/packages/*"
