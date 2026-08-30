@@ -16,7 +16,7 @@ import {
   PERM_TENANT_ADMIN,
   readDevAuthClaims,
 } from "../devAuth";
-import { messages, tabLabels } from "../i18n/messages";
+import { messages, tabLabels } from "../i18n";
 import { readDevAuthToken } from "../sdk/auth/token-provider";
 import { getWebFrameworkAdminService } from "../services/web-framework-admin-service";
 

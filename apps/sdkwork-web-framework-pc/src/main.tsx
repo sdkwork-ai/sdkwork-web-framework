@@ -6,7 +6,7 @@ import {
   useWebFrameworkAdmin,
   type WebFrameworkAdminTab,
 } from "./hooks/useWebFrameworkAdmin";
-import { messages } from "./i18n/messages";
+import { messages } from "./i18n";
 import "./styles.css";
 
 const EDITABLE_TABS: ReadonlySet<WebFrameworkAdminTab> = new Set([

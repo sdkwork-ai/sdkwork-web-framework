@@ -1,36 +1,177 @@
 {
-  "schemaVersion": 2,
-  "appId": "sdkwork-web-framework-pc",
-  "name": "SDKWork Web Framework Console",
-  "family": "platform",
+  "schemaVersion": 3,
+  "kind": "sdkwork.app",
+  "app": {
+    "key": "app-0tw41m",
+    "name": "App 0tw41m",
+    "displayName": "App 0tw41m",
+    "officialWebsiteUrl": "https://sdkwork.com/apps/app-0tw41m",
+    "appType": "APP_HTML"
+  },
+  "backend": {},
   "runtime": {
     "framework": "vite-react",
     "supportedDeploymentProfiles": [
       "cloud"
     ],
-    "defaultDeploymentProfile": "cloud"
+    "defaultDeploymentProfile": "cloud",
+    "family": "server"
   },
-  "preset": "pc-admin",
-  "apiSurfaces": [
-    {
-      "surface": "backend",
-      "prefix": "/backend/v3/api/web-framework",
-      "owner": "local",
-      "serviceId": "sdkwork-web-framework-backend-api"
-    }
-  ],
-  "envBindings": {
-    "variables": [
-      {
-        "name": "VITE_SDKWORK_WEB_FRAMEWORK_BACKEND_API_BASE_URL",
-        "required": false,
-        "tracked": true
+  "media": {
+    "icons": {
+      "primary": {
+        "id": "app-0tw41m-primary-icon",
+        "type": "ICON",
+        "purpose": "PRIMARY",
+        "url": "https://cdn.sdkwork.com/apps/app-0tw41m/assets/icon-1024.png",
+        "platform": "APP",
+        "locale": "en-US",
+        "width": 1024,
+        "height": 1024,
+        "format": "PNG",
+        "fileSizeBytes": 524288,
+        "alphaChannel": false,
+        "sortOrder": 0,
+        "enabled": true,
+        "metadata": {
+          "generatedPlaceholder": true
+        }
       },
+      "platform": [],
+      "metadata": {
+        "generatedPlaceholder": true
+      }
+    },
+    "screenshots": [
       {
-        "name": "VITE_SDKWORK_ACCESS_TOKEN",
-        "required": false,
-        "tracked": true
+        "id": "app-0tw41m-web-screenshot",
+        "type": "SCREENSHOT",
+        "purpose": "CATALOG_SCREENSHOT",
+        "url": "https://cdn.sdkwork.com/apps/app-0tw41m/media/web-screenshot.png",
+        "platform": "WEB",
+        "locale": "en-US",
+        "deviceClass": "BROWSER",
+        "displayType": "WEB_DESKTOP",
+        "width": 1920,
+        "height": 1080,
+        "format": "PNG",
+        "fileSizeBytes": 1048576,
+        "alphaChannel": false,
+        "caption": "App 0tw41m product screenshot.",
+        "sortOrder": 0,
+        "enabled": true,
+        "metadata": {
+          "generatedPlaceholder": true,
+          "altText": "App 0tw41m app screenshot."
+        }
+      }
+    ],
+    "previews": [
+      {
+        "id": "app-0tw41m-catalog-preview",
+        "type": "PREVIEW_IMAGE",
+        "purpose": "CATALOG_PREVIEW",
+        "url": "https://cdn.sdkwork.com/apps/app-0tw41m/media/preview-cover.png",
+        "platform": "WEB",
+        "locale": "en-US",
+        "width": 1600,
+        "height": 900,
+        "format": "PNG",
+        "fileSizeBytes": 786432,
+        "alphaChannel": false,
+        "caption": "App 0tw41m preview.",
+        "sortOrder": 0,
+        "enabled": true,
+        "metadata": {
+          "generatedPlaceholder": true,
+          "altText": "App 0tw41m preview cover."
+        }
+      }
+    ],
+    "metadata": {
+      "assetVersion": "0.1.0",
+      "defaultLocale": "en-US"
+    }
+  },
+  "publish": {
+    "status": "ACTIVE",
+    "platforms": [
+      "WEB"
+    ],
+    "installPlatforms": [
+      "WEB"
+    ],
+    "defaultPackageId": "linux-x64-cloud-server-tar-gz",
+    "installSkill": {
+      "name": "sdkwork-skills-app"
+    },
+    "stores": [],
+    "storeUrl": "https://sdkwork.com/apps/app-0tw41m"
+  },
+  "artifacts": {
+    "installConfig": {
+      "defaultPackageId": "linux-x64-cloud-server-tar-gz",
+      "installCommand": "sdkwork install app-0tw41m",
+      "launchCommand": "sdkwork open app-0tw41m",
+      "uninstallCommand": "sdkwork uninstall app-0tw41m",
+      "packages": [
+        {
+          "id": "linux-x64-cloud-server-tar-gz",
+          "name": "App 0tw41m cloud server archive",
+          "sourceType": "BINARY_URL",
+          "packageFormat": "TAR_GZ",
+          "platform": "API",
+          "url": "https://cdn.sdkwork.com/apps/app-0tw41m/STABLE/0.1.0/linux-x64-cloud-server-tar-gz-0.1.0.tar.gz",
+          "architecture": "x64",
+          "checksumAlgorithm": "SHA-256",
+          "checksum": "e90b75bb9443b48f2887a66e9deef64c636f3f5cad004c698512c6896de1a0a9",
+          "deploymentProfile": "cloud",
+          "runtimeTarget": "server",
+          "profileBinding": "fixed",
+          "enabled": true,
+          "metadata": {
+            "releaseBuildDeferred": false
+          }
+        }
+      ]
+    }
+  },
+  "release": {
+    "currentVersion": "0.1.0",
+    "defaultChannel": "STABLE",
+    "latest": {
+      "STABLE": "0.1.0"
+    },
+    "notes": [
+      {
+        "version": "0.1.0",
+        "releaseChannel": "STABLE",
+        "title": "App 0tw41m 0.1.0",
+        "summary": "App 0tw41m initialized standard release.",
+        "content": "Initial SDKWork App Standard v3 manifest for App 0tw41m.",
+        "highlights": [
+          "SDKWork App Standard v3 configuration initialized",
+          "platform_app projection metadata standardized",
+          "Download package matrix normalized"
+        ],
+        "packageIds": [
+          "linux-x64-cloud-server-tar-gz"
+        ],
+        "publishedAt": "2026-05-07T00:00:00Z",
+        "current": true,
+        "forceUpdate": false,
+        "minSupportedVersion": "0.1.0",
+        "metadata": {}
       }
     ]
+  },
+  "security": {
+    "checksumRequired": false,
+    "signatureRequired": false,
+    "sbomRequired": false
+  },
+  "metadata": {
+    "deploymentConfig": "etc/sdkwork.deployment.config.json",
+    "standardOwner": "sdkwork-platform"
   }
 }

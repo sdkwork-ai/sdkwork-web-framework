@@ -1,12 +1,13 @@
 /**
- * Lightweight operator-facing message catalog (FRONTEND_CODE_SPEC §3 / BACKEND_UI_SPEC §9).
+ * Authored message fragments for the web-framework console (zh-CN).
  *
- * The PC console is an internal admin surface; this module centralizes user-facing
- * strings so they can be audited and, in future, localized without hunting through
- * components. Add new keys here instead of inlining literals.
+ * Lightweight operator-facing message catalog (FRONTEND_CODE_SPEC §3 / BACKEND_UI_SPEC §9).
+ * The PC console is an internal admin surface; user-facing strings are centralized here
+ * so they can be audited and, in future, localized without hunting through components.
+ * Add new keys here instead of inlining literals.
  */
 
-export const messages = {
+export const consoleMessages = {
   appTitle: "SDKWork Web Framework Console",
   appSubtitle: "分布式运行时治理：CORS / 流控 / 租户配置 / 控制面节点",
   loading: "加载中…",
@@ -23,9 +24,9 @@ export const messages = {
   networkError: "网络错误，请检查控制面节点是否可用",
 } as const;
 
-export type MessageKey = keyof typeof messages;
+export type ConsoleMessageKey = keyof typeof consoleMessages;
 
-export const tabLabels = {
+export const consoleTabLabels = {
   defaults: "默认配置",
   cors: "CORS",
   rateLimit: "流控策略",

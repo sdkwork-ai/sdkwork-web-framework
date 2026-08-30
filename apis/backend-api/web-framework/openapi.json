@@ -573,7 +573,7 @@
         "x-sdkwork-route-auth": "dual-token"
       },
       "post": {
-        "operationId": "webFramework.controlNodes.register",
+        "operationId": "webFramework.controlNodes.create",
         "responses": {
           "200": {
             "content": {
@@ -1028,7 +1028,7 @@
         "x-sdkwork-route-auth": "dual-token"
       },
       "put": {
-        "operationId": "webFramework.corsPolicies.upsert",
+        "operationId": "webFramework.corsPolicies.update",
         "responses": {
           "200": {
             "content": {
@@ -1131,7 +1131,7 @@
     },
     "/backend/v3/api/web-framework/optional_features": {
       "get": {
-        "operationId": "webFramework.optionalFeatures.snapshot",
+        "operationId": "webFramework.optionalFeatures.list",
         "responses": {
           "200": {
             "content": {
@@ -1357,7 +1357,7 @@
         "x-sdkwork-route-auth": "dual-token"
       },
       "put": {
-        "operationId": "webFramework.rateLimitPolicies.upsert",
+        "operationId": "webFramework.rateLimitPolicies.update",
         "responses": {
           "200": {
             "content": {
@@ -1460,7 +1460,7 @@
     },
     "/backend/v3/api/web-framework/runtime_defaults": {
       "get": {
-        "operationId": "webFramework.runtimeDefaults.snapshot",
+        "operationId": "webFramework.runtimeDefaults.retrieve",
         "responses": {
           "200": {
             "content": {
@@ -1812,7 +1812,7 @@
         "x-sdkwork-route-auth": "dual-token"
       },
       "put": {
-        "operationId": "webFramework.tenantRuntimeProfiles.upsert",
+        "operationId": "webFramework.tenantRuntimeProfiles.update",
         "responses": {
           "200": {
             "content": {

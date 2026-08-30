@@ -5,5 +5,57 @@
   "applicationCode": "web_framework",
   "archetype": "application-client-root",
   "archetypeNotes": "No owned HTTP public-ingress; nginx webserver profile remains disabled.",
-  "cloudPublicHosts": {}
+  "cloudPublicHosts": {
+    "platform.api-gateway": {
+      "httpHost": "api.sdkwork.com"
+    }
+  },
+  "vocabulary": {
+    "deploymentProfile": {
+      "allowed": [
+        "standalone",
+        "cloud"
+      ]
+    }
+  },
+  "profilePattern": "{deploymentProfile}.{environment}.env",
+  "envKeys": {
+    "apiGatewayBaseUrl": "SDKWORK_WEB_FRAMEWORK_PLATFORM_API_GATEWAY_HTTP_URL",
+    "clientApiGatewayBaseUrl": "VITE_SDKWORK_WEB_FRAMEWORK_PLATFORM_API_GATEWAY_HTTP_URL"
+  },
+  "defaults": {
+    "productionProfileId": "cloud.production",
+    "developmentProfileId": "standalone.development",
+    "desktopBuildProfileId": "cloud.production"
+  },
+  "surfaces": {
+    "platform.api-gateway": {
+      "connectivityPlane": "platform",
+      "protocols": [
+        "http"
+      ],
+      "httpUrlEnv": "SDKWORK_WEB_FRAMEWORK_PLATFORM_API_GATEWAY_HTTP_URL",
+      "clientHttpEnv": "VITE_SDKWORK_WEB_FRAMEWORK_PLATFORM_API_GATEWAY_HTTP_URL"
+    }
+  },
+  "components": {},
+  "profileFiles": {
+    "standalone.development": "etc/topology/standalone.development.env",
+    "standalone.production": "etc/topology/standalone.production.env",
+    "cloud.development": "etc/topology/cloud.development.env",
+    "cloud.production": "etc/topology/cloud.production.env"
+  },
+  "orchestration": {
+    "profiles": {
+      "standalone.development": {
+        "processes": []
+      },
+      "cloud.development": {
+        "processes": [],
+        "healthSurfaces": [
+          "platform.api-gateway"
+        ]
+      }
+    }
+  }
 }
