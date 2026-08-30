@@ -325,18 +325,6 @@
             }
           },
           {
-            "deprecated": true,
-            "description": "Legacy alias for page_size (cursor mode).",
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "maximum": 200,
-              "minimum": 1,
-              "type": "integer"
-            }
-          },
-          {
             "description": "Opaque keyset cursor (audit/security event id).",
             "in": "query",
             "name": "cursor",
@@ -463,18 +451,6 @@
           {
             "in": "query",
             "name": "page_size",
-            "required": false,
-            "schema": {
-              "maximum": 200,
-              "minimum": 1,
-              "type": "integer"
-            }
-          },
-          {
-            "deprecated": true,
-            "description": "Legacy alias for page_size (offset mode).",
-            "in": "query",
-            "name": "limit",
             "required": false,
             "schema": {
               "maximum": 200,
@@ -921,18 +897,6 @@
               "minimum": 1,
               "type": "integer"
             }
-          },
-          {
-            "deprecated": true,
-            "description": "Legacy alias for page_size (offset mode).",
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "maximum": 200,
-              "minimum": 1,
-              "type": "integer"
-            }
           }
         ],
         "responses": {
@@ -1250,18 +1214,6 @@
               "minimum": 1,
               "type": "integer"
             }
-          },
-          {
-            "deprecated": true,
-            "description": "Legacy alias for page_size (offset mode).",
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "maximum": 200,
-              "minimum": 1,
-              "type": "integer"
-            }
           }
         ],
         "responses": {
@@ -1556,18 +1508,6 @@
             }
           },
           {
-            "deprecated": true,
-            "description": "Legacy alias for page_size (cursor mode).",
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "maximum": 200,
-              "minimum": 1,
-              "type": "integer"
-            }
-          },
-          {
             "description": "Opaque keyset cursor (audit/security event id).",
             "in": "query",
             "name": "cursor",
@@ -1699,18 +1639,6 @@
           {
             "in": "query",
             "name": "page_size",
-            "required": false,
-            "schema": {
-              "maximum": 200,
-              "minimum": 1,
-              "type": "integer"
-            }
-          },
-          {
-            "deprecated": true,
-            "description": "Legacy alias for page_size (offset mode).",
-            "in": "query",
-            "name": "limit",
             "required": false,
             "schema": {
               "maximum": 200,

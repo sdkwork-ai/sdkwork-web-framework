@@ -27,5 +27,4 @@ sdkwork-web-contract.workspace = true
 sdkwork-utils-rust.workspace = true
 
 [dev-dependencies]
-tokio.workspace = true
 tower.workspace = true
