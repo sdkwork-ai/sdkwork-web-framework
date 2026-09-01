@@ -33,8 +33,9 @@ pub use api_assembly::{
 pub use env_config::{
     application_cors_layer_from_env, application_security_policy_from_env,
     cors_allowed_origins_from_env, cors_allowed_origins_from_process_env,
-    security_policy_for_environment, web_environment_from_env, WebFrameworkEnv,
-    SHARED_CORS_ALLOWED_ORIGINS_ENV_KEY,
+    default_region_code_from_process_env, region_code_from_env, security_policy_for_environment,
+    web_environment_from_env, WebFrameworkEnv, DEFAULT_REGION_CODE,
+    SHARED_CORS_ALLOWED_ORIGINS_ENV_KEY, SHARED_REGION_CODE_ENV_KEY,
 };
 pub use fallback::{contract_fallback_handler, ContractFallbackConfig};
 pub use framework::{WebFramework, WebFrameworkBuilder};

@@ -33,6 +33,7 @@ pub mod request_identity;
 pub mod resolvers;
 pub mod route_manifest;
 pub mod runtime_options;
+pub mod runtime_region;
 pub mod security;
 pub mod stores;
 pub mod surface;

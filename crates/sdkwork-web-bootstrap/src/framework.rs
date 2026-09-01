@@ -58,6 +58,10 @@ where
     shutdown_grace_period: Option<Duration>,
     lifecycle: Option<Arc<dyn WebFrameworkLifecycle>>,
     open_api_scheme_detector: Option<sdkwork_web_core::DynOpenApiCredentialSchemeDetector>,
+    /// Application-specific `SDKWORK_<APPLICATION_CODE>_REGION_CODE` env keys
+    /// probed before the shared `SDKWORK_REGION_CODE` key when resolving the
+    /// startup default region (REGION_SPEC §8.2).
+    region_code_env_keys: Vec<String>,
 }
 
 pub struct WebFramework<R>
@@ -100,6 +104,13 @@ where
 
     pub fn shutdown_grace_period(&self) -> Option<Duration> {
         self.shutdown_grace_period
+    }
+
+    /// The process-wide default region code resolved at startup (REGION_SPEC
+    /// §8). Available anywhere through `sdkwork_web_core::runtime_region_code()`;
+    /// this accessor is a convenience on the built framework.
+    pub fn runtime_region_code(&self) -> &'static str {
+        sdkwork_web_core::runtime_region_code()
     }
 
     pub fn service_router_config(&self) -> ServiceRouterConfig {
@@ -202,6 +213,7 @@ where
             shutdown_grace_period: None,
             lifecycle: None,
             open_api_scheme_detector: None,
+            region_code_env_keys: Vec::new(),
         }
     }
 
@@ -390,6 +402,16 @@ where
         self
     }
 
+    /// Declares the application-specific region environment keys
+    /// (`SDKWORK_<APPLICATION_CODE>_REGION_CODE`) used to resolve the startup
+    /// default region (REGION_SPEC §8.2). The shared `SDKWORK_REGION_CODE` key
+    /// is always probed as the final fallback; when nothing is configured the
+    /// process registers the `global` default.
+    pub fn region_code_env_keys(mut self, keys: &[&str]) -> Self {
+        self.region_code_env_keys = keys.iter().map(|key| key.to_string()).collect();
+        self
+    }
+
     pub fn build(self) -> WebFramework<R> {
         #[cfg(feature = "admin-api")]
         let route_manifest = if self.route_manifest.is_none() && self.admin_api_pool.is_some() {
@@ -508,6 +530,24 @@ where
         if let Some(timeout) = self.request_timeout {
             layer = layer.with_request_timeout(timeout);
         }
+
+        // REGION_SPEC §8: resolve and publish the startup default region so any
+        // module in the process can read the deployment region through
+        // `sdkwork_web_core::runtime_region_code()` without threading config.
+        // A set-but-invalid value fails the build loudly, like the other
+        // startup validations above.
+        let region_keys: Vec<&str> = self
+            .region_code_env_keys
+            .iter()
+            .map(String::as_str)
+            .collect();
+        let region_code = crate::env_config::region_code_from_env(&region_keys)
+            .unwrap_or_else(|message| panic!("WebFrameworkBuilder default region is invalid: {message}"));
+        if let Err(message) = sdkwork_web_core::register_runtime_region(&region_code) {
+            panic!("WebFrameworkBuilder failed to register default region: {message}");
+        }
+        tracing::info!(region_code = %region_code, "startup default region registered");
+
         WebFramework {
             layer,
             metrics,

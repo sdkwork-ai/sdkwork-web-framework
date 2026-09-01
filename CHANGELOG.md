@@ -36,6 +36,7 @@ Run `scripts/verify.ps1` or `scripts/verify.sh` — commands mirror `specs/compo
 
 ### Added
 
+- **Startup default region (REGION_SPEC §8.4):** `sdkwork-web-core::runtime_region` process-wide registry (`register_runtime_region`, `runtime_region_code`) so any module can read the deployment's default region from anywhere in the process; `WebFrameworkBuilder::region_code_env_keys` resolves `SDKWORK_<APP>_REGION_CODE` / `SDKWORK_REGION_CODE` at build and registers the validated code (`global` default; invalid configured values fail startup); bootstrap exports `region_code_from_env` / `default_region_code_from_process_env`.
 - **Bounded HTTP metric series:** request and pipeline-stage registries now enforce hard series and label-byte ceilings, collapse unresolved routes to `unmatched`, exclude `/livez`, and export dropped-series counters instead of retaining unbounded label cardinality.
 
 - **Manifest-driven PC Admin SDK (K14):** `scripts/generate-pc-admin-operations.mjs` generates `operations.ts` from `routes.manifest.json`; verify gate runs `--check`.

@@ -146,6 +146,10 @@ pub use crate::resolvers::{
 };
 pub use crate::route_manifest::{route_path_matches, HttpRouteManifest, RouteManifestMount};
 pub use crate::runtime_options::WebFrameworkOptionalFeatures;
+pub use crate::runtime_region::{
+    is_runtime_region_registered, register_runtime_region, runtime_region, runtime_region_code,
+    RuntimeRegion, DEFAULT_REGION_CODE, MAX_REGION_CODE_LEN,
+};
 pub use crate::security::{
     is_development_private_network_origin, CorsPolicy, CrossSiteRequestPolicy,
     HeaderSecurityPolicy, IdempotencyPolicy, JsonContentTypePolicy, MethodGuardPolicy,

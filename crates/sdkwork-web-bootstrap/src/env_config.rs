@@ -12,6 +12,66 @@ use sdkwork_web_core::{CorsPolicy, SecurityPolicy, WebEnvironment};
 /// warning, and must not be relied on for new deployments.
 pub const SHARED_CORS_ALLOWED_ORIGINS_ENV_KEY: &str = "SDKWORK_CORS_ALLOWED_ORIGINS";
 
+/// Canonical process-wide default region environment key shared by every
+/// service (REGION_SPEC §8.2). Applications probe their own
+/// `SDKWORK_<APPLICATION_CODE>_REGION_CODE` keys first and fall back to this
+/// shared key, mirroring the CORS allow-list convention.
+pub const SHARED_REGION_CODE_ENV_KEY: &str = "SDKWORK_REGION_CODE";
+
+/// REGION_SPEC §4.1 default region code when nothing is declared.
+pub const DEFAULT_REGION_CODE: &str = "global";
+const MAX_REGION_CODE_LEN: usize = 64;
+
+/// Resolves the deployment default region code from the environment per
+/// REGION_SPEC §8.2: caller-provided application keys
+/// (`SDKWORK_<APPLICATION_CODE>_REGION_CODE`) are probed first, then the
+/// canonical shared key, then the `global` default. A set-but-invalid value
+/// is a diagnosable error so a misconfigured deployment fails loudly at
+/// startup instead of silently operating against the wrong region.
+pub fn region_code_from_env(keys: &[&str]) -> Result<String, String> {
+    let value = keys
+        .iter()
+        .copied()
+        .chain(std::iter::once(SHARED_REGION_CODE_ENV_KEY))
+        .find_map(|key| {
+            env::var(key)
+                .ok()
+                .map(|value| value.trim().to_owned())
+                .filter(|value| !value.is_empty())
+        });
+    normalize_region_code(value.as_deref())
+}
+
+/// Resolves the deployment default region from the shared canonical key only.
+pub fn default_region_code_from_process_env() -> Result<String, String> {
+    region_code_from_env(&[])
+}
+
+fn normalize_region_code(value: Option<&str>) -> Result<String, String> {
+    let Some(value) = value.filter(|value| !value.trim().is_empty()) else {
+        return Ok(DEFAULT_REGION_CODE.to_owned());
+    };
+    let code = value.trim().to_ascii_lowercase();
+    if !is_valid_region_code(&code) {
+        return Err(format!(
+            "default region code `{value}` must match ^[a-z][a-z0-9_]*$ and be at most {MAX_REGION_CODE_LEN} characters"
+        ));
+    }
+    Ok(code)
+}
+
+fn is_valid_region_code(code: &str) -> bool {
+    if code.is_empty() || code.len() > MAX_REGION_CODE_LEN {
+        return false;
+    }
+    let mut chars = code.chars();
+    match chars.next() {
+        Some(first) if first.is_ascii_alphabetic() && first.is_ascii_lowercase() => {}
+        _ => return false,
+    }
+    chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+}
+
 pub fn web_environment_from_env(keys: &[&str]) -> WebEnvironment {
     let value = keys
         .iter()
@@ -138,7 +198,10 @@ impl WebFrameworkEnv {
 
 #[cfg(test)]
 mod tests {
-    use super::{application_security_policy_from_env, security_policy_for_environment};
+    use super::{
+        application_security_policy_from_env, region_code_from_env, security_policy_for_environment,
+        SHARED_REGION_CODE_ENV_KEY,
+    };
     use sdkwork_web_core::WebEnvironment;
 
     #[test]
@@ -206,5 +269,40 @@ mod tests {
             .cors
             .validate_origin_value("https://evil.example.com")
             .expect_err("unconfigured production origin");
+    }
+
+    #[test]
+    fn region_code_from_env_resolves_keys_and_rejects_invalid_values() {
+        const APP_KEY: &str = "SDKWORK_WEB_BOOTSTRAP_TEST_APP_REGION_CODE";
+
+        // App-specific key wins over the shared canonical key.
+        std::env::set_var(APP_KEY, "cn");
+        std::env::set_var(SHARED_REGION_CODE_ENV_KEY, "global");
+        let resolved = region_code_from_env(&[APP_KEY]).expect("valid app region");
+        std::env::remove_var(APP_KEY);
+        std::env::remove_var(SHARED_REGION_CODE_ENV_KEY);
+        assert_eq!("cn", resolved);
+
+        // The shared canonical key resolves when no app-specific key is set.
+        std::env::set_var(SHARED_REGION_CODE_ENV_KEY, "eu");
+        let resolved = region_code_from_env(&[]).expect("valid shared region");
+        std::env::remove_var(SHARED_REGION_CODE_ENV_KEY);
+        assert_eq!("eu", resolved);
+
+        // Nothing set → REGION_SPEC `global` default.
+        assert_eq!("global", region_code_from_env(&[]).expect("global default"));
+
+        // A set-but-invalid value is a diagnosable error; uppercase input is
+        // normalized to lowercase before validation.
+        for invalid in ["Us-East-1", "with space", "a_b-c"] {
+            std::env::set_var(APP_KEY, invalid);
+            let result = region_code_from_env(&[APP_KEY]);
+            std::env::remove_var(APP_KEY);
+            assert!(result.is_err(), "{invalid:?} must be rejected");
+        }
+        std::env::set_var(APP_KEY, "UPPER");
+        let result = region_code_from_env(&[APP_KEY]);
+        std::env::remove_var(APP_KEY);
+        assert_eq!("upper", result.expect("uppercase normalizes to lowercase"));
     }
 }
