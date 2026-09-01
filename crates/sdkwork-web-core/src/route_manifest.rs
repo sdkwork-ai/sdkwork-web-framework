@@ -228,9 +228,10 @@ impl HttpRouteManifest {
         let mut seen = BTreeMap::new();
         for route in &routes {
             let key = manifest_route_identity(route);
-            if let Some((_existing_owner, existing_operation)) =
-                seen.insert(key.clone(), (owner.to_owned(), route.operation_id.to_owned()))
-            {
+            if let Some((_existing_owner, existing_operation)) = seen.insert(
+                key.clone(),
+                (owner.to_owned(), route.operation_id.to_owned()),
+            ) {
                 return Err(format!(
                     "{owner} base route collision for {} {} between {existing_operation} and {}",
                     key.0, key.1, route.operation_id
@@ -252,13 +253,7 @@ impl HttpRouteManifest {
                         route.operation_id
                     ));
                 }
-                seen.insert(
-                    key,
-                    (
-                        mount.owner.to_owned(),
-                        route.operation_id.to_owned(),
-                    ),
-                );
+                seen.insert(key, (mount.owner.to_owned(), route.operation_id.to_owned()));
                 routes.push(route.clone());
             }
         }

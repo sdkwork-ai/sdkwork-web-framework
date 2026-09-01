@@ -131,6 +131,7 @@ impl Default for CorsPolicy {
                 Method::OPTIONS,
             ],
             allowed_headers: vec![
+                // SDKWork credential and protocol headers.
                 "authorization".to_owned(),
                 "access-token".to_owned(),
                 "content-type".to_owned(),
@@ -139,8 +140,24 @@ impl Default for CorsPolicy {
                 "x-idempotency-fingerprint".to_owned(),
                 "x-api-key".to_owned(),
                 "x-sdkwork-access-token".to_owned(),
+                // Industry-common CORS request headers (WEB_FRAMEWORK_SPEC §12):
+                // desktop shells, mini program runtimes, API gateways, and
+                // tracing agents all send these alongside the protocol headers.
+                "accept".to_owned(),
+                "accept-language".to_owned(),
+                "content-language".to_owned(),
+                "x-requested-with".to_owned(),
+                "x-request-id".to_owned(),
+                "x-correlation-id".to_owned(),
+                "x-tenant-id".to_owned(),
+                "x-device-id".to_owned(),
+                "x-client-version".to_owned(),
+                "x-app-version".to_owned(),
+                "x-platform".to_owned(),
+                "traceparent".to_owned(),
+                "tracestate".to_owned(),
             ],
-            expose_headers: Vec::new(),
+            expose_headers: vec!["x-request-id".to_owned(), "x-sdkwork-trace-id".to_owned()],
             allow_credentials: true,
         }
     }
@@ -280,6 +297,10 @@ impl CorsPolicy {
                 "https://127.0.0.1:*".to_owned(),
                 "https://[::1]:*".to_owned(),
             ],
+            // Local browser surfaces never fail preflight because the SDK grows
+            // a new request header (see `validate_preflight`); production
+            // policies are rejected by `validate_for_production` for `*`.
+            allowed_headers: vec!["*".to_owned()],
             ..Self::default()
         }
     }
@@ -1278,6 +1299,59 @@ mod tests {
                 .validate_origin_value(origin)
                 .expect("loopback origin should be accepted");
         }
+    }
+
+    #[test]
+    fn default_policy_preflight_accepts_industry_common_headers() {
+        let policy = CorsPolicy::default();
+        let request = Request::builder()
+            .header("origin", "app://dsh")
+            .header("access-control-request-method", "GET")
+            .header(
+                "access-control-request-headers",
+                "authorization,access-token,content-type,x-request-id,x-tenant-id,x-device-id,traceparent,tracestate,x-requested-with",
+            )
+            .body(Body::empty())
+            .expect("build industry header preflight request");
+        policy
+            .validate_preflight(&request)
+            .expect("industry-common request headers must pass preflight");
+    }
+
+    #[test]
+    fn development_loopback_preflight_never_fails_on_new_headers() {
+        let policy = CorsPolicy::development_private_network();
+        let request = Request::builder()
+            .header("origin", "http://192.168.50.12:5173")
+            .header("access-control-request-method", "POST")
+            .header(
+                "access-control-request-headers",
+                "x-brand-new-future-header,x-another-one",
+            )
+            .body(Body::empty())
+            .expect("build future-header preflight request");
+        policy
+            .validate_preflight(&request)
+            .expect("development wildcard header policy must accept future headers");
+    }
+
+    #[test]
+    fn default_policy_exposes_infra_response_headers() {
+        // allow_all_origins mirrors a configured production allowlist: header
+        // emission only happens for origins the policy already allows.
+        let policy = CorsPolicy {
+            allow_all_origins: true,
+            ..CorsPolicy::default()
+        };
+        let mut response = Response::new(Body::empty());
+        policy.apply_headers_from_origin(Some("app://dsh"), &mut response);
+        assert_eq!(
+            Some("x-request-id, x-sdkwork-trace-id"),
+            response
+                .headers()
+                .get("access-control-expose-headers")
+                .and_then(|value| value.to_str().ok()),
+        );
     }
 
     #[test]

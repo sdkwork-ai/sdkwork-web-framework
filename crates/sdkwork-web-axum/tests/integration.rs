@@ -74,17 +74,67 @@ async fn valid_cors_preflight_short_circuits_with_204_and_headers() {
 }
 
 #[tokio::test]
+async fn open_api_surface_skips_cors_validation_entirely() {
+    use axum::routing::post;
+
+    // Open-api is a server-to-server / generated-SDK surface: preflights and
+    // cross-site requests must not be CORS-checked, even for unconfigured
+    // origins (WEB_BACKEND_SPEC open-api CORS exemption).
+    let app = with_web_request_context(
+        Router::new().route("/open/v3/api/echo", post(|| async { "created" })),
+        development_cors_layer(),
+    );
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("OPTIONS")
+                .uri("/open/v3/api/echo")
+                .header("origin", "https://evil.example")
+                .header("access-control-request-method", "POST")
+                .header("access-control-request-headers", "content-type")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("response");
+
+    assert_eq!(
+        axum::http::StatusCode::NO_CONTENT,
+        response.status(),
+        "open-api preflight must not be CORS-denied"
+    );
+
+    let app = with_web_request_context(
+        Router::new().route("/open/v3/api/echo", post(|| async { "created" })),
+        development_cors_layer(),
+    );
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/open/v3/api/echo")
+                .header("origin", "https://evil.example")
+                .header("content-type", "application/json")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("response");
+
+    assert_ne!(
+        axum::http::StatusCode::FORBIDDEN,
+        response.status(),
+        "open-api state-changing call must not be cross-site/CORS-denied"
+    );
+}
+
+#[tokio::test]
 async fn cors_preflight_rejects_disallowed_origin_method_and_header() {
     use axum::routing::post;
 
-    for (origin, method, headers) in [
-        ("https://evil.example", "POST", "content-type"),
-        ("http://127.0.0.1:45679", "TRACE", "content-type"),
-        (
-            "http://127.0.0.1:45679",
-            "POST",
-            "content-type,x-not-allowed",
-        ),
+    for (origin, method) in [
+        ("https://evil.example", "POST"),
+        ("http://127.0.0.1:45679", "TRACE"),
     ] {
         let app = with_web_request_context(
             Router::new().route(
@@ -100,7 +150,7 @@ async fn cors_preflight_rejects_disallowed_origin_method_and_header() {
                     .uri("/app/v3/api/memberships/orders")
                     .header("origin", origin)
                     .header("access-control-request-method", method)
-                    .header("access-control-request-headers", headers)
+                    .header("access-control-request-headers", "content-type")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -109,6 +159,47 @@ async fn cors_preflight_rejects_disallowed_origin_method_and_header() {
 
         assert_eq!(axum::http::StatusCode::FORBIDDEN, response.status());
     }
+}
+
+#[tokio::test]
+async fn cors_preflight_rejects_header_outside_explicit_allowlist() {
+    use axum::routing::post;
+
+    // An explicit (non-`*`) header allowlist must still reject unknown
+    // preflight headers; only development/loopback policies widen to `*`.
+    let security = SecurityPolicy {
+        cors: CorsPolicy {
+            allowed_origins: vec!["http://127.0.0.1:*".to_owned()],
+            ..CorsPolicy::default()
+        },
+        ..SecurityPolicy::default()
+    };
+    let app = with_web_request_context(
+        Router::new().route(
+            "/app/v3/api/memberships/orders",
+            post(|| async { "created" }),
+        ),
+        WebFrameworkLayer::new(DefaultWebRequestContextResolver::default())
+            .with_security_policy(security),
+    );
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("OPTIONS")
+                .uri("/app/v3/api/memberships/orders")
+                .header("origin", "http://127.0.0.1:45680")
+                .header("access-control-request-method", "POST")
+                .header(
+                    "access-control-request-headers",
+                    "content-type,x-not-allowed",
+                )
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("response");
+
+    assert_eq!(axum::http::StatusCode::FORBIDDEN, response.status());
 }
 
 #[tokio::test]

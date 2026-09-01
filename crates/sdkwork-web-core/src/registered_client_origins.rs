@@ -46,7 +46,10 @@ mod tests {
 
     #[test]
     fn merge_is_idempotent_and_preserves_existing_entries() {
-        let mut origins = vec!["app://dsh".to_owned(), "https://console.example.com".to_owned()];
+        let mut origins = vec![
+            "app://dsh".to_owned(),
+            "https://console.example.com".to_owned(),
+        ];
         merge_registered_sdkwork_client_origins(&mut origins);
         merge_registered_sdkwork_client_origins(&mut origins);
 

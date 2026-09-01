@@ -629,22 +629,18 @@ mod tests {
             "account_not_callable",
             payload["failedStage"].as_str().unwrap()
         );
-        assert!(
-            payload["detail"]
-                .as_str()
-                .unwrap_or_default()
-                .contains("no upstream account in account group default")
-        );
+        assert!(payload["detail"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("no upstream account in account group default"));
         assert_eq!(
             payload["reason"].as_str().unwrap(),
             payload["detail"].as_str().unwrap()
         );
-        assert!(
-            payload["detail"]
-                .as_str()
-                .unwrap_or_default()
-                .contains("missing callable base url or credential")
-        );
+        assert!(payload["detail"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("missing callable base url or credential"));
     }
 
     #[test]
@@ -656,7 +652,9 @@ mod tests {
         let response = Response::builder()
             .status(StatusCode::SERVICE_UNAVAILABLE)
             .header(header::CONTENT_TYPE, "application/json")
-            .body(Body::from(r#"{"error":{"message":"secret upstream detail"}}"#))
+            .body(Body::from(
+                r#"{"error":{"message":"secret upstream detail"}}"#,
+            ))
             .expect("response");
         let mut response = response;
         let correlation = ProblemCorrelation::new(Some("req-2"), Some("trace-2"));

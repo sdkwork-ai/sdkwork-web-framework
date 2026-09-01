@@ -199,6 +199,15 @@ where
                 ));
             }
             StandardWebCallInterceptorKind::Cors => {
+                // Open-api is a server-to-server / generated-SDK surface: calls
+                // carry no browser Origin and must never be CORS-checked
+                // (WEB_BACKEND_SPEC, open-api CORS exemption).
+                if matches!(
+                    state.api_surface,
+                    crate::request_context::WebApiSurface::OpenApi
+                ) {
+                    return Ok(());
+                }
                 if runtime.optional_features.dynamic_cors_policy {
                     let ctx = CorsPolicyContext {
                         tenant_id: state
@@ -244,6 +253,15 @@ where
             }
             StandardWebCallInterceptorKind::CrossSiteRequest => {
                 if is_cors_preflight(state) {
+                    return Ok(());
+                }
+                // Open-api calls authenticate with API keys / bearer tokens, not
+                // cookies, and originate from non-browser clients; cross-site
+                // origin enforcement (CSRF guard) does not apply.
+                if matches!(
+                    state.api_surface,
+                    crate::request_context::WebApiSurface::OpenApi
+                ) {
                     return Ok(());
                 }
                 let cors = runtime.effective_cors(state);

@@ -133,7 +133,10 @@ mod tests {
         assert!(is_runtime_region_registered());
 
         // Identical re-registration (including case/whitespace variants) is a no-op.
-        assert_eq!(region, register_runtime_region(" CN ").expect("same region"));
+        assert_eq!(
+            region,
+            register_runtime_region(" CN ").expect("same region")
+        );
         assert_eq!(region, register_runtime_region("cn").expect("same region"));
 
         // A conflicting re-registration is rejected without rebinding.
@@ -147,10 +150,7 @@ mod tests {
 
     #[test]
     fn normalizes_case_and_whitespace_without_touching_the_registry() {
-        assert_eq!(
-            "cn",
-            normalized_region_code(" CN ").expect("normalized")
-        );
+        assert_eq!("cn", normalized_region_code(" CN ").expect("normalized"));
         assert_eq!(
             DEFAULT_REGION_CODE,
             normalized_region_code("  ").expect("blank defaults to global")
@@ -165,6 +165,9 @@ mod tests {
         }
         // Uppercase input is normalized to lowercase before validation, so a
         // valid code written in mixed case resolves to its canonical form.
-        assert_eq!("upper", normalized_region_code("UPPER").expect("normalized"));
+        assert_eq!(
+            "upper",
+            normalized_region_code("UPPER").expect("normalized")
+        );
     }
 }
