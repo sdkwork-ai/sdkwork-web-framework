@@ -55,9 +55,22 @@ pub fn register_runtime_region(region_code: &str) -> Result<RuntimeRegion, Strin
         }
         None => {
             let region = RuntimeRegion::new(leak_region_code(normalized));
-            RUNTIME_REGION
-                .set(region)
-                .map_err(|_| "runtime region was registered concurrently".to_owned())?;
+            // Concurrent first registration: the identical code is still a
+            // no-op, so re-read the winner and only a genuinely different
+            // code is a conflicting re-registration.
+            if RUNTIME_REGION.set(region).is_err() {
+                let existing = RUNTIME_REGION.get().ok_or_else(|| {
+                    "runtime region was registered concurrently".to_owned()
+                })?;
+                if existing.region_code() != region.region_code() {
+                    return Err(format!(
+                        "runtime region is already registered as `{}`; refusing to rebind to `{}`",
+                        existing.region_code(),
+                        region.region_code()
+                    ));
+                }
+                return Ok(*existing);
+            }
             region
         }
     };
