@@ -1945,6 +1945,7 @@ dependencies = [
  "sdkwork-web-bootstrap",
  "sdkwork-web-core",
  "sdkwork-web-framework-admin-repository-sqlx",
+ "sdkwork-webstore-database-host",
  "tokio",
 ]
 

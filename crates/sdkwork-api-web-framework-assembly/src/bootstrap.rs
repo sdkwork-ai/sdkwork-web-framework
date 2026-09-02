@@ -9,7 +9,7 @@
 use std::sync::Arc;
 
 use axum::Router;
-use sdkwork_web_bootstrap::PgPoolReadinessCheck;
+use sdkwork_web_bootstrap::{PgPoolReadinessCheck, WebModule};
 use sdkwork_web_core::HttpRouteManifest;
 use sdkwork_web_framework_admin_repository_sqlx::AdminStorePool;
 
@@ -36,4 +36,27 @@ pub fn assemble_api_router(pool: AdminStorePool) -> Result<ApiAssembly, String> 
         Vec::new(),
         readiness,
     )
+}
+
+/// Installs the Web Framework admin surface as a Web Module on a
+/// caller-supplied admin store pool (API_ASSEMBLY_SPEC §4.1.1).
+pub fn web_module_with_pool(pool: AdminStorePool) -> Result<WebModule, String> {
+    Ok(WebModule::from_contribution(assemble_api_router(pool)?))
+}
+
+/// Canonical Web Module definition for this application
+/// (API_ASSEMBLY_SPEC §4.1.1): the complete HTTP surface — every route,
+/// manifest, and OpenAPI document of this owner — as one installable module.
+///
+/// The admin store pool is bootstrapped from the process environment through
+/// the Web Store database host, so the module owns its own bootstrap instead of
+/// depending on a running admin listener.
+pub async fn web_module() -> Result<WebModule, String> {
+    let host = sdkwork_webstore_database_host::bootstrap_webstore_database_from_env().await?;
+    let postgres = host
+        .pool()
+        .as_postgres()
+        .ok_or_else(|| "web framework admin API requires a PostgreSQL database profile".to_owned())?
+        .clone();
+    web_module_with_pool(AdminStorePool::Postgres(postgres))
 }

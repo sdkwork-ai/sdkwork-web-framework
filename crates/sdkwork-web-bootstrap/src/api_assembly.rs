@@ -259,6 +259,224 @@ fn remove_document_scoped_ownership(document: &mut Value) {
     }
 }
 
+/// One independently installable Web module: a single owner application's
+/// complete HTTP surface set.
+///
+/// A module is the SDKWork equivalent of a FastAPI `APIRouter` bundle or a
+/// NestJS module: it owns its app-api, backend-api, open-api (and any other
+/// declared surface) contributions behind one identity and is installed as a
+/// whole. Hosts never assemble a module's routes surface by surface; they
+/// register the module once with [`ApiModuleRegistry::add_module`].
+///
+/// Surfaces are contributed as [`ApiAssemblyContribution`] values. A module
+/// with exactly one served owner usually holds one contribution per selected
+/// surface owner (for example `sdkwork-community` plus `sdkwork-community-open`).
+pub struct WebModule {
+    owner: &'static str,
+    title: String,
+    contributions: Vec<ApiAssemblyContribution>,
+}
+
+impl WebModule {
+    pub fn new(owner: &'static str, title: impl Into<String>) -> Self {
+        Self {
+            owner,
+            title: title.into(),
+            contributions: Vec::new(),
+        }
+    }
+
+    /// Builds a module from a single prepared contribution (the common case).
+    pub fn from_contribution(contribution: ApiAssemblyContribution) -> Self {
+        let owner = contribution.owner;
+        Self::new(owner, owner).with_surface(contribution)
+    }
+
+    /// Adds one surface contribution to the module.
+    pub fn with_surface(mut self, contribution: ApiAssemblyContribution) -> Self {
+        self.contributions.push(contribution);
+        self
+    }
+
+    /// Adds every surface contribution in order.
+    pub fn with_surfaces<I>(mut self, contributions: I) -> Self
+    where
+        I: IntoIterator<Item = ApiAssemblyContribution>,
+    {
+        self.contributions.extend(contributions);
+        self
+    }
+
+    pub fn owner(&self) -> &'static str {
+        self.owner
+    }
+
+    pub fn title(&self) -> &str {
+        &self.title
+    }
+
+    pub fn contributions(&self) -> &[ApiAssemblyContribution] {
+        &self.contributions
+    }
+
+    /// Installs this module into a registry.
+    pub fn install_into(self, registry: &mut ApiModuleRegistry) -> &mut ApiModuleRegistry {
+        registry.add_module(self)
+    }
+}
+
+impl From<ApiAssemblyContribution> for WebModule {
+    fn from(contribution: ApiAssemblyContribution) -> Self {
+        Self::from_contribution(contribution)
+    }
+}
+
+/// Ordered registry of API assembly modules (API_ASSEMBLY_SPEC §4.1.1).
+///
+/// Hosts (standalone gateways and cloud gateways alike) assemble their HTTP
+/// surface by registering each module's [`ApiAssemblyContribution`] through
+/// [`ApiModuleRegistry::add_module`] / [`ApiModuleRegistry::add_modules`].
+/// Registering the same module owner more than once is tolerated: the first
+/// registration wins, later duplicates are ignored with a warning and recorded
+/// in [`ApiModuleRegistry::ignored_duplicates`] so free composition of route
+/// modules never fails on repeated integration of the same module.
+pub struct ApiModuleRegistry {
+    modules: Vec<WebModule>,
+    registered_owners: BTreeSet<&'static str>,
+    ignored_duplicates: Vec<&'static str>,
+}
+
+impl Default for ApiModuleRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ApiModuleRegistry {
+    pub fn new() -> Self {
+        Self {
+            modules: Vec::new(),
+            registered_owners: BTreeSet::new(),
+            ignored_duplicates: Vec::new(),
+        }
+    }
+
+    /// Registers one module (or a bare contribution). Duplicate module owners
+    /// are ignored (first registration wins) instead of failing composition.
+    pub fn add_module<M>(&mut self, module: M) -> &mut Self
+    where
+        M: Into<WebModule>,
+    {
+        let module = module.into();
+        if !self.registered_owners.insert(module.owner) {
+            tracing::warn!(
+                owner = module.owner,
+                "duplicate add_module ignored; first registration wins"
+            );
+            self.ignored_duplicates.push(module.owner);
+            return self;
+        }
+        self.modules.push(module);
+        self
+    }
+
+    /// Registers every module in order.
+    pub fn add_modules<I, M>(&mut self, modules: I) -> &mut Self
+    where
+        I: IntoIterator<Item = M>,
+        M: Into<WebModule>,
+    {
+        for module in modules {
+            self.add_module(module);
+        }
+        self
+    }
+
+    /// Consuming builder form of [`ApiModuleRegistry::add_module`] for inline
+    /// host composition:
+    /// `ApiModuleRegistry::with_modules(modules).try_compose(title)?`.
+    pub fn with_module<M>(mut self, module: M) -> Self
+    where
+        M: Into<WebModule>,
+    {
+        self.add_module(module);
+        self
+    }
+
+    /// Consuming builder form of [`ApiModuleRegistry::add_modules`].
+    pub fn with_modules<I, M>(mut self, modules: I) -> Self
+    where
+        I: IntoIterator<Item = M>,
+        M: Into<WebModule>,
+    {
+        self.add_modules(modules);
+        self
+    }
+
+    /// True when `owner` already has a registration in this registry.
+    pub fn is_registered(&self, owner: &str) -> bool {
+        self.registered_owners.contains(owner)
+    }
+
+    pub fn modules(&self) -> &[WebModule] {
+        &self.modules
+    }
+
+    pub fn owners(&self) -> Vec<&'static str> {
+        self.modules.iter().map(|module| module.owner).collect()
+    }
+
+    pub fn ignored_duplicates(&self) -> &[&'static str] {
+        &self.ignored_duplicates
+    }
+
+    /// Validates and merges every registered module's surfaces into one
+    /// composed profile.
+    ///
+    /// Contributions are flattened in registration order. A contribution the
+    /// same module intentionally exposes twice (for example an app surface and
+    /// a backend surface owned by one application) is always mounted; the same
+    /// contribution owner installed by a *later* module is ignored with a
+    /// warning, matching the duplicate-`add_module` guarantee. Cross-owner
+    /// route collisions still fail closed inside
+    /// [`ComposedApiAssembly::try_compose`].
+    pub fn try_compose(self, title: &str) -> Result<ComposedApiAssembly, String> {
+        let mut contributions = Vec::new();
+        let mut mounted_owners = BTreeSet::new();
+        for module in self.modules {
+            let mut module_owners = BTreeSet::new();
+            for contribution in module.contributions {
+                let duplicate_from_earlier_module = mounted_owners.contains(&contribution.owner)
+                    && !module_owners.contains(&contribution.owner);
+                if duplicate_from_earlier_module {
+                    tracing::warn!(
+                        owner = contribution.owner,
+                        module = module.owner,
+                        "duplicate surface contribution ignored; first contribution wins"
+                    );
+                    continue;
+                }
+                module_owners.insert(contribution.owner);
+                mounted_owners.insert(contribution.owner);
+                contributions.push(contribution);
+            }
+        }
+        ComposedApiAssembly::try_compose(title, contributions)
+    }
+
+    /// Composes the registry and binds the profile to one HTTP host in one step.
+    pub fn into_hosted<R>(
+        self,
+        title: &str,
+        framework: WebFrameworkBuilder<R>,
+    ) -> Result<HostedApiAssembly, String>
+    where
+        R: WebRequestContextResolver + Clone + Any,
+    {
+        Ok(self.try_compose(title)?.into_hosted(framework))
+    }
+}
+
 /// One selected gateway profile after all owner contributions have been validated and merged.
 pub struct ComposedApiAssembly {
     pub owners: Vec<&'static str>,
@@ -738,6 +956,164 @@ mod tests {
     }
 
     #[test]
+    fn add_module_ignores_duplicate_owners_with_first_registration_winning() {
+        let first = ApiAssemblyContribution::from_manifest(
+            "sdkwork-widgets",
+            "SDKWork Widgets API",
+            Router::new(),
+            HttpRouteManifest::new(ROUTES),
+            Vec::new(),
+            Arc::new(crate::AlwaysReady),
+        )
+        .expect("valid contribution");
+        let duplicate = ApiAssemblyContribution::from_manifest(
+            "sdkwork-widgets",
+            "SDKWork Widgets API (duplicate)",
+            Router::new(),
+            HttpRouteManifest::new(ROUTES),
+            Vec::new(),
+            Arc::new(crate::AlwaysReady),
+        )
+        .expect("valid contribution");
+        const GADGET_ROUTES: &[HttpRoute] = &[HttpRoute::new(
+            HttpMethod::Get,
+            "/app/v3/api/gadgets",
+            "Gadgets",
+            "gadgets.list",
+            RouteAuth::DualToken,
+        )];
+        let other = ApiAssemblyContribution::from_manifest(
+            "sdkwork-gadgets",
+            "SDKWork Gadgets API",
+            Router::new(),
+            HttpRouteManifest::new(GADGET_ROUTES),
+            Vec::new(),
+            Arc::new(crate::AlwaysReady),
+        )
+        .expect("valid contribution");
+
+        let mut registry = ApiModuleRegistry::new();
+        registry
+            .add_module(first)
+            .add_module(duplicate)
+            .add_modules([other]);
+
+        assert_eq!(registry.owners(), vec!["sdkwork-widgets", "sdkwork-gadgets"]);
+        assert_eq!(registry.ignored_duplicates(), &["sdkwork-widgets"]);
+        assert!(registry.is_registered("sdkwork-widgets"));
+        assert!(!registry.is_registered("sdkwork-other"));
+
+        let composed = registry
+            .try_compose("Combined")
+            .expect("duplicate registration must not fail composition");
+        assert_eq!(composed.owners, vec!["sdkwork-widgets", "sdkwork-gadgets"]);
+    }
+
+    #[test]
+    fn web_module_bundles_every_surface_of_one_owner() {
+        const BUSINESS_ROUTES: &[HttpRoute] = &[
+            HttpRoute::new(
+                HttpMethod::Get,
+                "/app/v3/api/widgets",
+                "Widgets",
+                "widgets.list",
+                RouteAuth::DualToken,
+            ),
+            HttpRoute::new(
+                HttpMethod::Get,
+                "/backend/v3/api/widgets",
+                "Widgets",
+                "widgets.management.list",
+                RouteAuth::DualToken,
+            ),
+        ];
+        const OPEN_ROUTES: &[HttpRoute] = &[HttpRoute::new(
+            HttpMethod::Get,
+            "/open/v3/api/widgets",
+            "Widgets",
+            "widgets.public.list",
+            RouteAuth::Public,
+        )];
+        let contribution = |owner, title, routes| {
+            ApiAssemblyContribution::from_manifest(
+                owner,
+                title,
+                Router::new(),
+                HttpRouteManifest::new(routes),
+                Vec::new(),
+                Arc::new(crate::AlwaysReady),
+            )
+            .expect("valid contribution")
+        };
+
+        // One contribution per served owner: the app and backend surfaces
+        // belong to the same owner contribution, the open surface is served
+        // under its own owner (`sdkwork-*-open`).
+        let module = WebModule::new("sdkwork-widgets", "SDKWork Widgets")
+            .with_surface(contribution(
+                "sdkwork-widgets",
+                "SDKWork Widgets API",
+                BUSINESS_ROUTES,
+            ))
+            .with_surfaces([contribution(
+                "sdkwork-widgets-open",
+                "SDKWork Widgets Open API",
+                OPEN_ROUTES,
+            )]);
+
+        assert_eq!(module.owner(), "sdkwork-widgets");
+        assert_eq!(module.title(), "SDKWork Widgets");
+        assert_eq!(module.contributions().len(), 2);
+
+        let mut registry = ApiModuleRegistry::new();
+        registry.add_module(module);
+        let composed = registry
+            .try_compose("Combined")
+            .expect("valid module composition");
+        assert_eq!(composed.route_manifest.routes().len(), 3);
+        assert_eq!(
+            composed.owners,
+            vec!["sdkwork-widgets", "sdkwork-widgets-open"]
+        );
+    }
+
+    #[test]
+    fn registry_ignores_duplicate_surface_contributions_across_modules() {
+        const ROUTES: &[HttpRoute] = &[HttpRoute::new(
+            HttpMethod::Get,
+            "/open/v3/api/widgets",
+            "Widgets",
+            "widgets.public.list",
+            RouteAuth::Public,
+        )];
+        let shared = |owner| {
+            ApiAssemblyContribution::from_manifest(
+                owner,
+                "Widgets Open API",
+                Router::new(),
+                HttpRouteManifest::new(ROUTES),
+                Vec::new(),
+                Arc::new(crate::AlwaysReady),
+            )
+            .expect("valid contribution")
+        };
+
+        // Two modules both install the same open-surface owner: the shared
+        // contribution must be mounted once, not rejected.
+        let mut registry = ApiModuleRegistry::new();
+        registry
+            .add_module(WebModule::from_contribution(shared("sdkwork-widgets-open")))
+            .add_module(
+                WebModule::new("sdkwork-aggregate", "Aggregate")
+                    .with_surface(shared("sdkwork-widgets-open")),
+            );
+        let composed = registry
+            .try_compose("Combined")
+            .expect("duplicate surface contribution must be ignored");
+        assert_eq!(composed.route_manifest.routes().len(), 1);
+    }
+
+    #[test]
     fn composition_rejects_cross_owner_route_collisions() {
         let build = |owner| {
             ApiAssemblyContribution::from_manifest(
@@ -928,5 +1304,116 @@ mod tests {
         let problem: Value = serde_json::from_slice(&body).expect("problem JSON");
         assert_eq!(problem["operationId"], "widgets.retrieve");
         assert_eq!(problem["instance"], "GET /app/v3/api/widgets/{widgetId}");
+    }
+
+    fn widgets_contribution() -> ApiAssemblyContribution {
+        ApiAssemblyContribution::from_manifest(
+            "sdkwork-widgets",
+            "SDKWork Widgets API",
+            Router::new(),
+            HttpRouteManifest::new(ROUTES),
+            Vec::new(),
+            Arc::new(crate::AlwaysReady),
+        )
+        .expect("valid contribution")
+    }
+
+    fn gadgets_contribution() -> ApiAssemblyContribution {
+        const GADGETS: &[HttpRoute] = &[HttpRoute::new(
+            HttpMethod::Get,
+            "/app/v3/api/gadgets/{gadgetId}",
+            "Gadgets",
+            "gadgets.retrieve",
+            RouteAuth::DualToken,
+        )];
+        ApiAssemblyContribution::from_manifest(
+            "sdkwork-gadgets",
+            "SDKWork Gadgets API",
+            Router::new(),
+            HttpRouteManifest::new(GADGETS),
+            Vec::new(),
+            Arc::new(crate::AlwaysReady),
+        )
+        .expect("valid contribution")
+    }
+
+    /// Building-block composition: registering the same module twice must be
+    /// ignored (first registration wins) instead of failing the composition.
+
+    #[test]
+    fn add_modules_ignores_duplicates_inside_a_single_batch() {
+        let mut registry = ApiModuleRegistry::new();
+        registry.add_modules(vec![
+            WebModule::from_contribution(widgets_contribution()),
+            WebModule::from_contribution(gadgets_contribution()),
+            WebModule::from_contribution(widgets_contribution()),
+        ]);
+
+        assert_eq!(registry.owners(), vec!["sdkwork-widgets", "sdkwork-gadgets"]);
+        assert_eq!(registry.ignored_duplicates(), &["sdkwork-widgets"]);
+    }
+
+    #[test]
+    fn consuming_builder_form_ignores_duplicates() {
+        let registry = ApiModuleRegistry::new()
+            .with_module(WebModule::from_contribution(widgets_contribution()))
+            .with_modules(vec![WebModule::from_contribution(widgets_contribution())]);
+
+        assert_eq!(registry.owners(), vec!["sdkwork-widgets"]);
+        assert_eq!(registry.ignored_duplicates(), &["sdkwork-widgets"]);
+    }
+
+    /// One module may intentionally own several surfaces (app-api + backend-api
+    /// + open-api). Those are the module's own definition and must all mount.
+
+    /// A later module must not re-mount a surface an earlier module already
+    /// mounted, even when the duplicate is contributed by a different module.
+    #[test]
+    fn later_module_cannot_re_mount_an_earlier_surface() {
+        let widgets = WebModule::from_contribution(widgets_contribution());
+        let bundle = WebModule::new("sdkwork-bundle", "SDKWork Bundle")
+            .with_surface(widgets_contribution())
+            .with_surface(gadgets_contribution());
+
+        let mut registry = ApiModuleRegistry::new();
+        registry.add_modules(vec![widgets, bundle]);
+
+        let composed = registry
+            .try_compose("SDKWork Platform API")
+            .expect("duplicate surface across modules must not fail");
+        assert_eq!(composed.owners, vec!["sdkwork-widgets", "sdkwork-gadgets"]);
+    }
+
+    #[test]
+    fn cross_owner_route_collisions_still_fail_closed() {
+        const CONFLICT: &[HttpRoute] = &[HttpRoute::new(
+            HttpMethod::Get,
+            "/app/v3/api/widgets/{widgetId}",
+            "Gadgets",
+            "gadgets.retrieve",
+            RouteAuth::DualToken,
+        )];
+        let conflicting = ApiAssemblyContribution::from_manifest(
+            "sdkwork-gadgets",
+            "SDKWork Gadgets API",
+            Router::new(),
+            HttpRouteManifest::new(CONFLICT),
+            Vec::new(),
+            Arc::new(crate::AlwaysReady),
+        )
+        .expect("valid contribution");
+
+        let mut registry = ApiModuleRegistry::new();
+        registry.add_modules(vec![
+            WebModule::from_contribution(widgets_contribution()),
+            WebModule::from_contribution(conflicting),
+        ]);
+
+        let error = registry
+            .try_compose("SDKWork Platform API")
+            .err()
+            .expect("route collisions must still fail");
+        assert!(error.contains("route collision"), "{error}");
+        assert!(error.contains("GET /app/v3/api/widgets/{param}"), "{error}");
     }
 }
