@@ -80,6 +80,11 @@ pub fn web_environment_from_env(keys: &[&str]) -> WebEnvironment {
     match value.trim().to_ascii_lowercase().as_str() {
         "development" | "dev" | "local" => WebEnvironment::Dev,
         "test" | "testing" => WebEnvironment::Test,
+        // Demo is an isolated showcase tier, not production-like: it gets the
+        // relaxed showcase posture instead of production assembly validation.
+        "demo" => WebEnvironment::Test,
+        // Staging/prod keep the strict fail-closed production posture.
+        "staging" | "prod" | "production" => WebEnvironment::Prod,
         _ => WebEnvironment::Prod,
     }
 }
