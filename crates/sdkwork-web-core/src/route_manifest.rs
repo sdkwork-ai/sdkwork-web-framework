@@ -48,9 +48,21 @@ impl HttpRouteManifest {
 
     pub fn match_route(&self, method: &str, path: &str) -> Option<&HttpRoute> {
         let normalized = normalize_path(path);
-        self.routes.iter().find(|route| {
-            http_method_matches(route.method, method) && route_path_matches(route.path, &normalized)
-        })
+        let is_candidate =
+            |route: &HttpRoute| http_method_matches(route.method, method) && route_path_matches(route.path, &normalized);
+        // Literal templates must win over parameterized templates regardless of
+        // registration order: `/user_coupons/wallet` is a distinct route from
+        // `/user_coupons/{userCouponId}`, so first-match-wins over the raw
+        // registration order would misclassify the wallet route as the
+        // parameter route (wrong auth profile, wrong rate limit tier).
+        if let Some(route) = self
+            .routes
+            .iter()
+            .find(|route| is_candidate(route) && !template_has_parameters(route.path))
+        {
+            return Some(route);
+        }
+        self.routes.iter().find(|route| is_candidate(route))
     }
 
     pub fn rate_limit_tier_for(&self, method: &str, path: &str) -> Option<RateLimitTier> {
@@ -350,6 +362,13 @@ fn path_segments(path: &str) -> Vec<String> {
         .collect()
 }
 
+/// True when the manifest template contains at least one `{param}` segment.
+fn template_has_parameters(manifest_path: &str) -> bool {
+    path_segments(manifest_path)
+        .iter()
+        .any(|segment| segment.starts_with('{') && segment.ends_with('}'))
+}
+
 /// Matches OpenAPI-style manifest paths (including `{param}` segments) to request paths.
 pub fn route_path_matches(manifest_path: &str, request_path: &str) -> bool {
     let template_segments = path_segments(manifest_path);
@@ -448,6 +467,50 @@ mod tests {
             .validate_public_path_prefixes(&["/app/v3/api/users".to_owned()])
             .expect_err("prefix must not cover protected route");
         assert!(error.contains("/app/v3/api/users/me"));
+    }
+
+    #[test]
+    fn literal_route_wins_over_parameter_route_regardless_of_order() {
+        // Regression: `/promotions/user_coupons/wallet` registered after
+        // `/promotions/user_coupons/{userCouponId}` must still resolve to the
+        // literal wallet route (first-match-wins over registration order
+        // misclassified it and flipped the auth profile).
+        const ORDERED: &[HttpRoute] = &[
+            HttpRoute::new(
+                HttpMethod::Get,
+                "/app/v3/api/promotions/user_coupons/{userCouponId}",
+                "promotions",
+                "promotions.userCoupons.retrieve",
+                RouteAuth::DualToken,
+            ),
+            HttpRoute::new(
+                HttpMethod::Get,
+                "/app/v3/api/promotions/user_coupons/wallet",
+                "promotions",
+                "promotions.userCoupons.wallet.list",
+                RouteAuth::DualToken,
+            ),
+            HttpRoute::new(
+                HttpMethod::Get,
+                "/app/v3/api/promotions/offers",
+                "promotions",
+                "promotions.offers.list",
+                RouteAuth::Public,
+            ),
+        ];
+        let manifest = HttpRouteManifest::new(ORDERED);
+        let wallet = manifest
+            .match_route("GET", "/app/v3/api/promotions/user_coupons/wallet")
+            .expect("wallet route");
+        assert_eq!("promotions.userCoupons.wallet.list", wallet.operation_id);
+        let retrieve = manifest
+            .match_route("GET", "/app/v3/api/promotions/user_coupons/42")
+            .expect("parameter route");
+        assert_eq!("promotions.userCoupons.retrieve", retrieve.operation_id);
+        let offers = manifest
+            .match_route("GET", "/app/v3/api/promotions/offers")
+            .expect("offers route");
+        assert_eq!(RouteAuth::Public, offers.auth);
     }
 
     #[test]

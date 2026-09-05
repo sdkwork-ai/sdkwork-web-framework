@@ -44,6 +44,9 @@ tools/.gateway-alignment-report.json
 # SDKWork local runtime state
 .runtime/
 **/.runtime/
+# Cargo local cache
+.cargo/
+**/.cargo/
 !.env.postgres.example
 coverage/
 .DS_Store

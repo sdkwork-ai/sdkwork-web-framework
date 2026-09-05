@@ -393,6 +393,25 @@ async fn web_request_context_middleware<R>(
 where
     R: WebRequestContextResolver + Clone,
 {
+    // Composition guard (API_ASSEMBLY_SPEC §4.1.1): when a composed host's
+    // canonical pipeline already classified and authenticated this request,
+    // a self-wrapped module layer must not re-run the interceptor chain.
+    // Re-running it re-executes surface classification, whose B9 guard
+    // (`reject_client_identity_projection`) rejects the identity projection
+    // headers that trusted intra-process hops legitimately carry, producing
+    // spurious 40001s for composed dependencies (sdkwork-im / sdkwork-course).
+    // The module's route manifest is already merged into the composed host's
+    // manifest, so authentication, authorization, and metrics stay owned by
+    // the outer pipeline. Standalone deployments never see a pre-classified
+    // context (`api_surface == Unknown`), so their full pipeline is preserved.
+    if request
+        .extensions()
+        .get::<WebRequestContext>()
+        .map(|context| context.api_surface != WebApiSurface::Unknown)
+        .unwrap_or(false)
+    {
+        return next.run(request).await;
+    }
     normalize_inbound_request_uri(&mut request);
     let request_started = std::time::Instant::now();
     let mut state = WebCallState::from_request(&request);
