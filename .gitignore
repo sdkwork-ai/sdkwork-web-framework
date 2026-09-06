@@ -81,3 +81,6 @@ Thumbs.db
 *.log
 .DS_Store
 Thumbs.db
+
+# Build artifacts
+/bin/

@@ -38,6 +38,7 @@ effective(<profile>.<environment>) =
 | development | `server.development.toml` | 0 | `(none)` | 80 |
 | test | `server.test.toml` | 0 | `(none)` | 80 |
 | staging | `server.staging.toml` | 0 | `(none)` | 80 |
+| demo | `server.demo.toml` | 0 | `(none)` | 80 |
 | production | `server.production.toml` | 0 | `(none)` | 443 ssl + 80 |
 
 Surfaces: none (placeholder).
