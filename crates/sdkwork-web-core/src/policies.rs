@@ -1,9 +1,18 @@
 use crate::error::WebFrameworkError;
-use crate::request_context::WebRequestContext;
+use crate::request_context::{WebApiSurface, WebRequestContext};
 use crate::route_manifest::HttpRouteManifest;
 use async_trait::async_trait;
 
 /// Stage 12 — manifest-driven permission enforcement (wildcard-aware).
+///
+/// PERMISSION_STANDARD_SPEC §Surface Authorization Tiers: first-party app-api consumer
+/// operations are tier 0–2 and `MUST NOT` be gated by per-route scopes — requiring
+/// them forces every deployment to seed and grant large permission catalogs and
+/// produces systemic 40301 failures ("implement the API, then configure permissions
+/// before any user can call it"). App-api access is therefore enforced by the service
+/// layer's ownership/ACL checks, never by the manifest gate. Manifest
+/// `required_permission` enforcement applies to backend-api and open-api surfaces
+/// (tier-3 enterprise/platform operations).
 #[derive(Clone, Debug)]
 pub struct ManifestAuthorizationPolicy {
     pub manifest: HttpRouteManifest,
@@ -39,8 +48,21 @@ impl AuthorizationPolicy for ManifestAuthorizationPolicy {
 
         ctx.require_principal()?;
 
-        if let Some(required) = route.and_then(|matched| matched.required_permission) {
-            if !ctx.has_permission(required) {
+        let required = route.and_then(|matched| matched.required_permission);
+        if let Some(required) = required {
+            if ctx.api_surface == WebApiSurface::AppApi {
+                // Consumer app-api: the manifest gate never blocks. A signed-in
+                // principal without the declared code proceeds; the service layer's
+                // ownership/ACL checks decide access. Observability only.
+                if !ctx.has_permission(required) {
+                    tracing::debug!(
+                        target = "web.authz",
+                        path = %ctx.transport.path,
+                        permission = %required,
+                        "app-api per-route scope skipped (tier 0-2 policy); service-layer ACL remains authoritative"
+                    );
+                }
+            } else if !ctx.has_permission(required) {
                 return Err(WebFrameworkError::forbidden(format!(
                     "missing required permission: {required}"
                 )));
