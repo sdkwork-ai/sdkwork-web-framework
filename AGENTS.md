@@ -113,6 +113,61 @@ PC admin console: `cd apps/sdkwork-web-framework-pc && npm run verify`
 
 Architecture guard: no `cargo tree` edges to `sdkwork-appbase`, `sdkwork-iam-*`, or product routers.
 
+## Packaging And Deployment (bin/ entrypoints — MANDATORY)
+
+**All image build, package, deploy, rollback, log, backup, and config operations MUST go through
+the `bin/` entrypoints.** Never invoke `docker build`, `docker compose`, `cargo build --release`,
+or hand-edit a deployed bundle directly — the entrypoints resolve the image tag from
+`sdkwork.app.config.json` → `release.currentVersion`, bridge Windows→WSL automatically
+(`sdkwork_local_run`), pass the full registry reference required by `DOCKER_SPEC.md` §2.1, and
+append audit evidence to `target/bin-evidence/evidence.log`. Raw `docker`/`cargo` calls bypass
+version pinning, WSL bridging, and the evidence trap.
+
+Full reference: [`bin/README.md`](bin/README.md). Entrypoint contract:
+`../sdkwork-specs/MODULE_BIN_SPEC.md`.
+
+### Release workflow (build → deploy → verify)
+
+```sh
+# 0. Bump release.currentVersion in sdkwork.app.config.json FIRST (tag source of truth).
+# 1. Build the container image (runs in WSL where required).
+bin/docker-image.sh build --image-tag <version>
+# 2. Deploy per environment (production mutations require --yes).
+bin/docker-deploy.sh install --environment development
+bin/docker-deploy.sh install --environment test
+bin/docker-deploy.sh install --environment staging
+bin/docker-deploy.sh install --environment demo
+bin/docker-deploy.sh install --environment production --yes
+# 3. Verify after each environment: containers healthy + healthz probe + status.
+bin/docker-deploy.sh status --environment <env>
+```
+
+Versioning rules: a behavior-change rebuild always gets a **new version tag** — bump
+`release.currentVersion` before building; never reuse or overwrite an existing tag so rollback
+targets stay addressable. If `cargo metadata --locked` fails with "cannot update the lock file",
+the lock is out of sync with the workspace manifests: regenerate it (run `cargo metadata
+--format-version 1` with the same feature set) and commit `Cargo.lock` **before** rebuilding.
+
+### Operational entrypoints
+
+```sh
+bin/docker-image.sh <build|push|save|load|update|inspect> [--image-tag <v>]
+bin/docker-deploy.sh <install|upgrade|rollback|status|logs|down|start|stop|restart|check-config|doctor> --environment <env>
+                     [--image-tag <v>] [--deps external|embedded] [--to <version>] [--yes] [--dry-run]
+bin/config.sh  <list|show|get|set|diff|validate|edit> --environment <env>   # live bundle config, secrets redacted
+bin/doctor.sh  --environment <env>                                          # read-only, exit 70 on failure
+bin/backup.sh  <create|list|verify|restore> --environment <env>
+bin/docker-deploy.sh logs --environment <env> [--tail N|all] [--since <d>] [--follow] [--export <dir>]
+```
+
+Safety rules: run `--dry-run` first when the command is unfamiliar or the environment is not
+dev; production mutations always require `--yes`; `--purge` requires `--yes` in every
+environment; prefer `upgrade` over `down`+`install` so bundle state and release history persist;
+`rollback --to <version>` uses bundle-owned release history. The host-native channel
+(`bin/apps-build.sh` / `apps-package.sh` / `apps-deploy.sh`) covers production-only bare-metal
+delivery where the repo declares it — every containerized environment uses the
+`docker-image.sh`/`docker-deploy.sh` path.
+
 ## Agent Execution Rules
 
 - Specs before memory; evidence before completion.
