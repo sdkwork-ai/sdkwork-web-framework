@@ -11,6 +11,7 @@ import type {
 } from "../../api/types";
 import { webFrameworkAdminOperations } from "./operations";
 import { createBackendSdkTransport, query, type BackendSdkTransport } from "./transport";
+import {resolveBaseUrlWithAlignProtocol} from "@sdkwork/sdk-common";
 
 export type WebFrameworkAdminBackendSdk = ReturnType<typeof createWebFrameworkAdminBackendSdk>;
 
@@ -92,7 +93,14 @@ export function createWebFrameworkAdminBackendSdk(
 }
 
 export function createWebFrameworkAdminBackendSdkFromEnv(
-  baseUrl = import.meta.env.VITE_SDKWORK_WEB_FRAMEWORK_BACKEND_API_BASE_URL ?? "",
+  // Authored override wins; the shared default resolves through
+  // @sdkwork/sdk-common resolveBaseUrlWithAlignProtocol (ENVIRONMENT_SPEC.md §6.3): unified
+  // SDKWORK_API_BASE_URL candidates matched against the page host, else
+  // derived from it (standalone same-origin; cloud api[-<env>].<brand>;
+  // pnpm dev -> local dev-server origin or cloud-gateway dev port).
+  baseUrl = import.meta.env.VITE_SDKWORK_WEB_FRAMEWORK_BACKEND_API_BASE_URL
+    ?? resolveBaseUrlWithAlignProtocol().url
+    ?? "",
 ) {
   return createWebFrameworkAdminBackendSdk(baseUrl);
 }
