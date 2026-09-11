@@ -1,10 +1,14 @@
 [package]
+rust-version.workspace = true
 name = "sdkwork-web-admin-server"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 description = "Optional standalone server for web-framework admin API and distributed config store."
 
+
+[lints]
+workspace = true
 [lib]
 name = "sdkwork_web_admin_server"
 path = "src/lib.rs"

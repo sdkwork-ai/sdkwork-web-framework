@@ -72,7 +72,7 @@ WebLocaleContext {
   fallbackLocale: LocaleTag
   supportedLocales: LocaleTag[]
   activeLocales: LocaleTag[]
-  source: user-preference | tenant-preference | app-default | accept-language | sdk-header | system-default
+  source: user-preference | tenant-preference | app-default | accept-language | system-default
   catalogVersion?: string
   messageBundleVersion?: string
   timezone?: string
@@ -84,8 +84,9 @@ Rules:
 
 - Locale resolution `MUST` run inside RequestContextResolution before ContextInjection.
 - Public and protected routes `MUST` receive locale context.
-- Resolver precedence is authenticated user preference, tenant/application preference, approved SDK/host runtime locale, `Accept-Language`, application default, explicit fallback.
-- Handlers `MUST NOT` parse `Accept-Language`, `X-SdkWork-Locale`, cookies, query parameters, or user-agent language values.
+- Resolver precedence is authenticated user preference, tenant/application preference, `Accept-Language`, application default, explicit fallback.
+- Locale negotiation uses standard HTTP headers only. SDKWork `MUST NOT` define, send, trust, or document a custom locale request header (`I18N_SPEC.md` §4); the request-side signal is `Accept-Language`, and in-process preference lookup is a resolver extension point, not a wire header.
+- Handlers `MUST NOT` parse `Accept-Language`, cookies, query parameters, or user-agent language values.
 - Localized responses `MUST` emit `Content-Language`; language-varying responses `MUST` emit `Vary: Accept-Language`.
 
 ### 3.5 Public routes (auth bypass)

@@ -1,5 +1,6 @@
 use crate::error::WebFrameworkError;
 use crate::registered_client_origins::merge_registered_sdkwork_client_origins;
+use crate::registered_console_hosts::RegisteredConsoleHosts;
 use axum::extract::Request;
 use axum::http::{HeaderName, HeaderValue, Method, Uri};
 use axum::response::Response;
@@ -14,6 +15,15 @@ const DEVELOPMENT_PRIVATE_NETWORK_HTTPS_ORIGIN: &str = "https://private-network:
 pub struct CorsPolicy {
     pub allow_all_origins: bool,
     pub allowed_origins: Vec<String>,
+    /// Registered console host pattern
+    /// (`<scheme>://<label><suffix>.<registered base domain>`).
+    ///
+    /// The platform API edge serves every module browser console from its own
+    /// cloud sub-domain, and matching has no sub-domain wildcard, so a
+    /// deployment either enumerates thousands of exact origins or declares the
+    /// closed pattern. `None` keeps the historical exact-origin-only behavior.
+    /// See [`crate::registered_console_hosts`].
+    pub registered_console_hosts: Option<RegisteredConsoleHosts>,
     pub allowed_methods: Vec<Method>,
     pub allowed_headers: Vec<String>,
     /// Response headers exposed to browser clients (written as
@@ -122,6 +132,7 @@ impl Default for CorsPolicy {
         Self {
             allow_all_origins: false,
             allowed_origins: Vec::new(),
+            registered_console_hosts: None,
             allowed_methods: vec![
                 Method::GET,
                 Method::POST,
@@ -264,6 +275,11 @@ impl CorsPolicy {
                     .into(),
             );
         }
+        if let Some(hosts) = &self.registered_console_hosts {
+            hosts.validate().map_err(|error| {
+                format!("production CORS policy registered console hosts are invalid: {error}")
+            })?;
+        }
         if self
             .allowed_origins
             .iter()
@@ -324,6 +340,29 @@ impl CorsPolicy {
     pub fn with_registered_sdkwork_client_origins(mut self) -> Self {
         merge_registered_sdkwork_client_origins(&mut self.allowed_origins);
         self
+    }
+
+    /// Attaches the registered console host pattern
+    /// (`<scheme>://<label><suffix>.<registered base domain>`).
+    ///
+    /// Fails closed when the pattern is not valid, so a deployment can never
+    /// publish a permissive console rule by accident.
+    pub fn with_registered_console_hosts(
+        mut self,
+        hosts: RegisteredConsoleHosts,
+    ) -> Result<Self, String> {
+        hosts.validate()?;
+        self.registered_console_hosts = Some(hosts);
+        Ok(self)
+    }
+
+    /// Returns whether this policy accepts at least one browser origin source.
+    ///
+    /// A policy satisfied only by the registered console host pattern is a valid
+    /// non-permissive configuration and must not be treated as an empty
+    /// allowlist by deployment gates.
+    pub fn has_origin_configuration(&self) -> bool {
+        !self.allowed_origins.is_empty() || self.registered_console_hosts.is_some()
     }
 
     pub fn validate_origin(&self, request: &Request) -> Result<(), WebFrameworkError> {
@@ -466,11 +505,19 @@ impl CorsPolicy {
     }
 
     fn allows_origin(&self, origin: &str) -> bool {
-        self.allow_all_origins
-            || self
-                .allowed_origins
-                .iter()
-                .any(|allowed| origin_matches_allowed(allowed, origin))
+        if self.allow_all_origins {
+            return true;
+        }
+        if self
+            .allowed_origins
+            .iter()
+            .any(|allowed| origin_matches_allowed(allowed, origin))
+        {
+            return true;
+        }
+        self.registered_console_hosts
+            .as_ref()
+            .is_some_and(|hosts| hosts.matches(origin))
     }
 }
 
@@ -1232,6 +1279,60 @@ mod tests {
         policy
             .validate_for_production()
             .expect("explicit allowlist is production-safe");
+    }
+
+    #[test]
+    fn registered_console_hosts_match_without_enumerating_origins() {
+        use crate::registered_console_hosts::{registered_service_base_domains, RegisteredConsoleHosts};
+
+        let policy = CorsPolicy {
+            allow_all_origins: false,
+            allowed_origins: vec!["http://127.0.0.1:5173".to_owned()],
+            ..CorsPolicy::default()
+        }
+        .with_registered_console_hosts(RegisteredConsoleHosts::new(
+            vec!["im".to_owned(), "server-app".to_owned()],
+            "-dev",
+            vec!["http".to_owned(), "https".to_owned()],
+            registered_service_base_domains(),
+        ))
+        .expect("valid console host pattern");
+
+        assert!(policy.has_origin_configuration());
+        for origin in [
+            "http://im-dev.sdkwork.com",
+            "https://im-dev.birdcoder.com",
+            "https://server-app-dev.86offer.cn",
+            "http://127.0.0.1:5173",
+        ] {
+            policy
+                .validate_origin_value(origin)
+                .unwrap_or_else(|_| panic!("expected `{origin}` to be allowed"));
+        }
+        assert!(!policy.allows_origin_value("http://evil.example.com"));
+        // the same policy is production-safe: the pattern is a closed registry
+        policy
+            .validate_for_production()
+            .expect("registered console host pattern is production-safe");
+    }
+
+    #[test]
+    fn registered_console_hosts_reject_unregistered_base_domains_in_production() {
+        use crate::registered_console_hosts::RegisteredConsoleHosts;
+
+        let policy = CorsPolicy {
+            registered_console_hosts: Some(RegisteredConsoleHosts::new(
+                vec!["im".to_owned()],
+                "-dev",
+                vec!["http".to_owned()],
+                vec!["attacker.example".to_owned()],
+            )),
+            ..CorsPolicy::default()
+        };
+        let error = policy
+            .validate_for_production()
+            .expect_err("unregistered base domain must be rejected");
+        assert!(error.contains("base domain"), "unexpected error: {error}");
     }
 
     #[test]

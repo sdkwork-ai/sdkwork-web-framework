@@ -504,6 +504,26 @@ where
                     if let (Some(key), Some(fingerprint)) =
                         (&state.idempotency_key, &state.idempotency_fingerprint)
                     {
+                        // Streaming responses must never enter the replay cache.
+                        // `to_bytes` would hold the response until the stream
+                        // ends — turning an incremental SSE delivery into one
+                        // buffered blob (and failing with `payload_too_large`
+                        // once the capture exceeds the cache limit). Releasing
+                        // the reservation keeps the retry contract sane: a
+                        // retried command re-executes instead of replaying a
+                        // truncated capture.
+                        if is_event_stream_response(response) {
+                            if let Err(error) =
+                                runtime.idempotency_store.release(key, fingerprint).await
+                            {
+                                tracing::warn!(
+                                    request_id = ?state.request_id_value(),
+                                    error = ?error,
+                                    "idempotency release failed for a streaming response"
+                                );
+                            }
+                            return Ok(());
+                        }
                         let ttl = Duration::from_secs(
                             runtime.security_policy.idempotency.retention_secs.max(1),
                         );
@@ -642,6 +662,24 @@ where
         }
         Ok(())
     }
+}
+
+/// True when the response is a Server-Sent Events stream.
+///
+/// SSE responses are unbounded in time, so the idempotency `after` stage must
+/// skip them: buffering the body would stall incremental delivery for the whole
+/// turn (see the `Idempotency` arm of `after`).
+fn is_event_stream_response(response: &Response) -> bool {
+    response
+        .headers()
+        .get(axum::http::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .map(|value| {
+            value
+                .to_ascii_lowercase()
+                .starts_with("text/event-stream")
+        })
+        .unwrap_or(false)
 }
 
 fn validate_idempotency_key(value: &str) -> Result<(), WebFrameworkError> {

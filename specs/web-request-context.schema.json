@@ -126,7 +126,7 @@
     },
     "WebLocaleSource": {
       "type": "string",
-      "enum": ["user-preference", "tenant-preference", "app-default", "accept-language", "sdk-header", "system-default"]
+      "enum": ["user-preference", "tenant-preference", "app-default", "accept-language", "system-default"]
     },
     "WebLocaleContext": {
       "type": "object",

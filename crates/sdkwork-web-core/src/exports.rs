@@ -116,6 +116,13 @@ pub use crate::registered_client_origins::{
     registered_sdkwork_client_cors_origins, REGISTERED_SDKWORK_DESKTOP_CORS_ORIGINS,
     REGISTERED_SDKWORK_MINI_PROGRAM_CORS_ORIGINS,
 };
+pub use crate::registered_console_hosts::{
+    is_registered_service_base_domain, registered_console_hosts_from_env,
+    registered_console_hosts_from_lookup, registered_service_base_domains, RegisteredConsoleHosts,
+    SHARED_CORS_CONSOLE_HOST_BASE_DOMAINS_ENV_KEY, SHARED_CORS_CONSOLE_HOST_LABELS_ENV_KEY,
+    SHARED_CORS_CONSOLE_HOST_SCHEMES_ENV_KEY, SHARED_CORS_CONSOLE_HOST_SUFFIX_ENV_KEY,
+    SDKWORK_REGISTERED_SERVICE_BASE_DOMAINS,
+};
 pub use crate::request_context::{
     AppRequestApiSurface, AppRequestAuthLevel, AppRequestAuthMode, AppRequestContext,
     AppRequestContextProfile, AppRequestDeploymentMode, AppRequestEnvironment,

@@ -1,10 +1,14 @@
 [package]
+rust-version.workspace = true
 name = "sdkwork-web-schema-registry"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 description = "Composable schema registry loader for SDKWork applications"
 
+
+[lints]
+workspace = true
 [lib]
 name = "sdkwork_web_schema_registry"
 

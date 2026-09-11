@@ -404,6 +404,152 @@ async fn idempotency_replays_cached_response_without_duplicate_handler() {
     assert!(state.idempotency_replay.is_some());
 }
 
+/// SSE turns are unbounded in time: the idempotency `after` stage must hand the
+/// response back untouched instead of folding it into a replay record.
+///
+/// The cache limit below is deliberately far smaller than the fixture payload,
+/// so the buffering path would surface `payload_too_large` — that is the
+/// discriminator proving the streaming branch really ran.
+#[tokio::test]
+async fn idempotency_skips_streaming_responses_without_buffering_or_caching() {
+    use crate::idempotency::IdempotencyBeginOutcome;
+    use crate::security::IdempotencyPolicy;
+
+    const CACHE_LIMIT_BYTES: u64 = 16;
+    const STREAM_PAYLOAD: &str =
+        "data: {\"choices\":[{\"delta\":{\"content\":\"hello\"}}]}\n\ndata: [DONE]\n\n";
+
+    let store = memory_idempotency_store();
+    let security = security_with_idempotency(IdempotencyPolicy {
+        require_for_retryable_commands: true,
+        retention_secs: 60,
+        max_cached_response_bytes: CACHE_LIMIT_BYTES,
+        require_body_hash_for_payload: true,
+    });
+    let runtime = WebCallRuntime::new(DefaultWebRequestContextResolver::default())
+        .with_idempotency_store(Arc::clone(&store))
+        .with_security_policy(security);
+    let chain = WebCallInterceptorChain::standard();
+    let mut request = Request::builder()
+        .method("POST")
+        .uri("/app/v3/api/ai/agents/agent.chat.default/sessions/s-1/turns")
+        .header("Idempotency-Key", "turn-1")
+        .header("content-length", "0")
+        .header("Authorization", fixture_auth_header())
+        .header("Access-Token", fixture_access_header())
+        .body(Body::empty())
+        .expect("request");
+    let mut state = WebCallState::from_request(&request);
+    chain
+        .before(&mut state, &mut request, &runtime)
+        .await
+        .expect("pipeline");
+    assert!(state.idempotency_leader, "the turn must hold the reservation");
+    let key = state.idempotency_key.clone().expect("store key");
+    let fingerprint = state.idempotency_fingerprint.clone().expect("fingerprint");
+
+    assert!(
+        STREAM_PAYLOAD.len() as u64 > CACHE_LIMIT_BYTES,
+        "fixture must exceed the idempotency cache limit"
+    );
+    let mut response = Response::builder()
+        .status(200)
+        .header("content-type", "text/event-stream; charset=utf-8")
+        .body(Body::from(STREAM_PAYLOAD))
+        .expect("response");
+
+    chain
+        .after(&state, &mut response, &runtime)
+        .await
+        .expect("a streaming response must never be buffered by the idempotency stage");
+
+    // The body survives verbatim: no capture, no truncation.
+    let content_type = response
+        .headers()
+        .get("content-type")
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_owned);
+    assert_eq!(
+        Some("text/event-stream; charset=utf-8".to_owned()),
+        content_type
+    );
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("body");
+    assert_eq!(STREAM_PAYLOAD.as_bytes(), body.as_ref());
+
+    // The reservation is released, so a retry re-executes the turn instead of
+    // replaying a truncated capture or failing with "already in progress".
+    let retry = store
+        .begin(&key, &fingerprint, std::time::Duration::from_secs(60))
+        .await
+        .expect("a streamed turn must stay retryable");
+    assert!(
+        matches!(retry, IdempotencyBeginOutcome::Leader),
+        "a streamed turn must release its reservation"
+    );
+}
+
+/// Control case for the streaming exemption: buffered responses must still be
+/// captured and replayed, otherwise the exemption silently disabled Stage 9.
+#[tokio::test]
+async fn idempotency_still_caches_buffered_responses() {
+    use crate::idempotency::IdempotencyBeginOutcome;
+    use crate::security::IdempotencyPolicy;
+
+    const CACHED_PAYLOAD: &str = r#"{"id":"order-1"}"#;
+
+    let store = memory_idempotency_store();
+    let security = security_with_idempotency(IdempotencyPolicy {
+        require_for_retryable_commands: true,
+        retention_secs: 60,
+        max_cached_response_bytes: 1024,
+        require_body_hash_for_payload: true,
+    });
+    let runtime = WebCallRuntime::new(DefaultWebRequestContextResolver::default())
+        .with_idempotency_store(Arc::clone(&store))
+        .with_security_policy(security);
+    let chain = WebCallInterceptorChain::standard();
+    let mut request = Request::builder()
+        .method("POST")
+        .uri("/app/v3/api/orders")
+        .header("Idempotency-Key", "order-9")
+        .header("content-length", "0")
+        .header("Authorization", fixture_auth_header())
+        .header("Access-Token", fixture_access_header())
+        .body(Body::empty())
+        .expect("request");
+    let mut state = WebCallState::from_request(&request);
+    chain
+        .before(&mut state, &mut request, &runtime)
+        .await
+        .expect("pipeline");
+    let key = state.idempotency_key.clone().expect("store key");
+    let fingerprint = state.idempotency_fingerprint.clone().expect("fingerprint");
+
+    let mut response = Response::builder()
+        .status(201)
+        .header("content-type", "application/json")
+        .body(Body::from(CACHED_PAYLOAD))
+        .expect("response");
+    chain
+        .after(&state, &mut response, &runtime)
+        .await
+        .expect("buffered responses must still be cached");
+
+    let replay = store
+        .begin(&key, &fingerprint, std::time::Duration::from_secs(60))
+        .await
+        .expect("replay lookup");
+    match replay {
+        IdempotencyBeginOutcome::Replay(record) => {
+            assert_eq!(201, record.status_code);
+            assert_eq!(CACHED_PAYLOAD.as_bytes(), record.body.as_slice());
+        }
+        IdempotencyBeginOutcome::Leader => panic!("non-streaming responses must be cached"),
+    }
+}
+
 #[tokio::test]
 async fn rejects_client_identity_projection_headers_on_protected_paths() {
     let runtime = WebCallRuntime::new(DefaultWebRequestContextResolver::default());

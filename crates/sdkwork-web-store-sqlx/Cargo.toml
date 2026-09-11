@@ -1,10 +1,14 @@
 [package]
+rust-version.workspace = true
 name = "sdkwork-web-store-sqlx"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 description = "SQLx-backed RateLimitStore, IdempotencyStore, and SecurityEventEmitter for web_* tables."
 
+
+[lints]
+workspace = true
 [lib]
 name = "sdkwork_web_store_sqlx"
 path = "src/lib.rs"

@@ -49,6 +49,7 @@ pub fn validate_cors_upsert(body: &UpsertCorsPolicyRequest) -> Result<(), ApiPro
         CorsPolicy {
             allow_all_origins: body.allow_all_origins,
             allowed_origins: body.allowed_origins.clone(),
+            registered_console_hosts: None,
             allowed_methods: vec![],
             allowed_headers: vec![],
             expose_headers: vec![],

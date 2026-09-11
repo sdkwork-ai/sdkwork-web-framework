@@ -16,6 +16,12 @@
         "standalone",
         "cloud"
       ]
+    },
+    "environment": {
+      "allowed": [
+        "development",
+        "production"
+      ]
     }
   },
   "profilePattern": "{deploymentProfile}.{environment}.env",

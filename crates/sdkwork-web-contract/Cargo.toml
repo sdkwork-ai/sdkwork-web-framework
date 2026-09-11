@@ -1,10 +1,14 @@
 [package]
+rust-version.workspace = true
 name = "sdkwork-web-contract"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 description = "SDKWork web framework contract types (ApiSurface, HttpRoute)."
 
+
+[lints]
+workspace = true
 [lib]
 name = "sdkwork_web_contract"
 path = "src/lib.rs"

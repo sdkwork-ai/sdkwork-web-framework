@@ -1,10 +1,14 @@
 [package]
+rust-version.workspace = true
 name = "sdkwork-web-test-utils"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 description = "Test fixtures and TestRuntime builder for sdkwork-web-framework (catalog K2)."
 
+
+[lints]
+workspace = true
 [lib]
 name = "sdkwork_web_test_utils"
 path = "src/lib.rs"

@@ -69,6 +69,7 @@ async fn production_cors_policy_rejects_allow_all_origins() {
     let policy = CorsPolicy {
         allow_all_origins: true,
         allowed_origins: vec![],
+        registered_console_hosts: None,
         allowed_methods: vec![],
         allowed_headers: vec![],
         expose_headers: vec![],

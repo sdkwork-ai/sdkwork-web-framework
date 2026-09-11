@@ -152,7 +152,6 @@ pub enum WebLocaleSource {
     TenantPreference,
     AppDefault,
     AcceptLanguage,
-    SdkHeader,
     SystemDefault,
 }
 

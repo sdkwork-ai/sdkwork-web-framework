@@ -18,6 +18,17 @@ pub const SHARED_CORS_ALLOWED_ORIGINS_ENV_KEY: &str = "SDKWORK_CORS_ALLOWED_ORIG
 /// shared key, mirroring the CORS allow-list convention.
 pub const SHARED_REGION_CODE_ENV_KEY: &str = "SDKWORK_REGION_CODE";
 
+/// Canonical registered console host keys shared by every service.
+///
+/// The vocabulary lives with the pattern in
+/// [`sdkwork_web_core::registered_console_hosts`]; it is re-exported here so
+/// services that already depend on bootstrap pick it up from one place.
+pub use sdkwork_web_core::{
+    registered_console_hosts_from_env, registered_console_hosts_from_lookup,
+    SHARED_CORS_CONSOLE_HOST_BASE_DOMAINS_ENV_KEY, SHARED_CORS_CONSOLE_HOST_LABELS_ENV_KEY,
+    SHARED_CORS_CONSOLE_HOST_SCHEMES_ENV_KEY, SHARED_CORS_CONSOLE_HOST_SUFFIX_ENV_KEY,
+};
+
 /// REGION_SPEC §4.1 default region code when nothing is declared.
 pub const DEFAULT_REGION_CODE: &str = "global";
 const MAX_REGION_CODE_LEN: usize = 64;
@@ -147,6 +158,25 @@ pub fn security_policy_for_environment(
     }
     policy.cors = policy.cors.with_registered_sdkwork_client_origins();
     policy
+}
+
+/// Attaches the registered console host pattern resolved from the environment
+/// to an already-built security policy.
+///
+/// Returns the policy unchanged when
+/// [`SHARED_CORS_CONSOLE_HOST_LABELS_ENV_KEY`] is unset, and a diagnosable error
+/// when the pattern is half-configured or invalid, so startup fails loudly
+/// instead of silently rejecting every module console preflight.
+pub fn with_registered_console_hosts_from_env(
+    policy: SecurityPolicy,
+) -> Result<SecurityPolicy, String> {
+    match registered_console_hosts_from_env()? {
+        Some(hosts) => Ok(SecurityPolicy {
+            cors: policy.cors.with_registered_console_hosts(hosts)?,
+            ..policy
+        }),
+        None => Ok(policy),
+    }
 }
 
 pub fn application_security_policy_from_env(
