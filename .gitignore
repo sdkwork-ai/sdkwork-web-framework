@@ -11,7 +11,14 @@ target-alt/
 .pytest_cache/
 **/.gradle/
 **/build/
-**/bin/
+# NOTE: `**/bin/` MUST NOT be listed here. The repository-root bin/ directory
+# holds this module's normative command entrypoints (MODULE_BIN_SPEC.md §2) and
+# the bin/lib wiring they source. A recursive bin/ glob matches the root bin/ as
+# well, which makes every mandated entrypoint unstageable — that is why an
+# earlier "land standard bin/ entrypoints" commit could delete the `/bin/` line
+# and still record no scripts at all. Nested build output is covered by
+# `**/build/` and `**/obj/`; `**/generated/**/bin/Release/` covers .NET publish
+# output if one ever lands.
 **/obj/
 **/vendor/
 .packages/
