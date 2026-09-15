@@ -27,7 +27,7 @@ Specs: DOCUMENTATION_SPEC.md §7, WEB_FRAMEWORK_SPEC.md, SECURITY_SPEC.md
 ### Start admin-server (local dev)
 
 ```bash
-cd e:\sdkwork-space\sdkwork-web-framework
+cd <workspace-root>/sdkwork-web-framework
 export SDKWORK_WEB_FRAMEWORK_JWT_HS256_SECRET=dev-local-secret
 cargo run -p sdkwork-web-admin-server
 # Listens on 127.0.0.1:3920
@@ -36,7 +36,7 @@ cargo run -p sdkwork-web-admin-server
 ### Start PC console (local dev)
 
 ```bash
-cd e:\sdkwork-space\sdkwork-web-framework\apps\sdkwork-web-framework-pc
+cd <workspace-root>/sdkwork-web-framework\apps\sdkwork-web-framework-pc
 npm install
 npm run dev
 # Vite dev server on 5173, proxies /backend → 127.0.0.1:3920
@@ -45,14 +45,14 @@ npm run dev
 ### Run full verification
 
 ```powershell
-cd e:\sdkwork-space\sdkwork-web-framework
+cd <workspace-root>/sdkwork-web-framework
 .\scripts\verify.ps1
 ```
 
 ### Run integration E2E only
 
 ```bash
-cd e:\sdkwork-space\sdkwork-web-framework\apps\sdkwork-web-framework-pc
+cd <workspace-root>/sdkwork-web-framework\apps\sdkwork-web-framework-pc
 npm run test:e2e:integration
 ```
 
