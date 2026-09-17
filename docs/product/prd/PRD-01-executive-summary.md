@@ -50,7 +50,7 @@ SDKWork 各带 API 的产品共享 HTTP 契约（`/app/v3/api`、`/backend/v3/ap
 | `sdkwork-web-core` | `WebRequestContext`、Resolver trait、18 阶段 Interceptor 链、SecurityPolicy、Store trait 与内存默认实现 |
 | `sdkwork-web-axum` | middleware、extractor、Layer |
 | `sdkwork-web-bootstrap` | healthz、metrics、contract_fallback（自动挂载）、service_router、`WebFramework::builder` |
-| `sdkwork-web-store-sqlx` | 可选：`web_*` 表 sqlx 实现（仍无业务表） |
+| `sdkwork-web-store-sqlx` | 可选：`framework_*` 表 sqlx 实现（仍无业务表） |
 
 ## 7. 成功标准
 

@@ -61,7 +61,7 @@ impl DynamicRateLimitPolicySource for SqlxRateLimitPolicySource {
             WebStorePool::Sqlite(pool) => {
                 for (tenant_id, tier) in candidates {
                     let row = sqlx::query_as::<_, RateLimitPolicyRow>(
-                        "SELECT max_requests, window_secs, enabled FROM web_rate_limit_policy \
+                        "SELECT max_requests, window_secs, enabled FROM framework_rate_limit_policy \
                          WHERE tenant_id = ? AND environment = ? AND tier_key = ? LIMIT 1",
                     )
                     .bind(tenant_id)
@@ -80,7 +80,7 @@ impl DynamicRateLimitPolicySource for SqlxRateLimitPolicySource {
             WebStorePool::Postgres(pool) => {
                 for (tenant_id, tier) in candidates {
                     let row = sqlx::query_as::<_, RateLimitPolicyRow>(
-                        "SELECT max_requests, window_secs, enabled FROM web_rate_limit_policy \
+                        "SELECT max_requests, window_secs, enabled FROM framework_rate_limit_policy \
                          WHERE tenant_id = $1 AND environment = $2 AND tier_key = $3 LIMIT 1",
                     )
                     .bind(tenant_id)

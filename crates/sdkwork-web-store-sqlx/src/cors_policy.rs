@@ -48,7 +48,7 @@ impl DynamicCorsPolicySource for SqlxCorsPolicySource {
             WebStorePool::Sqlite(pool) => {
                 let row = sqlx::query_as::<_, CorsPolicyRow>(
                     "SELECT allow_all_origins, allowed_origins, allow_credentials \
-                     FROM web_cors_policy WHERE tenant_id = ? AND environment = ?",
+                     FROM framework_cors_policy WHERE tenant_id = ? AND environment = ?",
                 )
                 .bind(ctx.tenant_scope())
                 .bind(ctx.environment_label())
@@ -61,7 +61,7 @@ impl DynamicCorsPolicySource for SqlxCorsPolicySource {
             WebStorePool::Postgres(pool) => {
                 let row = sqlx::query_as::<_, CorsPolicyRow>(
                     "SELECT allow_all_origins, allowed_origins, allow_credentials \
-                     FROM web_cors_policy WHERE tenant_id = $1 AND environment = $2",
+                     FROM framework_cors_policy WHERE tenant_id = $1 AND environment = $2",
                 )
                 .bind(ctx.tenant_scope())
                 .bind(ctx.environment_label())

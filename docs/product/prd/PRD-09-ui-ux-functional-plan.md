@@ -12,14 +12,14 @@
 本文档描述：
 
 - 基于框架标准 **可构建** 的运维/开发者体验（供并行 apps 或其它 **产品仓库** 实现）
-- 框架提供的 **契约与数据基础**（`web_*` 表、Audit/Security 事件）
+- 框架提供的 **契约与数据基础**（`framework_*` 表、Audit/Security 事件）
 
 ## 2. 控制台归属（修订）
 
 | 能力 | 推荐归属 | 说明 |
 | --- | --- | --- |
 | IAM 用户/角色/组织 | appbase backend-ui | 已有 IAM 域 |
-| Web 流控/CORS/安全事件 | platform-admin 或 appbase 扩展模块 | **消费** `web_*` 与框架 emitter |
+| Web 流控/CORS/安全事件 | platform-admin 或 appbase 扩展模块 | **消费** `framework_*` 与框架 emitter |
 | 框架文档/集成指南 | web-framework `docs/` + 静态门户 | 无业务 API |
 
 **不在 web-framework 仓库内建 admin API 路由**（见 [TECH-05-api-surface-design.md](../../architecture/tech/TECH-05-api-surface-design.md) §8）。
@@ -28,13 +28,13 @@
 
 ### 3.1 Web 安全中心（platform 或 appbase admin）
 
-- CORS 策略 CRUD → `web_cors_policy`
-- 流控策略 CRUD → `web_rate_limit_policy`
-- 安全事件列表 → `web_security_event`
+- CORS 策略 CRUD → `framework_cors_policy`
+- 流控策略 CRUD → `framework_rate_limit_policy`
+- 安全事件列表 → `framework_security_event`
 
 ### 3.2 审计浏览器
 
-- 框架审计 → `web_audit_event`
+- 框架审计 → `framework_audit_event`
 - IAM 审计 → appbase 表（联合查询在 **业务 UI** 组装）
 
 ### 3.3 开发者门户（文档站）

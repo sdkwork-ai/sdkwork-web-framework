@@ -241,7 +241,7 @@
           "modules": [
             "DynamicCorsPolicySource",
             "SqlxCorsPolicySource",
-            "web_cors_policy",
+            "framework_cors_policy",
             "EP-16"
           ]
         },
@@ -506,7 +506,7 @@
           "modules": [
             "DynamicRateLimitPolicySource",
             "SqlxRateLimitPolicySource",
-            "web_rate_limit_policy",
+            "framework_rate_limit_policy",
             "EP-10"
           ]
         },
@@ -519,7 +519,7 @@
           "modules": [
             "TenantRuntimeProfile",
             "SqlxTenantRuntimeProfileSource",
-            "web_tenant_runtime_profile"
+            "framework_tenant_runtime_profile"
           ]
         },
         {
@@ -616,7 +616,7 @@
           "implStatus": "implemented",
           "modules": [
             "SqlxAuditEmitter",
-            "web_audit_event",
+            "framework_audit_event",
             "pipeline:Audit"
           ]
         },
@@ -956,7 +956,7 @@
             "SqlxCorsPolicySource",
             "SqlxRateLimitPolicySource",
             "SqlxTenantRuntimeProfileSource",
-            "web_control_node",
+            "framework_control_node",
             "bootstrap:sqlx feature"
           ]
         },

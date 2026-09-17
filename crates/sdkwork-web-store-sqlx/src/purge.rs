@@ -26,11 +26,11 @@ impl ThrottledPurge {
             match &pool {
                 #[cfg(feature = "sqlite")]
                 WebStorePool::Sqlite(_) => {
-                    "DELETE FROM web_idempotency_record WHERE expires_at <= ?"
+                    "DELETE FROM framework_idempotency_record WHERE expires_at <= ?"
                 }
                 #[cfg(feature = "postgres")]
                 WebStorePool::Postgres(_) => {
-                    "DELETE FROM web_idempotency_record WHERE expires_at <= $1"
+                    "DELETE FROM framework_idempotency_record WHERE expires_at <= $1"
                 }
             },
         )
@@ -43,11 +43,11 @@ impl ThrottledPurge {
             match &pool {
                 #[cfg(feature = "sqlite")]
                 WebStorePool::Sqlite(_) => {
-                    "DELETE FROM web_rate_limit_bucket WHERE expires_at <= ?"
+                    "DELETE FROM framework_rate_limit_bucket WHERE expires_at <= ?"
                 }
                 #[cfg(feature = "postgres")]
                 WebStorePool::Postgres(_) => {
-                    "DELETE FROM web_rate_limit_bucket WHERE expires_at <= $1"
+                    "DELETE FROM framework_rate_limit_bucket WHERE expires_at <= $1"
                 }
             },
         )
@@ -60,11 +60,11 @@ impl ThrottledPurge {
             match &pool {
                 #[cfg(feature = "sqlite")]
                 WebStorePool::Sqlite(_) => {
-                    "DELETE FROM web_audit_event WHERE expires_at IS NOT NULL AND expires_at <= ?"
+                    "DELETE FROM framework_audit_event WHERE expires_at IS NOT NULL AND expires_at <= ?"
                 }
                 #[cfg(feature = "postgres")]
                 WebStorePool::Postgres(_) => {
-                    "DELETE FROM web_audit_event WHERE expires_at IS NOT NULL AND expires_at <= $1"
+                    "DELETE FROM framework_audit_event WHERE expires_at IS NOT NULL AND expires_at <= $1"
                 }
             },
         )
@@ -77,11 +77,11 @@ impl ThrottledPurge {
             match &pool {
                 #[cfg(feature = "sqlite")]
                 WebStorePool::Sqlite(_) => {
-                    "DELETE FROM web_security_event WHERE expires_at IS NOT NULL AND expires_at <= ?"
+                    "DELETE FROM framework_security_event WHERE expires_at IS NOT NULL AND expires_at <= ?"
                 }
                 #[cfg(feature = "postgres")]
                 WebStorePool::Postgres(_) => {
-                    "DELETE FROM web_security_event WHERE expires_at IS NOT NULL AND expires_at <= $1"
+                    "DELETE FROM framework_security_event WHERE expires_at IS NOT NULL AND expires_at <= $1"
                 }
             },
         )

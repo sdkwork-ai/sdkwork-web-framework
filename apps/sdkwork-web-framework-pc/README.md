@@ -49,5 +49,5 @@ Vite 开发服务器将 `/backend` 代理到 `127.0.0.1:3920`。
 
 - 各业务节点连接**同一** `SDKWORK_WEB_FRAMEWORK_STORE_URL` SQLx 库
 - 启用 `WebFrameworkOptionalFeatures::production_sqlx()` 与对应 dynamic sources
-- 通过本控制台写入 `web_*` 表；节点在请求管道中自动解析 overlay
-- `web_control_node` 记录区域/节点 URL，供运维查看心跳与拓扑
+- 通过本控制台写入 `framework_*` 表；节点在请求管道中自动解析 overlay
+- `framework_control_node` 记录区域/节点 URL，供运维查看心跳与拓扑

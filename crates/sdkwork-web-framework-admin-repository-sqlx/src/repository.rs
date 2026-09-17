@@ -381,7 +381,7 @@ async fn list_cors_policies_postgres(
     params: OffsetListPageParams,
 ) -> Result<RepoOffsetPage<CorsPolicyRecord>, RepositoryError> {
     let total_items = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(1) FROM web_cors_policy \
+        "SELECT COUNT(1) FROM framework_cors_policy \
          WHERE ($1::text IS NULL OR environment = $1) AND tenant_id = $2",
     )
     .bind(&environment)
@@ -392,7 +392,7 @@ async fn list_cors_policies_postgres(
 
     let rows = sqlx::query_as::<_, (String, String, i64, String, i64, i64)>(
         "SELECT tenant_id, environment, allow_all_origins, allowed_origins, allow_credentials, version \
-         FROM web_cors_policy \
+         FROM framework_cors_policy \
          WHERE ($1::text IS NULL OR environment = $1) AND tenant_id = $2 \
          ORDER BY tenant_id, environment \
          LIMIT $3 OFFSET $4",
@@ -428,13 +428,13 @@ async fn upsert_cors_policy_postgres(
     let origins_json = serde_json::to_string(&body.allowed_origins)
         .map_err(|_| RepositoryError::StoredJson("allowed_origins payload is invalid".into()))?;
     let row = sqlx::query_as::<_, (i64,)>(
-        "INSERT INTO web_cors_policy (tenant_id, environment, allow_all_origins, allowed_origins, allow_credentials, version) \
+        "INSERT INTO framework_cors_policy (tenant_id, environment, allow_all_origins, allowed_origins, allow_credentials, version) \
          VALUES ($1, $2, $3, $4, $5, 1) \
          ON CONFLICT(tenant_id, environment) DO UPDATE SET \
            allow_all_origins = excluded.allow_all_origins, \
            allowed_origins = excluded.allowed_origins, \
            allow_credentials = excluded.allow_credentials, \
-           version = web_cors_policy.version + 1 \
+           version = framework_cors_policy.version + 1 \
          RETURNING version",
     )
     .bind(&body.tenant_id)
@@ -464,7 +464,7 @@ async fn list_rate_limit_policies_postgres(
     params: OffsetListPageParams,
 ) -> Result<RepoOffsetPage<RateLimitPolicyRecord>, RepositoryError> {
     let total_items = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(1) FROM web_rate_limit_policy \
+        "SELECT COUNT(1) FROM framework_rate_limit_policy \
          WHERE ($1::text IS NULL OR environment = $1) AND tenant_id = $2",
     )
     .bind(&environment)
@@ -475,7 +475,7 @@ async fn list_rate_limit_policies_postgres(
 
     let rows = sqlx::query_as::<_, (String, String, String, i64, i64, i64, i64)>(
         "SELECT tenant_id, environment, tier_key, max_requests, window_secs, enabled, version \
-         FROM web_rate_limit_policy \
+         FROM framework_rate_limit_policy \
          WHERE ($1::text IS NULL OR environment = $1) AND tenant_id = $2 \
          ORDER BY tenant_id, environment, tier_key \
          LIMIT $3 OFFSET $4",
@@ -510,13 +510,13 @@ async fn upsert_rate_limit_policy_postgres(
     body: UpsertRateLimitPolicyRecord,
 ) -> Result<RateLimitPolicyRecord, RepositoryError> {
     let row = sqlx::query_as::<_, (i64,)>(
-        "INSERT INTO web_rate_limit_policy (tenant_id, environment, tier_key, max_requests, window_secs, enabled, version) \
+        "INSERT INTO framework_rate_limit_policy (tenant_id, environment, tier_key, max_requests, window_secs, enabled, version) \
          VALUES ($1, $2, $3, $4, $5, $6, 1) \
          ON CONFLICT(tenant_id, environment, tier_key) DO UPDATE SET \
            max_requests = excluded.max_requests, \
            window_secs = excluded.window_secs, \
            enabled = excluded.enabled, \
-           version = web_rate_limit_policy.version + 1 \
+           version = framework_rate_limit_policy.version + 1 \
          RETURNING version",
     )
     .bind(&body.tenant_id)
@@ -548,7 +548,7 @@ async fn list_tenant_runtime_profiles_postgres(
     params: OffsetListPageParams,
 ) -> Result<RepoOffsetPage<TenantRuntimeProfileRecord>, RepositoryError> {
     let total_items = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(1) FROM web_tenant_runtime_profile \
+        "SELECT COUNT(1) FROM framework_tenant_runtime_profile \
          WHERE ($1::text IS NULL OR environment = $1) AND tenant_id = $2",
     )
     .bind(&environment)
@@ -560,7 +560,7 @@ async fn list_tenant_runtime_profiles_postgres(
     let rows =
         sqlx::query_as::<_, (String, String, Option<i64>, Option<i64>, Option<i64>, i64)>(
             "SELECT tenant_id, environment, rate_limit_enabled, max_content_length, max_concurrent_requests, version \
-             FROM web_tenant_runtime_profile \
+             FROM framework_tenant_runtime_profile \
              WHERE ($1::text IS NULL OR environment = $1) AND tenant_id = $2 \
              ORDER BY tenant_id, environment \
              LIMIT $3 OFFSET $4",
@@ -596,13 +596,13 @@ async fn upsert_tenant_runtime_profile_postgres(
     let rate_limit = body.rate_limit_enabled.map(i64::from);
     let max_concurrent = body.max_concurrent_requests.map(|value| value as i64);
     let row = sqlx::query_as::<_, (i64,)>(
-        "INSERT INTO web_tenant_runtime_profile (tenant_id, environment, rate_limit_enabled, max_content_length, max_concurrent_requests, version) \
+        "INSERT INTO framework_tenant_runtime_profile (tenant_id, environment, rate_limit_enabled, max_content_length, max_concurrent_requests, version) \
          VALUES ($1, $2, $3, $4, $5, 1) \
          ON CONFLICT(tenant_id, environment) DO UPDATE SET \
            rate_limit_enabled = excluded.rate_limit_enabled, \
            max_content_length = excluded.max_content_length, \
            max_concurrent_requests = excluded.max_concurrent_requests, \
-           version = web_tenant_runtime_profile.version + 1 \
+           version = framework_tenant_runtime_profile.version + 1 \
          RETURNING version",
     )
     .bind(&body.tenant_id)
@@ -636,7 +636,7 @@ async fn list_security_events_postgres(
         (SecurityEventListScope::Tenant(tenant_id), Some(before)) => {
             sqlx::query_as::<_, SecurityEventRow>(
                 "SELECT id, kind, request_id, tenant_id, path, method, api_surface, origin, detail, created_at \
-                 FROM web_security_event \
+                 FROM framework_security_event \
                  WHERE tenant_id = $1 AND id < $2 \
                  ORDER BY id DESC LIMIT $3",
             )
@@ -649,7 +649,7 @@ async fn list_security_events_postgres(
         (SecurityEventListScope::Tenant(tenant_id), None) => {
             sqlx::query_as::<_, SecurityEventRow>(
                 "SELECT id, kind, request_id, tenant_id, path, method, api_surface, origin, detail, created_at \
-                 FROM web_security_event \
+                 FROM framework_security_event \
                  WHERE tenant_id = $1 \
                  ORDER BY id DESC LIMIT $2",
             )
@@ -661,7 +661,7 @@ async fn list_security_events_postgres(
         (SecurityEventListScope::PlatformAll, Some(before)) => {
             sqlx::query_as::<_, SecurityEventRow>(
                 "SELECT id, kind, request_id, tenant_id, path, method, api_surface, origin, detail, created_at \
-                 FROM web_security_event \
+                 FROM framework_security_event \
                  WHERE id < $1 \
                  ORDER BY id DESC LIMIT $2",
             )
@@ -673,7 +673,7 @@ async fn list_security_events_postgres(
         (SecurityEventListScope::PlatformAll, None) => {
             sqlx::query_as::<_, SecurityEventRow>(
                 "SELECT id, kind, request_id, tenant_id, path, method, api_surface, origin, detail, created_at \
-                 FROM web_security_event \
+                 FROM framework_security_event \
                  ORDER BY id DESC LIMIT $1",
             )
             .bind(fetch_limit)
@@ -702,7 +702,7 @@ async fn list_audit_events_postgres(
         (AuditEventListScope::Tenant(tenant_id) | AuditEventListScope::PlatformTenant(tenant_id), Some(before)) => {
             sqlx::query_as::<_, AuditEventRow>(
                 "SELECT id, request_id, tenant_id, user_id, api_surface, path, method, operation_id, status_code, duration_ms, created_at \
-                 FROM web_audit_event \
+                 FROM framework_audit_event \
                  WHERE tenant_id = $1 AND id < $2 \
                  ORDER BY id DESC LIMIT $3",
             )
@@ -715,7 +715,7 @@ async fn list_audit_events_postgres(
         (AuditEventListScope::Tenant(tenant_id) | AuditEventListScope::PlatformTenant(tenant_id), None) => {
             sqlx::query_as::<_, AuditEventRow>(
                 "SELECT id, request_id, tenant_id, user_id, api_surface, path, method, operation_id, status_code, duration_ms, created_at \
-                 FROM web_audit_event \
+                 FROM framework_audit_event \
                  WHERE tenant_id = $1 \
                  ORDER BY id DESC LIMIT $2",
             )
@@ -727,7 +727,7 @@ async fn list_audit_events_postgres(
         (AuditEventListScope::PlatformAll, Some(before)) => {
             sqlx::query_as::<_, AuditEventRow>(
                 "SELECT id, request_id, tenant_id, user_id, api_surface, path, method, operation_id, status_code, duration_ms, created_at \
-                 FROM web_audit_event \
+                 FROM framework_audit_event \
                  WHERE id < $1 \
                  ORDER BY id DESC LIMIT $2",
             )
@@ -739,7 +739,7 @@ async fn list_audit_events_postgres(
         (AuditEventListScope::PlatformAll, None) => {
             sqlx::query_as::<_, AuditEventRow>(
                 "SELECT id, request_id, tenant_id, user_id, api_surface, path, method, operation_id, status_code, duration_ms, created_at \
-                 FROM web_audit_event \
+                 FROM framework_audit_event \
                  ORDER BY id DESC LIMIT $1",
             )
             .bind(fetch_limit)
@@ -763,7 +763,7 @@ async fn list_control_nodes_postgres(
     params: OffsetListPageParams,
 ) -> Result<RepoOffsetPage<ControlNodeRecord>, RepositoryError> {
     let total_items = sqlx::query_scalar::<_, i64>(
-        "SELECT COUNT(1) FROM web_control_node WHERE ($1::text IS NULL OR environment = $1)",
+        "SELECT COUNT(1) FROM framework_control_node WHERE ($1::text IS NULL OR environment = $1)",
     )
     .bind(&environment)
     .fetch_one(pool)
@@ -772,7 +772,7 @@ async fn list_control_nodes_postgres(
 
     let rows = sqlx::query_as::<_, ControlNodeRow>(
         "SELECT node_id, region, base_url, environment, status, last_heartbeat_at, created_at, updated_at \
-         FROM web_control_node \
+         FROM framework_control_node \
          WHERE ($1::text IS NULL OR environment = $1) \
          ORDER BY region, node_id \
          LIMIT $2 OFFSET $3",
@@ -794,7 +794,7 @@ async fn control_node_exists_postgres(
     node_id: &str,
 ) -> Result<bool, RepositoryError> {
     let count =
-        sqlx::query_scalar::<_, i64>("SELECT COUNT(1) FROM web_control_node WHERE node_id = $1")
+        sqlx::query_scalar::<_, i64>("SELECT COUNT(1) FROM framework_control_node WHERE node_id = $1")
             .bind(node_id)
             .fetch_one(pool)
             .await
@@ -809,7 +809,7 @@ async fn register_control_node_postgres(
     now: i64,
 ) -> Result<(ControlNodeRecord, bool), RepositoryError> {
     let inserted = sqlx::query_as::<_, ControlNodeRow>(
-        "INSERT INTO web_control_node (node_id, region, base_url, environment, status, last_heartbeat_at, created_at, updated_at) \
+        "INSERT INTO framework_control_node (node_id, region, base_url, environment, status, last_heartbeat_at, created_at, updated_at) \
          VALUES ($1, $2, $3, $4, 'registered', $5, $6, $7) \
          ON CONFLICT(node_id) DO NOTHING \
          RETURNING node_id, region, base_url, environment, status, last_heartbeat_at, created_at, updated_at",
@@ -830,7 +830,7 @@ async fn register_control_node_postgres(
     }
 
     let row = sqlx::query_as::<_, ControlNodeRow>(
-        "UPDATE web_control_node SET \
+        "UPDATE framework_control_node SET \
            region = $1, \
            base_url = $2, \
            environment = $3, \
@@ -863,7 +863,7 @@ async fn get_control_node_postgres(
 ) -> Result<Option<ControlNodeRecord>, RepositoryError> {
     let row = sqlx::query_as::<_, ControlNodeRow>(
         "SELECT node_id, region, base_url, environment, status, last_heartbeat_at, created_at, updated_at \
-         FROM web_control_node WHERE node_id = $1",
+         FROM framework_control_node WHERE node_id = $1",
     )
     .bind(node_id)
     .fetch_optional(pool)
@@ -879,7 +879,7 @@ async fn heartbeat_control_node_postgres(
     now: i64,
 ) -> Result<ControlNodeRecord, RepositoryError> {
     let updated = sqlx::query(
-        "UPDATE web_control_node SET status = 'online', last_heartbeat_at = $1, updated_at = $2 WHERE node_id = $3",
+        "UPDATE framework_control_node SET status = 'online', last_heartbeat_at = $1, updated_at = $2 WHERE node_id = $3",
     )
     .bind(now)
     .bind(now)
@@ -904,7 +904,7 @@ async fn delete_control_node_postgres(
     pool: &sqlx::PgPool,
     node_id: &str,
 ) -> Result<(), RepositoryError> {
-    let result = sqlx::query("DELETE FROM web_control_node WHERE node_id = $1")
+    let result = sqlx::query("DELETE FROM framework_control_node WHERE node_id = $1")
         .bind(node_id)
         .execute(pool)
         .await

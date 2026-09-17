@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS web_cors_policy (
+CREATE TABLE IF NOT EXISTS framework_cors_policy (
     tenant_id TEXT NOT NULL,
     environment TEXT NOT NULL,
     allow_all_origins INTEGER NOT NULL DEFAULT 0,
@@ -7,5 +7,5 @@ CREATE TABLE IF NOT EXISTS web_cors_policy (
     PRIMARY KEY (tenant_id, environment)
 );
 
-CREATE INDEX IF NOT EXISTS idx_web_cors_policy_tenant
-    ON web_cors_policy (tenant_id);
+CREATE INDEX IF NOT EXISTS idx_framework_cors_policy_tenant
+    ON framework_cors_policy (tenant_id);

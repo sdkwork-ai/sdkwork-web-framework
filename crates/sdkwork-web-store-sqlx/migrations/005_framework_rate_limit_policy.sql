@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS web_rate_limit_policy (
+CREATE TABLE IF NOT EXISTS framework_rate_limit_policy (
     tenant_id TEXT NOT NULL,
     environment TEXT NOT NULL,
     tier_key TEXT NOT NULL DEFAULT 'default',
@@ -8,5 +8,5 @@ CREATE TABLE IF NOT EXISTS web_rate_limit_policy (
     PRIMARY KEY (tenant_id, environment, tier_key)
 );
 
-CREATE INDEX IF NOT EXISTS idx_web_rate_limit_policy_tenant
-    ON web_rate_limit_policy (tenant_id);
+CREATE INDEX IF NOT EXISTS idx_framework_rate_limit_policy_tenant
+    ON framework_rate_limit_policy (tenant_id);

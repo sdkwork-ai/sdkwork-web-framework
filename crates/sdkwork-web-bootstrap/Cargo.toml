@@ -54,7 +54,7 @@ sdkwork-web-core.workspace = true
 sdkwork-database-sqlx = { workspace = true, features = ["postgres"] }
 sdkwork-web-store-redis = { workspace = true, optional = true }
 sdkwork-web-store-sqlx = { workspace = true, default-features = false, optional = true }
-redis = { version = "0.27", features = ["tokio-comp"], optional = true }
+redis = { version = "1", default-features = false, features = ["tokio-comp"], optional = true }
 sdkwork-routes-web-framework-backend-api = { workspace = true, optional = true }
 sdkwork-web-framework-admin-repository-sqlx = { workspace = true, optional = true }
 sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "postgres"] }

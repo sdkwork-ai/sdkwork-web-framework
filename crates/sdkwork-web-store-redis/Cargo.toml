@@ -16,7 +16,7 @@ path = "src/lib.rs"
 [dependencies]
 async-trait.workspace = true
 getrandom.workspace = true
-redis = { version = "0.27", features = ["tokio-comp"] }
+redis = { version = "1", default-features = false, features = ["tokio-comp", "script"] }
 serde.workspace = true
 serde_json.workspace = true
 sdkwork-web-core.workspace = true

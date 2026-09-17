@@ -1,4 +1,4 @@
-//! SQLx store adapters for idempotency, rate limiting, audit, and security events (`web_*` only).
+//! SQLx store adapters for idempotency, rate limiting, audit, and security events (`framework_*` only).
 //!
 //! PostgreSQL is the default authoritative-server backend. SQLite support is
 //! compiled only when an explicitly declared client-local consumer enables it.
@@ -73,7 +73,7 @@ pub async fn connect_sqlite(
 /// baseline through the lifecycle orchestrator, and return it.
 ///
 /// Initialization state: authoritative PostgreSQL DDL lives in the module
-/// baseline (`database/ddl/baseline/postgres/0001_web_baseline.sql`) and is
+/// baseline (`database/ddl/baseline/postgres/0001_framework_baseline.sql`) and is
 /// applied by `sdkwork-webstore-database-host`; this crate never runs sqlx
 /// migrations on PostgreSQL.
 #[cfg(feature = "postgres")]
@@ -360,7 +360,7 @@ mod tests {
             .await
             .expect("emit");
         let row: (i64, Option<String>) =
-            sqlx::query_as("SELECT COUNT(*), MAX(tenant_id) FROM web_security_event")
+            sqlx::query_as("SELECT COUNT(*), MAX(tenant_id) FROM framework_security_event")
                 .fetch_one(&pool)
                 .await
                 .expect("count");
@@ -410,7 +410,7 @@ mod tests {
             .await
             .expect("emit");
         let row: (String, Option<String>, Option<String>) =
-            sqlx::query_as("SELECT request_id, tenant_id, user_id FROM web_audit_event LIMIT 1")
+            sqlx::query_as("SELECT request_id, tenant_id, user_id FROM framework_audit_event LIMIT 1")
                 .fetch_one(&pool)
                 .await
                 .expect("row");
@@ -423,7 +423,7 @@ mod tests {
     async fn sqlx_cors_policy_source_resolves_tenant_overlay() {
         let pool = test_pool().await;
         sqlx::query(
-            "INSERT INTO web_cors_policy (tenant_id, environment, allow_all_origins, allowed_origins, allow_credentials) \
+            "INSERT INTO framework_cors_policy (tenant_id, environment, allow_all_origins, allowed_origins, allow_credentials) \
              VALUES ('100001', 'prod', 0, '[\"https://app.example\"]', 1)",
         )
         .execute(&pool)
@@ -449,7 +449,7 @@ mod tests {
     async fn sqlx_rate_limit_policy_source_resolves_tenant_tier() {
         let pool = test_pool().await;
         sqlx::query(
-            "INSERT INTO web_rate_limit_policy (tenant_id, environment, tier_key, max_requests, window_secs, enabled) \
+            "INSERT INTO framework_rate_limit_policy (tenant_id, environment, tier_key, max_requests, window_secs, enabled) \
              VALUES ('100001', 'prod', 'auth_critical', 3, 60, 1)",
         )
         .execute(&pool)
@@ -474,7 +474,7 @@ mod tests {
     async fn sqlx_tenant_runtime_profile_source_resolves_overrides() {
         let pool = test_pool().await;
         sqlx::query(
-            "INSERT INTO web_tenant_runtime_profile (tenant_id, environment, rate_limit_enabled, max_content_length, max_concurrent_requests) \
+            "INSERT INTO framework_tenant_runtime_profile (tenant_id, environment, rate_limit_enabled, max_content_length, max_concurrent_requests) \
              VALUES ('100001', 'prod', 0, 4096, 2)",
         )
         .execute(&pool)

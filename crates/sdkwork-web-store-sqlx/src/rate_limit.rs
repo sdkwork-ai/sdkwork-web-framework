@@ -90,7 +90,7 @@ async fn sqlite_check_and_record(
     let mut tx = pool.begin().await.map_err(sqlx_error)?;
 
     let row = sqlx::query_as::<_, RateLimitRow>(
-        "SELECT request_count, window_start FROM web_rate_limit_bucket WHERE bucket_key = ?",
+        "SELECT request_count, window_start FROM framework_rate_limit_bucket WHERE bucket_key = ?",
     )
     .bind(key)
     .fetch_optional(&mut *tx)
@@ -121,7 +121,7 @@ async fn sqlite_check_and_record(
     }
 
     sqlx::query(
-        "INSERT INTO web_rate_limit_bucket (bucket_key, request_count, window_start, expires_at)
+        "INSERT INTO framework_rate_limit_bucket (bucket_key, request_count, window_start, expires_at)
          VALUES (?, ?, ?, ?)
          ON CONFLICT(bucket_key) DO UPDATE SET
            request_count = excluded.request_count,
@@ -153,7 +153,7 @@ async fn pg_check_and_record(
     let mut tx = pool.begin().await.map_err(sqlx_error)?;
 
     let row = sqlx::query_as::<_, RateLimitRow>(
-        "SELECT request_count, window_start FROM web_rate_limit_bucket WHERE bucket_key = $1",
+        "SELECT request_count, window_start FROM framework_rate_limit_bucket WHERE bucket_key = $1",
     )
     .bind(key)
     .fetch_optional(&mut *tx)
@@ -184,7 +184,7 @@ async fn pg_check_and_record(
     }
 
     sqlx::query(
-        "INSERT INTO web_rate_limit_bucket (bucket_key, request_count, window_start, expires_at)
+        "INSERT INTO framework_rate_limit_bucket (bucket_key, request_count, window_start, expires_at)
          VALUES ($1, $2, $3, $4)
          ON CONFLICT (bucket_key) DO UPDATE SET
            request_count = EXCLUDED.request_count,

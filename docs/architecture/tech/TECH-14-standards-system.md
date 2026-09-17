@@ -38,7 +38,7 @@
 | `API_SPEC.md` §10 | `WebRequestContext` 词汇；18 阶段顺序；三接口面 |
 | `WEB_BACKEND_SPEC.md` | Handler 薄层；manifest 类型；禁止 raw header 解析 |
 | `SECURITY_SPEC.md` §5.1 | Interceptor 基线表 → pipeline 实现 |
-| `DATABASE_SPEC.md` | 仅 `web_*` tenant_entity 表 |
+| `DATABASE_SPEC.md` | 仅 `framework_*` tenant_entity 表 |
 | `OBSERVABILITY_SPEC.md` | request_id、脱敏、route template 日志 |
 | `CACHE_SPEC.md` | Redis 限流命名空间 |
 | `CONFIG_SPEC.md` | `SDKWORK_WEB_*` 环境键（L1 定义） |

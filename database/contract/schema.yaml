@@ -1,35 +1,35 @@
 schema_version: 1
 kind: sdkwork.database.schema
 database_role: authoritative-server
-module_id: webstore
+module_id: framework
 contract_version: 1.0.0
 owner_team: web-framework-platform
 compliance_level: L2
 engines:
   - postgres
-table_prefix: web_
+table_prefix: framework_
 tables:
-  - name: web_idempotency_record
+  - name: framework_idempotency_record
     lifecycle_status: active
     owner: web-framework-platform
-  - name: web_security_event
+  - name: framework_security_event
     lifecycle_status: active
     owner: web-framework-platform
-  - name: web_rate_limit_bucket
+  - name: framework_rate_limit_bucket
     lifecycle_status: active
     owner: web-framework-platform
-  - name: web_audit_event
+  - name: framework_audit_event
     lifecycle_status: active
     owner: web-framework-platform
-  - name: web_cors_policy
+  - name: framework_cors_policy
     lifecycle_status: active
     owner: web-framework-platform
-  - name: web_rate_limit_policy
+  - name: framework_rate_limit_policy
     lifecycle_status: active
     owner: web-framework-platform
-  - name: web_tenant_runtime_profile
+  - name: framework_tenant_runtime_profile
     lifecycle_status: active
     owner: web-framework-platform
-  - name: web_control_node
+  - name: framework_control_node
     lifecycle_status: active
     owner: web-framework-platform

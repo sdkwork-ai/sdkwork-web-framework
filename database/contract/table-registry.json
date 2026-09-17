@@ -3,49 +3,49 @@
   "kind": "sdkwork.database.table-registry",
   "tables": [
     {
-      "table_name": "web_idempotency_record",
+      "table_name": "framework_idempotency_record",
       "owner": "web-framework-platform",
       "compliance_level": "L2",
       "lifecycle_status": "active"
     },
     {
-      "table_name": "web_security_event",
+      "table_name": "framework_security_event",
       "owner": "web-framework-platform",
       "compliance_level": "L2",
       "lifecycle_status": "active"
     },
     {
-      "table_name": "web_rate_limit_bucket",
+      "table_name": "framework_rate_limit_bucket",
       "owner": "web-framework-platform",
       "compliance_level": "L2",
       "lifecycle_status": "active"
     },
     {
-      "table_name": "web_audit_event",
+      "table_name": "framework_audit_event",
       "owner": "web-framework-platform",
       "compliance_level": "L2",
       "lifecycle_status": "active"
     },
     {
-      "table_name": "web_cors_policy",
+      "table_name": "framework_cors_policy",
       "owner": "web-framework-platform",
       "compliance_level": "L2",
       "lifecycle_status": "active"
     },
     {
-      "table_name": "web_rate_limit_policy",
+      "table_name": "framework_rate_limit_policy",
       "owner": "web-framework-platform",
       "compliance_level": "L2",
       "lifecycle_status": "active"
     },
     {
-      "table_name": "web_tenant_runtime_profile",
+      "table_name": "framework_tenant_runtime_profile",
       "owner": "web-framework-platform",
       "compliance_level": "L2",
       "lifecycle_status": "active"
     },
     {
-      "table_name": "web_control_node",
+      "table_name": "framework_control_node",
       "owner": "web-framework-platform",
       "compliance_level": "L2",
       "lifecycle_status": "active"

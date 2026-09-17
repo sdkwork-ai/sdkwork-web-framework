@@ -104,7 +104,7 @@ Admin-server uses SQLx migrations in `crates/sdkwork-webstore-database-host/migr
 
 1. Identify the migration version: `cargo run -p sdkwork-web-admin-server -- --list-migrations`
 2. Rollback: `cargo run -p sdkwork-web-admin-server -- --rollback <version>`
-3. Verify schema: `sqlite3 <db-path> ".tables" | grep web_`
+3. Verify schema: `sqlite3 <db-path> ".tables" | grep framework_`
 4. Restart admin-server and verify `/readyz` returns 200.
 
 ### Configuration rollback

@@ -128,7 +128,7 @@ apps/sdkwork-web-framework-pc/
 - **API surface**: `backend` (`/backend/v3/api/web-framework`)
 - **SDK**: Generated backend SDK facade (`src/sdk/backend-sdk/`); do not hand-edit.
 - **Data ownership**: The console owns NO data. All data lives in the backend SQLx store
-  (`web_*` tables). The console is a read/upsert/delete proxy.
+  (`framework_*` tables). The console is a read/upsert/delete proxy.
 
 ### SDK operations
 

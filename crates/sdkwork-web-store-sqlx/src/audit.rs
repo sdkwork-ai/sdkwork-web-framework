@@ -50,7 +50,7 @@ impl AuditEmitter for SqlxAuditEmitter {
             #[cfg(feature = "sqlite")]
             WebStorePool::Sqlite(pool) => {
                 sqlx::query(
-                    "INSERT INTO web_audit_event \
+                    "INSERT INTO framework_audit_event \
                      (request_id, tenant_id, user_id, api_surface, path, method, operation_id, status_code, duration_ms, created_at, expires_at) \
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 )
@@ -76,7 +76,7 @@ impl AuditEmitter for SqlxAuditEmitter {
             #[cfg(feature = "postgres")]
             WebStorePool::Postgres(pool) => {
                 sqlx::query(
-                    "INSERT INTO web_audit_event \
+                    "INSERT INTO framework_audit_event \
                      (request_id, tenant_id, user_id, api_surface, path, method, operation_id, status_code, duration_ms, created_at, expires_at) \
                      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
                 )

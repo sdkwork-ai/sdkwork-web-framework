@@ -50,7 +50,7 @@ impl DynamicTenantRuntimeProfileSource for SqlxTenantRuntimeProfileSource {
             WebStorePool::Sqlite(pool) => {
                 let row = sqlx::query_as::<_, TenantRuntimeProfileRow>(
                     "SELECT rate_limit_enabled, max_content_length, max_concurrent_requests \
-                     FROM web_tenant_runtime_profile WHERE tenant_id = ? AND environment = ?",
+                     FROM framework_tenant_runtime_profile WHERE tenant_id = ? AND environment = ?",
                 )
                 .bind(ctx.tenant_scope())
                 .bind(ctx.environment_label())
@@ -63,7 +63,7 @@ impl DynamicTenantRuntimeProfileSource for SqlxTenantRuntimeProfileSource {
             WebStorePool::Postgres(pool) => {
                 let row = sqlx::query_as::<_, TenantRuntimeProfileRow>(
                     "SELECT rate_limit_enabled, max_content_length, max_concurrent_requests \
-                     FROM web_tenant_runtime_profile WHERE tenant_id = $1 AND environment = $2",
+                     FROM framework_tenant_runtime_profile WHERE tenant_id = $1 AND environment = $2",
                 )
                 .bind(ctx.tenant_scope())
                 .bind(ctx.environment_label())

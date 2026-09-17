@@ -57,7 +57,7 @@ impl SecurityEventEmitter for SqlxSecurityEventEmitter {
             #[cfg(feature = "sqlite")]
             WebStorePool::Sqlite(pool) => {
                 let result = sqlx::query(
-                    "INSERT INTO web_security_event \
+                    "INSERT INTO framework_security_event \
                      (kind, request_id, tenant_id, path, method, api_surface, origin, detail, created_at, expires_at) \
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 )
@@ -89,7 +89,7 @@ impl SecurityEventEmitter for SqlxSecurityEventEmitter {
             #[cfg(feature = "postgres")]
             WebStorePool::Postgres(pool) => {
                 let result = sqlx::query(
-                    "INSERT INTO web_security_event \
+                    "INSERT INTO framework_security_event \
                      (kind, request_id, tenant_id, path, method, api_surface, origin, detail, created_at, expires_at) \
                      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
                 )

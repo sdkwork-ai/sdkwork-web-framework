@@ -47,7 +47,7 @@ OWASP API Top 10 框架层映射见 [TECH-18-owasp-api-top10-mapping.md](./TECH-
 ## 4. CORS / 跨站
 
 - CORS 与 CSRF **独立**；框架分别封装
-- 配置：`SecurityPolicy.cors` + 可选 `web_cors_policy` 表（store crate）
+- 配置：`SecurityPolicy.cors` + 可选 `framework_cors_policy` 表（store crate）
 - prod 禁止 `allow_all_origins`
 
 ## 5. 流控
@@ -60,7 +60,7 @@ OWASP API Top 10 框架层映射见 [TECH-18-owasp-api-top10-mapping.md](./TECH-
 
 - `Logging` stage：tracing，脱敏
 - `Audit` stage：调用 `AuditEmitter`
-- 默认 `SqlxAuditEmitter` 写 `web_audit_event`；IAM 业务审计由 appbase 自定义 emitter **组合**或替换
+- 默认 `SqlxAuditEmitter` 写 `framework_audit_event`；IAM 业务审计由 appbase 自定义 emitter **组合**或替换
 
 ## 7. 威胁模型
 

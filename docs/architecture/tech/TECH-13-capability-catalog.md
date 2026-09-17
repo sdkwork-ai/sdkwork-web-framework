@@ -153,7 +153,7 @@ I. 存储适配        J. 验证与绑定     K. 测试与质量     L. 部署�
 
 ---
 
-## I. 存储适配（仅 web_*）
+## I. 存储适配（仅 framework_*）
 
 | ID | 功能点 | 技术点 | 框架模块 | 目标 M |
 | --- | --- | --- | --- | --- |
@@ -161,7 +161,7 @@ I. 存储适配        J. 验证与绑定     K. 测试与质量     L. 部署�
 | I2 | IdempotencyStore trait | get/put + TTL | security | M3 |
 | I3 | AuditEmitter trait | append-only | security | M2 |
 | I4 | SecurityEventEmitter | 安全告警 | security | M2 |
-| I5 | Sqlx 实现 | web_* migrations | store-sqlx | M2 |
+| I5 | Sqlx 实现 | framework_* migrations | store-sqlx | M2 |
 | I6 | Redis 实现 | 热路径限流 | store-redis | M2 |
 | I7 | Memory 实现 | 测试/dev 默认 | security | M3 |
 
@@ -190,7 +190,7 @@ I. 存储适配        J. 验证与绑定     K. 测试与质量     L. 部署�
 | K5 | 金标 Problem JSON | snapshot | tests/snapshot | M2 |
 | K6 | 并发限流测试 | tokio 压测 | tests/stress | M2 |
 | K7 | Java parity checklist | 同阶段名/字段 | 文档 + 共享 vectors | M1 |
-| K8 | SQLx migration guard | `web_*` 迁移不可变 | tests/sqlx_migrations | M2 |
+| K8 | SQLx migration guard | `framework_*` 迁移不可变 | tests/sqlx_migrations | M2 |
 | K9 | Release pipeline benchmark | p99 < 0.5ms @ release | `pipeline_benchmark` + `scripts/benchmark-pipeline.*` | M4 |
 | K10 | Problem 关联架构守卫 | 禁止 bare IntoResponse / about:blank | problem_correlation_rules | M3 |
 | K11 | Contract fallback 架构守卫 | manifest → fallback 静态校验 | bootstrap_contract_fallback | M3 |

@@ -47,7 +47,7 @@ sdkwork-web-framework/crates/
         ▲
   sdkwork-web-bootstrap       # service_router, healthz, metrics, openapi routes
 
-  sdkwork-web-store-sqlx      # 可选 feature：web_* 表 sqlx 适配（无业务 SQL）
+  sdkwork-web-store-sqlx      # 可选 feature：framework_* 表 sqlx 适配（无业务 SQL）
   sdkwork-web-store-redis     # 可选 feature：流控 Redis 适配
 ```
 

@@ -1,4 +1,4 @@
-//! Per-tenant runtime profile overlays (admin table `web_tenant_runtime_profile`).
+//! Per-tenant runtime profile overlays (admin table `framework_tenant_runtime_profile`).
 
 use crate::error::WebFrameworkError;
 use crate::request_context::{WebApiSurface, WebEnvironment};

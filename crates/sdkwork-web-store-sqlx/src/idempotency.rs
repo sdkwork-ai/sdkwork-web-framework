@@ -113,7 +113,7 @@ fn sqlite_begin<'a>(
     Box::pin(async move {
         let row = sqlx::query_as::<_, IdempotencyRow>(
             "SELECT fingerprint, response_status, response_body, content_type \
-             FROM web_idempotency_record WHERE idempotency_key = ?",
+             FROM framework_idempotency_record WHERE idempotency_key = ?",
         )
         .bind(key)
         .fetch_optional(pool)
@@ -141,7 +141,7 @@ fn sqlite_begin<'a>(
         let now = now_epoch_secs();
         let expires_at = ttl_epoch_secs(ttl);
         let inserted = sqlx::query(
-            "INSERT OR IGNORE INTO web_idempotency_record \
+            "INSERT OR IGNORE INTO framework_idempotency_record \
              (idempotency_key, fingerprint, response_status, response_body, content_type, created_at, expires_at) \
              VALUES (?, ?, NULL, NULL, NULL, ?, ?)",
         )
@@ -174,7 +174,7 @@ async fn sqlite_complete(
 ) -> Result<(), WebFrameworkError> {
     let expires_at = ttl_epoch_secs(ttl);
     let updated = sqlx::query(
-        "UPDATE web_idempotency_record \
+        "UPDATE framework_idempotency_record \
          SET response_status = ?, response_body = ?, content_type = ?, expires_at = ? \
          WHERE idempotency_key = ? AND fingerprint = ? AND response_status IS NULL",
     )
@@ -191,7 +191,7 @@ async fn sqlite_complete(
     if updated.rows_affected() == 0 {
         let row = sqlx::query_as::<_, IdempotencyRow>(
             "SELECT fingerprint, response_status, response_body, content_type \
-             FROM web_idempotency_record WHERE idempotency_key = ?",
+             FROM framework_idempotency_record WHERE idempotency_key = ?",
         )
         .bind(key)
         .fetch_optional(pool)
@@ -218,7 +218,7 @@ async fn sqlite_release(
     fingerprint: &str,
 ) -> Result<(), WebFrameworkError> {
     sqlx::query(
-        "DELETE FROM web_idempotency_record \
+        "DELETE FROM framework_idempotency_record \
          WHERE idempotency_key = ? AND fingerprint = ? AND response_status IS NULL",
     )
     .bind(key)
@@ -247,7 +247,7 @@ fn pg_begin<'a>(
     Box::pin(async move {
         let row = sqlx::query_as::<_, IdempotencyRow>(
             "SELECT fingerprint, response_status, response_body, content_type \
-             FROM web_idempotency_record WHERE idempotency_key = $1",
+             FROM framework_idempotency_record WHERE idempotency_key = $1",
         )
         .bind(key)
         .fetch_optional(pool)
@@ -276,7 +276,7 @@ fn pg_begin<'a>(
         let expires_at = ttl_epoch_secs(ttl);
         // On PostgreSQL, use INSERT ... ON CONFLICT DO NOTHING
         let inserted = sqlx::query(
-            "INSERT INTO web_idempotency_record \
+            "INSERT INTO framework_idempotency_record \
              (idempotency_key, fingerprint, response_status, response_body, content_type, created_at, expires_at) \
              VALUES ($1, $2, NULL, NULL, NULL, $3, $4) \
              ON CONFLICT (idempotency_key) DO NOTHING",
@@ -310,7 +310,7 @@ async fn pg_complete(
 ) -> Result<(), WebFrameworkError> {
     let expires_at = ttl_epoch_secs(ttl);
     let updated = sqlx::query(
-        "UPDATE web_idempotency_record \
+        "UPDATE framework_idempotency_record \
          SET response_status = $1, response_body = $2, content_type = $3, expires_at = $4 \
          WHERE idempotency_key = $5 AND fingerprint = $6 AND response_status IS NULL",
     )
@@ -327,7 +327,7 @@ async fn pg_complete(
     if updated.rows_affected() == 0 {
         let row = sqlx::query_as::<_, IdempotencyRow>(
             "SELECT fingerprint, response_status, response_body, content_type \
-             FROM web_idempotency_record WHERE idempotency_key = $1",
+             FROM framework_idempotency_record WHERE idempotency_key = $1",
         )
         .bind(key)
         .fetch_optional(pool)
@@ -354,7 +354,7 @@ async fn pg_release(
     fingerprint: &str,
 ) -> Result<(), WebFrameworkError> {
     sqlx::query(
-        "DELETE FROM web_idempotency_record \
+        "DELETE FROM framework_idempotency_record \
          WHERE idempotency_key = $1 AND fingerprint = $2 AND response_status IS NULL",
     )
     .bind(key)

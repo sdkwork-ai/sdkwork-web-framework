@@ -19,8 +19,8 @@ fn sqlx_migrations_contain_no_iam_tables() {
             entry.file_name()
         );
         assert!(
-            !lowered.contains("create table") || lowered.contains("web_"),
-            "migration {:?} must only create web_* framework tables",
+            !lowered.contains("create table") || lowered.contains("framework_"),
+            "migration {:?} must only create framework_* framework tables",
             entry.file_name()
         );
     }

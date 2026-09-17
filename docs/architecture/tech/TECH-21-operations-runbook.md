@@ -25,7 +25,7 @@
 | --- | --- | --- |
 | `SDKWORK_WEB_FRAMEWORK_ENV` | 生产推荐 `prod` | 触发 `validate_production_assembly` |
 | `SDKWORK_WEB_FRAMEWORK_ADMIN_BIND` | 否 | 默认 `127.0.0.1:3920` |
-| `SDKWORK_WEB_FRAMEWORK_STORE_URL` | 是 | SQLx 连接串（`web_*` 表） |
+| `SDKWORK_WEB_FRAMEWORK_STORE_URL` | 是 | SQLx 连接串（`framework_*` 表） |
 | `SDKWORK_WEB_FRAMEWORK_STORE_POOL_SIZE` | 否 | SQLx 连接池大小（默认 `8`） |
 | `SDKWORK_WEB_FRAMEWORK_JWT_HS256_SECRET` | admin-server 是 | 控制面 bootstrap JWT 签名 |
 | `SDKWORK_WEB_FRAMEWORK_JWT_BOOTSTRAP_TENANT_ID` | 否 | 默认 `bootstrap` |

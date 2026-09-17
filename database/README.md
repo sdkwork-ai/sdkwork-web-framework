@@ -2,15 +2,15 @@
 
 Canonical lifecycle assets for `sdkwork-web-framework` per `DATABASE_FRAMEWORK_SPEC.md`.
 
-- moduleId: `webstore`
+- moduleId: `framework`
 - serviceCode: `WEB_STORE`
-- tablePrefix: `webstore_`
+- tablePrefix: `framework_`
 
 ## Initialization state
 
 This module is in **initialization state** for greenfield deployments:
 
-1. **Baseline** — `database/ddl/baseline/{engine}/0001_webstore_baseline.sql` contains the full DDL snapshot.
+1. **Baseline** — `database/ddl/baseline/{engine}/0001_framework_baseline.sql` contains the full DDL snapshot.
 2. **Migrations** — `database/migrations/{engine}/` is reserved for post-GA incremental schema changes only. It is intentionally empty at initialization.
 3. **Drift** — run `pnpm db:drift:check` before release.
 

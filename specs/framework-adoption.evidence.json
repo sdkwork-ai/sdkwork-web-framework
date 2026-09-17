@@ -14,7 +14,7 @@
       "integrationProfile": "control-plane-standalone",
       "resolver": "tenant_bound_verifying_web_request_resolver + EnvBootstrapTenantSigningKeyLookup + DisabledApiKeyLookupService",
       "stores": {
-        "primary": "SqlitePool (web_* tables)",
+        "primary": "SqlitePool (framework_* tables)",
         "rateLimit": "SqlxRateLimitStore or RedisRateLimitStore when SDKWORK_WEB_FRAMEWORK_REDIS_URL set",
         "idempotency": "SqlxIdempotencyStore or RedisIdempotencyStore when Redis configured",
         "readiness": ["SqliteReadinessCheck", "optional RedisReadinessCheck"]

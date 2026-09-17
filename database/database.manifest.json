@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "kind": "sdkwork.database.module",
-  "moduleId": "webstore",
+  "moduleId": "framework",
   "serviceCode": "WEB_STORE",
   "displayName": "WEB_STORE Database",
   "owner": "web-framework-platform",
@@ -9,7 +9,7 @@
     "postgres"
   ],
   "defaultEngine": "postgres",
-  "tablePrefix": "web_",
+  "tablePrefix": "framework_",
   "contractVersion": "1.0.0",
   "baselineStrategy": "baseline-plus-migrations",
   "modules": [],

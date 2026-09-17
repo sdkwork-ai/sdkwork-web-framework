@@ -1,4 +1,4 @@
-CREATE TABLE IF NOT EXISTS web_control_node (
+CREATE TABLE IF NOT EXISTS framework_control_node (
     node_id TEXT PRIMARY KEY NOT NULL,
     region TEXT NOT NULL DEFAULT 'default',
     base_url TEXT NOT NULL,
@@ -9,8 +9,8 @@ CREATE TABLE IF NOT EXISTS web_control_node (
     updated_at INTEGER NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_web_control_node_environment
-    ON web_control_node (environment);
+CREATE INDEX IF NOT EXISTS idx_framework_control_node_environment
+    ON framework_control_node (environment);
 
-CREATE INDEX IF NOT EXISTS idx_web_control_node_region
-    ON web_control_node (region);
+CREATE INDEX IF NOT EXISTS idx_framework_control_node_region
+    ON framework_control_node (region);

@@ -4,7 +4,7 @@ name = "sdkwork-web-store-sqlx"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "SQLx-backed RateLimitStore, IdempotencyStore, and SecurityEventEmitter for web_* tables."
+description = "SQLx-backed RateLimitStore, IdempotencyStore, and SecurityEventEmitter for framework_* tables."
 
 
 [lints]

@@ -31,7 +31,7 @@ Intentionally absent at root (narrow-purpose framework repo): `sdks/`, `jobs/`, 
 | `sdkwork-web-axum` | Axum middleware + extractors + WebSocket upgrade |
 | `sdkwork-web-bootstrap` | `WebFramework::builder`, health/metrics, contract fallback |
 | `sdkwork-web-store-redis` | Redis rate limit + idempotency adapters |
-| `sdkwork-web-store-sqlx` | SQLx store adapters (`web_*` tables) via `sdkwork-database-sqlx` pools |
+| `sdkwork-web-store-sqlx` | SQLx store adapters (`framework_*` tables) via `sdkwork-database-sqlx` pools |
 | `sdkwork-web-test-utils` | Test runtime helpers |
 | `sdkwork-routes-web-framework-backend-api` | Framework control-plane backend-api routes |
 | `sdkwork-web-admin-server` | Standalone admin server binary |

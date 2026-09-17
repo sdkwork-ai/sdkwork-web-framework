@@ -43,7 +43,7 @@
 
 | 归属 | 内容 |
 | --- | --- |
-| **框架独有** | `WebRequestContext`、Interceptor 链、SecurityPolicy、Resolver **trait**、Axum 中间件封装、`service_router` 基座、契约类型 `HttpRoute`/`ApiSurface`、Problem+json、框架 `web_*` 运行时表契约、内存/可插拔 Store 默认实现 |
+| **框架独有** | `WebRequestContext`、Interceptor 链、SecurityPolicy、Resolver **trait**、Axum 中间件封装、`service_router` 基座、契约类型 `HttpRoute`/`ApiSurface`、Problem+json、框架 `framework_*` 运行时表契约、内存/可插拔 Store 默认实现 |
 | **业务独有** | IAM 用户/会话/API Key 表、`IamAppContext`、具体 `WebRequestContextResolver` 实现、`AuthorizationPolicy` 业务规则、所有 `sdkwork-routes-*` 路由与 Handler、OpenAPI authority、产品 SDK 家族 |
 | **框架定义标准、业务实现扩展** | 双 Token 解析流程、API Key / OAuth Bearer 查找接口、open-api 凭证 scheme 检测、租户隔离校验接口、审计/流控 **语义与挂载点** |
 
@@ -58,7 +58,7 @@
 | 序列化 | `serde`, `serde_json` | 上下文与错误 |
 | 观测 | `tracing` | 结构化日志（可选 feature） |
 | 随机/ID | `getrandom`, `uuid` | request_id |
-| 缓存/存储适配 | `redis`, `sqlx`, `sdkwork-database-config`, `sdkwork-database-sqlx` | **仅** `sdkwork-web-store-*` 可选 crate；连接池经 `sdkwork-database-sqlx` 创建，store 实现只访问 `web_*` 表 |
+| 缓存/存储适配 | `redis`, `sqlx`, `sdkwork-database-config`, `sdkwork-database-sqlx` | **仅** `sdkwork-web-store-*` 可选 crate；连接池经 `sdkwork-database-sqlx` 创建，store 实现只访问 `framework_*` 表 |
 | 错误 | `thiserror` | 库边界 |
 
 **禁止依赖（示例）**：`sdkwork_iam_context_service`、`sdkwork-cloudrouter-*`、`sdkwork-commerce (deleted)-*-service`、任何 `sdkwork-routes-*`。

@@ -28,7 +28,7 @@
 | EP-13 | `SecurityEventEmitter` | Cors/RateLimit 失败 | `Noop` 或 Sqlx | 平台安全中心 |
 | EP-14 | `WebCallInterceptor` | 链任意位置（插入） | 18 个标准实现 | 产品自定义 WAF 探测 |
 | EP-15 | `ReadinessCheck` | `/readyz` | 总是 200 | DB/Redis ping |
-| EP-16 | `CorsPolicySource` | Cors before | 静态 `SecurityPolicy` | DB `web_cors_policy` |
+| EP-16 | `CorsPolicySource` | Cors before | 静态 `SecurityPolicy` | DB `framework_cors_policy` |
 | EP-17 | `OperationIdResolver` | Logging/Audit | 从 `HttpRoute` manifest 匹配 | 自定义 fallback |
 | EP-18 | `ProblemDetailRenderer` | 错误映射 | 标准 Problem+json | 白标定制 |
 | EP-19 | `RequestLogRedactor` | Logging | 默认脱敏规则 | 扩展正则 |

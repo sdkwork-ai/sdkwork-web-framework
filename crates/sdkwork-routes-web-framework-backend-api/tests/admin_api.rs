@@ -427,14 +427,14 @@ async fn admin_api_audit_events_exclude_null_tenant_rows_for_tenant_admin() {
         return;
     };
     sqlx::query(
-        "INSERT INTO web_audit_event (request_id, tenant_id, user_id, api_surface, path, method, operation_id, status_code, duration_ms, created_at) \
+        "INSERT INTO framework_audit_event (request_id, tenant_id, user_id, api_surface, path, method, operation_id, status_code, duration_ms, created_at) \
          VALUES ('req-global', NULL, NULL, 'backendApi', '/healthz', 'GET', NULL, 200, 1, 1)",
     )
     .execute(&pool)
     .await
     .expect("insert global audit row");
     sqlx::query(
-        "INSERT INTO web_audit_event (request_id, tenant_id, user_id, api_surface, path, method, operation_id, status_code, duration_ms, created_at) \
+        "INSERT INTO framework_audit_event (request_id, tenant_id, user_id, api_surface, path, method, operation_id, status_code, duration_ms, created_at) \
          VALUES ('req-tenant', '100001', 'user-test', 'backendApi', ?1, 'GET', 'webFramework.runtimeDefaults.snapshot', 200, 2, 2)",
     )
     .bind(paths::runtime_defaults::PATH)
@@ -465,7 +465,7 @@ async fn admin_api_platform_read_can_list_global_audit_rows() {
         return;
     };
     sqlx::query(
-        "INSERT INTO web_audit_event (request_id, tenant_id, user_id, api_surface, path, method, operation_id, status_code, duration_ms, created_at) \
+        "INSERT INTO framework_audit_event (request_id, tenant_id, user_id, api_surface, path, method, operation_id, status_code, duration_ms, created_at) \
          VALUES ('req-global', NULL, NULL, 'backendApi', '/healthz', 'GET', NULL, 200, 1, 1)",
     )
     .execute(&pool)
@@ -673,7 +673,7 @@ async fn admin_api_rejects_zero_page_size() {
 async fn seed_tenant_audit_rows(pool: &sqlx::PgPool, count: usize) {
     for index in 0..count {
         sqlx::query(
-            "INSERT INTO web_audit_event (request_id, tenant_id, user_id, api_surface, path, method, operation_id, status_code, duration_ms, created_at) \
+            "INSERT INTO framework_audit_event (request_id, tenant_id, user_id, api_surface, path, method, operation_id, status_code, duration_ms, created_at) \
              VALUES (?1, '100001', 'user-test', 'backendApi', ?2, 'GET', 'webFramework.runtimeDefaults.snapshot', 200, 1, ?3)",
         )
         .bind(format!("req-{index}"))
@@ -910,7 +910,7 @@ async fn admin_api_security_event_scope_narrows_to_requested_tenant() {
         return;
     };
     sqlx::query(
-        "INSERT INTO web_security_event \
+        "INSERT INTO framework_security_event \
          (kind, request_id, tenant_id, path, method, api_surface, origin, detail, created_at, expires_at) \
          VALUES \
            ('cors_denied', 'req-a', '100001', '/app/v3/api/users', 'POST', 'AppApi', 'https://evil.example', 'denied', 1, 1), \

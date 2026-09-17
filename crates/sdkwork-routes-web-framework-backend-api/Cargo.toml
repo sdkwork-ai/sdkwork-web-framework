@@ -4,7 +4,7 @@ name = "sdkwork-routes-web-framework-backend-api"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Platform backend-api for web framework runtime governance (web_* config, control nodes)."
+description = "Platform backend-api for web framework runtime governance (framework_* config, control nodes)."
 
 
 [lints]
