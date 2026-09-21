@@ -31,6 +31,10 @@ fn map_result_code(code: i32) -> SdkWorkResultCode {
         40401 => SdkWorkResultCode::NotFound,
         40501 => SdkWorkResultCode::MethodNotAllowed,
         40801 => SdkWorkResultCode::RequestTimeout,
+        // Funding shortfall reported by a downstream payment/billing surface.
+        // Without this arm the code falls into the `_ => InternalError` branch
+        // and the client sees a 500 instead of an actionable 402.
+        40201 => SdkWorkResultCode::InsufficientBalance,
         40901 => SdkWorkResultCode::Conflict,
         41101 => SdkWorkResultCode::PaymentGatewayRejected,
         41301 => SdkWorkResultCode::PayloadTooLarge,
@@ -58,6 +62,7 @@ fn result_code_from_status(status: axum::http::StatusCode) -> SdkWorkResultCode 
         423 => SdkWorkResultCode::Locked,
         428 => SdkWorkResultCode::PreconditionRequired,
         429 => SdkWorkResultCode::RateLimitExceeded,
+        402 => SdkWorkResultCode::InsufficientBalance,
         502 => SdkWorkResultCode::BadGateway,
         503 => SdkWorkResultCode::ServiceUnavailable,
         504 => SdkWorkResultCode::GatewayTimeout,
