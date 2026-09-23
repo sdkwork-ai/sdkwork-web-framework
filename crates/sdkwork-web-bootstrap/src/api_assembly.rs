@@ -9,10 +9,10 @@ use sdkwork_web_contract::{
     normalize_route_path, route_inventory_from_openapi, route_inventory_from_routes, HttpRoute,
     OPENAPI_API_AUTHORITY_EXTENSION, OPENAPI_OWNER_EXTENSION,
 };
+pub use sdkwork_web_core::RouteManifestMount;
 use sdkwork_web_core::{
     DomainContextInjector, HttpRouteManifest, WebRequestContextProfile, WebRequestContextResolver,
 };
-pub use sdkwork_web_core::RouteManifestMount;
 use serde_json::Value;
 
 use crate::{
@@ -216,13 +216,31 @@ impl ApiAssemblyContribution {
             let manifest_only = manifest_set
                 .difference(&openapi_set)
                 .take(10)
-                .map(|entry| format!("{} {} {} ({}, {})", entry.surface, entry.method, entry.normalized_path, entry.operation_id, entry.auth_profile))
+                .map(|entry| {
+                    format!(
+                        "{} {} {} ({}, {})",
+                        entry.surface,
+                        entry.method,
+                        entry.normalized_path,
+                        entry.operation_id,
+                        entry.auth_profile
+                    )
+                })
                 .collect::<Vec<_>>()
                 .join("; ");
             let openapi_only = openapi_set
                 .difference(&manifest_set)
                 .take(10)
-                .map(|entry| format!("{} {} {} ({}, {})", entry.surface, entry.method, entry.normalized_path, entry.operation_id, entry.auth_profile))
+                .map(|entry| {
+                    format!(
+                        "{} {} {} ({}, {})",
+                        entry.surface,
+                        entry.method,
+                        entry.normalized_path,
+                        entry.operation_id,
+                        entry.auth_profile
+                    )
+                })
                 .collect::<Vec<_>>()
                 .join("; ");
             return Err(format!(
@@ -998,7 +1016,10 @@ mod tests {
             .add_module(duplicate)
             .add_modules([other]);
 
-        assert_eq!(registry.owners(), vec!["sdkwork-widgets", "sdkwork-gadgets"]);
+        assert_eq!(
+            registry.owners(),
+            vec!["sdkwork-widgets", "sdkwork-gadgets"]
+        );
         assert_eq!(registry.ignored_duplicates(), &["sdkwork-widgets"]);
         assert!(registry.is_registered("sdkwork-widgets"));
         assert!(!registry.is_registered("sdkwork-other"));
@@ -1349,7 +1370,10 @@ mod tests {
             WebModule::from_contribution(widgets_contribution()),
         ]);
 
-        assert_eq!(registry.owners(), vec!["sdkwork-widgets", "sdkwork-gadgets"]);
+        assert_eq!(
+            registry.owners(),
+            vec!["sdkwork-widgets", "sdkwork-gadgets"]
+        );
         assert_eq!(registry.ignored_duplicates(), &["sdkwork-widgets"]);
     }
 

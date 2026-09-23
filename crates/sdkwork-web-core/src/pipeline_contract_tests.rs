@@ -444,7 +444,10 @@ async fn idempotency_skips_streaming_responses_without_buffering_or_caching() {
         .before(&mut state, &mut request, &runtime)
         .await
         .expect("pipeline");
-    assert!(state.idempotency_leader, "the turn must hold the reservation");
+    assert!(
+        state.idempotency_leader,
+        "the turn must hold the reservation"
+    );
     let key = state.idempotency_key.clone().expect("store key");
     let fingerprint = state.idempotency_fingerprint.clone().expect("fingerprint");
 

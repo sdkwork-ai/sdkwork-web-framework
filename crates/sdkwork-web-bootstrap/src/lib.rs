@@ -26,18 +26,17 @@ mod tracing_init;
 #[cfg(feature = "admin-api")]
 pub use admin_api::{mount_web_framework_admin_api, WebFrameworkAdminMount};
 pub use api_assembly::{
-    merge_route_manifest_mounts, permission_catalog, prepare_host_route_manifest,
-    finalize_host_route_manifest, ApiAssemblyContribution, ApiModuleRegistry, ComposedApiAssembly,
+    finalize_host_route_manifest, merge_route_manifest_mounts, permission_catalog,
+    prepare_host_route_manifest, ApiAssemblyContribution, ApiModuleRegistry, ComposedApiAssembly,
     HostedApiAssembly, RouteManifestMount, WebModule,
 };
 pub use env_config::{
     application_cors_layer_from_env, application_security_policy_from_env,
     cors_allowed_origins_from_env, cors_allowed_origins_from_process_env,
-    default_region_code_from_process_env, region_code_from_env,
-    registered_console_hosts_from_env, registered_console_hosts_from_lookup,
-    security_policy_for_environment, web_environment_from_env,
-    with_registered_console_hosts_from_env, WebFrameworkEnv, DEFAULT_REGION_CODE,
-    SHARED_CORS_ALLOWED_ORIGINS_ENV_KEY,
+    default_region_code_from_process_env, region_code_from_env, registered_console_hosts_from_env,
+    registered_console_hosts_from_lookup, security_policy_for_environment,
+    web_environment_from_env, with_registered_console_hosts_from_env, WebFrameworkEnv,
+    DEFAULT_REGION_CODE, SHARED_CORS_ALLOWED_ORIGINS_ENV_KEY,
     SHARED_CORS_CONSOLE_HOST_BASE_DOMAINS_ENV_KEY, SHARED_CORS_CONSOLE_HOST_LABELS_ENV_KEY,
     SHARED_CORS_CONSOLE_HOST_SCHEMES_ENV_KEY, SHARED_CORS_CONSOLE_HOST_SUFFIX_ENV_KEY,
     SHARED_REGION_CODE_ENV_KEY,

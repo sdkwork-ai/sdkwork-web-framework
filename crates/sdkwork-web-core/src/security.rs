@@ -1283,7 +1283,9 @@ mod tests {
 
     #[test]
     fn registered_console_hosts_match_without_enumerating_origins() {
-        use crate::registered_console_hosts::{registered_service_base_domains, RegisteredConsoleHosts};
+        use crate::registered_console_hosts::{
+            registered_service_base_domains, RegisteredConsoleHosts,
+        };
 
         let policy = CorsPolicy {
             allow_all_origins: false,

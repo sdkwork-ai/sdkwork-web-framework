@@ -793,12 +793,13 @@ async fn control_node_exists_postgres(
     pool: &sqlx::PgPool,
     node_id: &str,
 ) -> Result<bool, RepositoryError> {
-    let count =
-        sqlx::query_scalar::<_, i64>("SELECT COUNT(1) FROM framework_control_node WHERE node_id = $1")
-            .bind(node_id)
-            .fetch_one(pool)
-            .await
-            .map_err(map_sqlx_error)?;
+    let count = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(1) FROM framework_control_node WHERE node_id = $1",
+    )
+    .bind(node_id)
+    .fetch_one(pool)
+    .await
+    .map_err(map_sqlx_error)?;
     Ok(count > 0)
 }
 

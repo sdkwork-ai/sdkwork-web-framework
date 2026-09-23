@@ -139,10 +139,10 @@ pub fn registered_console_hosts_from_lookup<F>(
 where
     F: Fn(&str) -> Option<String>,
 {
-    let labels = read_env_list(&lookup, &[SHARED_CORS_CONSOLE_HOST_LABELS_ENV_KEY])
-        .unwrap_or_default();
-    let suffix = lookup(SHARED_CORS_CONSOLE_HOST_SUFFIX_ENV_KEY)
-        .map(|value| value.trim().to_owned());
+    let labels =
+        read_env_list(&lookup, &[SHARED_CORS_CONSOLE_HOST_LABELS_ENV_KEY]).unwrap_or_default();
+    let suffix =
+        lookup(SHARED_CORS_CONSOLE_HOST_SUFFIX_ENV_KEY).map(|value| value.trim().to_owned());
     let schemes =
         read_env_list(&lookup, &[SHARED_CORS_CONSOLE_HOST_SCHEMES_ENV_KEY]).unwrap_or_default();
     let base_domains = read_env_list(&lookup, &[SHARED_CORS_CONSOLE_HOST_BASE_DOMAINS_ENV_KEY])
@@ -281,11 +281,11 @@ impl RegisteredConsoleHosts {
         if self.base_domains.is_empty() {
             return Err("registered console hosts require at least one base domain".into());
         }
-        if let Some(scheme) = self
-            .schemes
-            .iter()
-            .find(|scheme| !SUPPORTED_SCHEMES.iter().any(|allowed| allowed.eq_ignore_ascii_case(scheme)))
-        {
+        if let Some(scheme) = self.schemes.iter().find(|scheme| {
+            !SUPPORTED_SCHEMES
+                .iter()
+                .any(|allowed| allowed.eq_ignore_ascii_case(scheme))
+        }) {
             return Err(format!(
                 "registered console host scheme `{scheme}` is not one of {}",
                 SUPPORTED_SCHEMES.join(", ")
@@ -325,8 +325,7 @@ fn is_valid_dns_label(value: &str) -> bool {
 }
 
 fn is_valid_suffix(value: &str) -> bool {
-    value.is_empty()
-        || (value.starts_with('-') && is_valid_dns_label(&value[1..]))
+    value.is_empty() || (value.starts_with('-') && is_valid_dns_label(&value[1..]))
 }
 
 #[cfg(test)]
@@ -385,7 +384,9 @@ mod tests {
 
     #[test]
     fn validate_is_fail_closed() {
-        assert!(pattern(&["im"], "-dev", &["http", "https"]).validate().is_ok());
+        assert!(pattern(&["im"], "-dev", &["http", "https"])
+            .validate()
+            .is_ok());
         assert!(pattern(&["im"], "", &["https"]).validate().is_ok());
 
         let mut hosts = pattern(&["im"], "-dev", &["http", "https"]);

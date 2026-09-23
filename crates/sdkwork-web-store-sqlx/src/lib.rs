@@ -409,11 +409,12 @@ mod tests {
             })
             .await
             .expect("emit");
-        let row: (String, Option<String>, Option<String>) =
-            sqlx::query_as("SELECT request_id, tenant_id, user_id FROM framework_audit_event LIMIT 1")
-                .fetch_one(&pool)
-                .await
-                .expect("row");
+        let row: (String, Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT request_id, tenant_id, user_id FROM framework_audit_event LIMIT 1",
+        )
+        .fetch_one(&pool)
+        .await
+        .expect("row");
         assert_eq!("req-audit-1", row.0);
         assert_eq!(Some("100001".to_owned()), row.1);
         assert_eq!(Some("user-1".to_owned()), row.2);

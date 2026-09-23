@@ -48,8 +48,9 @@ impl HttpRouteManifest {
 
     pub fn match_route(&self, method: &str, path: &str) -> Option<&HttpRoute> {
         let normalized = normalize_path(path);
-        let is_candidate =
-            |route: &HttpRoute| http_method_matches(route.method, method) && route_path_matches(route.path, &normalized);
+        let is_candidate = |route: &HttpRoute| {
+            http_method_matches(route.method, method) && route_path_matches(route.path, &normalized)
+        };
         // Literal templates must win over parameterized templates regardless of
         // registration order: `/user_coupons/wallet` is a distinct route from
         // `/user_coupons/{userCouponId}`, so first-match-wins over the raw

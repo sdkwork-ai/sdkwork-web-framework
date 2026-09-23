@@ -541,8 +541,10 @@ where
             .iter()
             .map(String::as_str)
             .collect();
-        let region_code = crate::env_config::region_code_from_env(&region_keys)
-            .unwrap_or_else(|message| panic!("WebFrameworkBuilder default region is invalid: {message}"));
+        let region_code =
+            crate::env_config::region_code_from_env(&region_keys).unwrap_or_else(|message| {
+                panic!("WebFrameworkBuilder default region is invalid: {message}")
+            });
         if let Err(message) = sdkwork_web_core::register_runtime_region(&region_code) {
             panic!("WebFrameworkBuilder failed to register default region: {message}");
         }

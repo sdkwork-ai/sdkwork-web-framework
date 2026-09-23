@@ -234,8 +234,8 @@ impl WebFrameworkEnv {
 #[cfg(test)]
 mod tests {
     use super::{
-        application_security_policy_from_env, region_code_from_env, security_policy_for_environment,
-        SHARED_REGION_CODE_ENV_KEY,
+        application_security_policy_from_env, region_code_from_env,
+        security_policy_for_environment, SHARED_REGION_CODE_ENV_KEY,
     };
     use sdkwork_web_core::WebEnvironment;
 

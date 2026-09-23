@@ -22,9 +22,9 @@ pub fn assemble_api_router(pool: AdminStorePool) -> Result<ApiAssembly, String> 
         pool.clone(),
     ));
     let readiness = match pool {
-        AdminStorePool::Postgres(postgres_pool) => Arc::new(PgPoolReadinessCheck::new(
-            postgres_pool,
-        )),
+        AdminStorePool::Postgres(postgres_pool) => {
+            Arc::new(PgPoolReadinessCheck::new(postgres_pool))
+        }
     };
     ApiAssemblyContribution::from_manifest(
         "sdkwork-web-framework",

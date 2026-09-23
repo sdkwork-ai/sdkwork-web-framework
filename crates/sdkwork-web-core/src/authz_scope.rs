@@ -120,10 +120,7 @@ pub struct AuthorizationScopeSubject {
 }
 
 impl AuthorizationScopeSubject {
-    pub fn for_principal(
-        principal: &WebRequestPrincipal,
-        api_surface: WebApiSurface,
-    ) -> Self {
+    pub fn for_principal(principal: &WebRequestPrincipal, api_surface: WebApiSurface) -> Self {
         Self {
             tenant_id: principal.tenancy.tenant_id.clone(),
             organization_id: principal.tenancy.organization_id.clone(),
@@ -278,7 +275,11 @@ impl AuthorizationScopeProvider {
 
     /// Production wiring: authoritative source, fail-closed fallback.
     pub fn server_resolved(source: Arc<dyn DynamicAuthorizationScopeSource>) -> Self {
-        Self::new(source, default_scope_cache_ttl(), AuthorizationScopeFallback::Deny)
+        Self::new(
+            source,
+            default_scope_cache_ttl(),
+            AuthorizationScopeFallback::Deny,
+        )
     }
 
     /// Development wiring: authoritative source, credential-claim fallback.
@@ -363,16 +364,14 @@ impl AuthorizationScopeProvider {
     ) -> Result<WebAuthorizationScope, WebFrameworkError> {
         match self.fallback {
             AuthorizationScopeFallback::CredentialClaims => Ok(credential_scope),
-            AuthorizationScopeFallback::Deny => {
-                Err(WebFrameworkError::forbidden(format!(
-                    "authorization scope is not resolvable server-side for tenant {} subject {} \
+            AuthorizationScopeFallback::Deny => Err(WebFrameworkError::forbidden(format!(
+                "authorization scope is not resolvable server-side for tenant {} subject {} \
                      (session {}); refusing to trust credential-carried scope",
-                    subject.tenant_id,
-                    subject.user_id,
-                    subject.session_id.as_deref().unwrap_or("-"),
-                ))
-                .with_reason("authorization-scope-unavailable"))
-            }
+                subject.tenant_id,
+                subject.user_id,
+                subject.session_id.as_deref().unwrap_or("-"),
+            ))
+            .with_reason("authorization-scope-unavailable")),
         }
     }
 
@@ -390,8 +389,7 @@ impl AuthorizationScopeProvider {
     /// Drops every cached entry for a tenant (tenant-wide RBAC or permission
     /// catalog change).
     pub fn invalidate_tenant(&self, tenant_id: &str) {
-        self.cache
-            .invalidate_prefix(&format!("{tenant_id}|"));
+        self.cache.invalidate_prefix(&format!("{tenant_id}|"));
     }
 }
 
@@ -449,9 +447,13 @@ impl<R> ServerResolvedScopeResolver<R> {
         &self,
         principal: WebRequestPrincipal,
     ) -> Result<WebRequestPrincipal, WebFrameworkError> {
-        let subject = AuthorizationScopeSubject::for_principal(&principal, self.api_surface.clone());
+        let subject =
+            AuthorizationScopeSubject::for_principal(&principal, self.api_surface.clone());
         let credential_scope = WebAuthorizationScope::from_principal(&principal);
-        let resolved = self.provider.materialize(&subject, credential_scope).await?;
+        let resolved = self
+            .provider
+            .materialize(&subject, credential_scope)
+            .await?;
         let mut principal = principal;
         resolved.apply_to(&mut principal);
         Ok(principal)
@@ -519,7 +521,10 @@ where
         &self,
         raw_bearer_token: &str,
     ) -> Result<WebRequestPrincipal, WebFrameworkError> {
-        let principal = self.inner.resolve_bearer_auth_token(raw_bearer_token).await?;
+        let principal = self
+            .inner
+            .resolve_bearer_auth_token(raw_bearer_token)
+            .await?;
         self.enrich(principal).await
     }
 
@@ -580,11 +585,13 @@ mod tests {
             &self,
             _subject: &AuthorizationScopeSubject,
         ) -> Result<Option<WebAuthorizationScope>, WebFrameworkError> {
-            self.calls
-                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             Ok(Some(
-                WebAuthorizationScope::new(vec!["tenant:100001".to_owned()], vec!["iam:read".to_owned()])
-                    .with_revision("rev-1"),
+                WebAuthorizationScope::new(
+                    vec!["tenant:100001".to_owned()],
+                    vec!["iam:read".to_owned()],
+                )
+                .with_revision("rev-1"),
             ))
         }
     }
@@ -603,10 +610,16 @@ mod tests {
         });
         let provider = AuthorizationScopeProvider::server_resolved(source);
         let resolved = provider
-            .materialize(&subject(), WebAuthorizationScope::from_principal(&principal()))
+            .materialize(
+                &subject(),
+                WebAuthorizationScope::from_principal(&principal()),
+            )
             .await
             .expect("materialize");
-        assert_eq!(resolved.permission_scope, vec!["app.orders.read".to_owned()]);
+        assert_eq!(
+            resolved.permission_scope,
+            vec!["app.orders.read".to_owned()]
+        );
         assert_eq!(resolved.data_scope.len(), 2);
     }
 
@@ -615,7 +628,10 @@ mod tests {
         let source = Arc::new(FixedSource { scope: None });
         let provider = AuthorizationScopeProvider::server_resolved(source);
         let error = provider
-            .materialize(&subject(), WebAuthorizationScope::from_principal(&principal()))
+            .materialize(
+                &subject(),
+                WebAuthorizationScope::from_principal(&principal()),
+            )
             .await
             .expect_err("deny");
         assert_eq!(crate::error::WebFrameworkErrorKind::Forbidden, error.kind);
@@ -626,7 +642,10 @@ mod tests {
         let source = Arc::new(FixedSource { scope: None });
         let provider = AuthorizationScopeProvider::server_resolved_with_claim_fallback(source);
         let resolved = provider
-            .materialize(&subject(), WebAuthorizationScope::from_principal(&principal()))
+            .materialize(
+                &subject(),
+                WebAuthorizationScope::from_principal(&principal()),
+            )
             .await
             .expect("claim fallback");
         assert_eq!(resolved.permission_scope, vec!["*".to_owned()]);
@@ -640,13 +659,30 @@ mod tests {
         }));
         let credential = WebAuthorizationScope::from_principal(&principal());
 
-        provider.materialize(&subject(), credential.clone()).await.expect("first");
-        provider.materialize(&subject(), credential.clone()).await.expect("cached");
-        assert_eq!(1, calls.load(std::sync::atomic::Ordering::SeqCst), "second call must hit cache");
+        provider
+            .materialize(&subject(), credential.clone())
+            .await
+            .expect("first");
+        provider
+            .materialize(&subject(), credential.clone())
+            .await
+            .expect("cached");
+        assert_eq!(
+            1,
+            calls.load(std::sync::atomic::Ordering::SeqCst),
+            "second call must hit cache"
+        );
 
         provider.invalidate_subject(&subject());
-        provider.materialize(&subject(), credential).await.expect("after invalidation");
-        assert_eq!(2, calls.load(std::sync::atomic::Ordering::SeqCst), "invalidation must reload");
+        provider
+            .materialize(&subject(), credential)
+            .await
+            .expect("after invalidation");
+        assert_eq!(
+            2,
+            calls.load(std::sync::atomic::Ordering::SeqCst),
+            "invalidation must reload"
+        );
     }
 
     #[test]

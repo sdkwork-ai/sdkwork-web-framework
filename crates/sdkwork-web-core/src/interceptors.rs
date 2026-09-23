@@ -674,11 +674,7 @@ fn is_event_stream_response(response: &Response) -> bool {
         .headers()
         .get(axum::http::header::CONTENT_TYPE)
         .and_then(|value| value.to_str().ok())
-        .map(|value| {
-            value
-                .to_ascii_lowercase()
-                .starts_with("text/event-stream")
-        })
+        .map(|value| value.to_ascii_lowercase().starts_with("text/event-stream"))
         .unwrap_or(false)
 }
 

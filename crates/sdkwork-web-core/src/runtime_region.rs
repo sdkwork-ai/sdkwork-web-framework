@@ -59,9 +59,9 @@ pub fn register_runtime_region(region_code: &str) -> Result<RuntimeRegion, Strin
             // no-op, so re-read the winner and only a genuinely different
             // code is a conflicting re-registration.
             if RUNTIME_REGION.set(region).is_err() {
-                let existing = RUNTIME_REGION.get().ok_or_else(|| {
-                    "runtime region was registered concurrently".to_owned()
-                })?;
+                let existing = RUNTIME_REGION
+                    .get()
+                    .ok_or_else(|| "runtime region was registered concurrently".to_owned())?;
                 if existing.region_code() != region.region_code() {
                     return Err(format!(
                         "runtime region is already registered as `{}`; refusing to rebind to `{}`",
