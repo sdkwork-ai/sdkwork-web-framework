@@ -90,3 +90,13 @@ Thumbs.db
 Thumbs.db
 
 # Build artifacts
+
+# Local scratch and build residue (do not commit)
+tmp/
+.tmp/
+
+# Python bytecode (do not commit)
+__pycache__/
+
+# Local assistant state (do not commit)
+.workbuddy/

@@ -14,6 +14,15 @@ pub use crate::axum_integration::{
     RequireAppApi, RequireDualToken, RequireInternalApi, RequireOpenApi, RequirePrincipal,
     RequireTenantApp,
 };
+pub use crate::authz_scope::{
+    default_scope_cache_ttl, validate_dual_token_header_budget, validate_rendered_token_bytes,
+    AuthorizationScopeFallback, AuthorizationScopeProvider, AuthorizationScopeSubject,
+    DynamicAuthorizationScopeSource, NoOpDynamicAuthorizationScopeSource,
+    ServerResolvedScopeResolver, WebAuthorizationScope, AUTHORIZATION_SCOPE_CACHE_TTL_SECS,
+    DUAL_TOKEN_HEADER_BLOCK_BUDGET_BYTES, DUAL_TOKEN_HEADER_NAME_BYTES,
+    ENTRYPOINT_HEADER_RESERVE_BYTES, MAX_RENDERED_TOKEN_BYTES,
+    SINGLE_TOKEN_HEADER_BUDGET_BYTES,
+};
 pub use crate::client_context_guard::{
     inspect_json_body_context_selectors, is_forbidden_context_selector_key,
     reject_client_context_selectors, reject_forbidden_ambient_context_path,

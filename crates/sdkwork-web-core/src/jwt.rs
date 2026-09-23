@@ -332,6 +332,12 @@ fn map_auth_token_claims(
         session_id: optional_claim(&claims, "session_id"),
         app_id: optional_claim(&claims, "app_id"),
         auth_level: parse_auth_level(claims.get("auth_level").map(String::as_str)),
+        // IAM_SPEC §5.2/§5.6: parsing a credential is not an authorization
+        // decision. These fields capture whatever the credential happens to
+        // carry so the migration fallback can still see it; the decision is made
+        // by `AuthorizationScopeProvider`, which resolves scope server-side and
+        // defaults to `Deny`. Issuers MUST NOT sign scope (§5.2), so in a
+        // compliant deployment these stay empty anyway.
         data_scope: split_claim(claims.get("data_scope")),
         permission_scope: split_claim(claims.get("permission_scope")),
         subject_type: optional_claim(&claims, "subject_type"),
@@ -357,6 +363,8 @@ fn map_access_token_claims(
         app_id: required_claim(&claims, "app_id")?,
         environment: parse_environment(claims.get("environment").map(String::as_str)),
         deployment_mode: parse_deployment_mode(claims.get("deployment_mode").map(String::as_str)),
+        // IAM_SPEC §5.2/§5.6: see `map_auth_token_claims`; parsing is not an
+        // authorization decision, and compliant issuers sign no scope anyway.
         data_scope: split_claim(claims.get("data_scope")),
         permission_scope: split_claim(claims.get("permission_scope")),
         subject_type: optional_claim(&claims, "subject_type"),

@@ -512,6 +512,9 @@ impl ApiKeyLookupService for DefaultApiKeyLookupService {
                     .get("deployment_mode")
                     .map(String::as_str),
             ),
+            // IAM_SPEC §5.2/§5.6: parsing is not an authorization decision. The
+            // claim is captured so the migration fallback can see it; the
+            // provider resolves scope server-side and defaults to `Deny`.
             data_scope: split_claim(credential.metadata.get("data_scope")),
             permission_scope: split_claim(credential.metadata.get("permission_scope")),
             subject_type: optional_claim(&credential.metadata, "subject_type")
@@ -565,6 +568,11 @@ impl OAuthTokenLookupService for DefaultOAuthTokenLookupService {
                     .get("deployment_mode")
                     .map(String::as_str),
             ),
+            // IAM_SPEC §5.2/§5.6: parsing is not an authorization decision.
+            // NOTE: `credential.scopes` is the OAuth protocol scope (RFC 6749
+            // §3.3) — a different vocabulary from SDKWork's `data_scope`.
+            // Conflating them is exactly why the credential fallback must stay
+            // explicit and non-default; the provider defaults to `Deny`.
             data_scope: if credential.scopes.is_empty() {
                 split_claim(credential.metadata.get("data_scope"))
             } else {

@@ -107,6 +107,8 @@ impl AuthTokenParser for DefaultAuthTokenParser {
             session_id: optional_claim(&claims, "session_id"),
             app_id: optional_claim(&claims, "app_id"),
             auth_level: parse_auth_level(claims.get("auth_level").map(String::as_str)),
+            // IAM_SPEC §5.2/§5.6: parsing is not an authorization decision; the
+            // provider resolves scope server-side and defaults to `Deny`.
             data_scope: split_claim(claims.get("data_scope")),
             permission_scope: split_claim(claims.get("permission_scope")),
             subject_type: optional_claim(&claims, "subject_type")
@@ -137,6 +139,7 @@ impl AccessTokenParser for DefaultAccessTokenParser {
             deployment_mode: parse_deployment_mode(
                 claims.get("deployment_mode").map(String::as_str),
             ),
+            // IAM_SPEC §5.2/§5.6: see the auth-token parser above.
             data_scope: split_claim(claims.get("data_scope")),
             permission_scope: split_claim(claims.get("permission_scope")),
             subject_type: optional_claim(&claims, "subject_type")

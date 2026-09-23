@@ -169,6 +169,10 @@ pub fn auth_token_jwt_with_permissions(
         "login_scope": "TENANT",
     });
     if !permission_scope.trim().is_empty() {
+        // token-claims-gate: legacy-fixture — this fixture deliberately signs a
+        // `permission_scope` claim so tests can prove the parsers IGNORE it
+        // (IAM_SPEC §5.2 forbids scope in a credential). It exists only to model
+        // a pre-slimming token; production issuers MUST NOT copy this.
         payload["permission_scope"] = json!(permission_scope);
     }
     encode_unsigned_test_jwt(payload)

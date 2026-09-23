@@ -1,6 +1,7 @@
 //! SDKWork web framework core: request context, interceptor pipeline, security policies.
 
 pub mod api_chain;
+pub mod authz_scope;
 pub mod axum_integration;
 pub mod client_context_guard;
 pub mod client_kind;
