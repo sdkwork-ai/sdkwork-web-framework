@@ -353,7 +353,22 @@ pub fn build_openapi_path_item(routes: &[HttpRoute]) -> Value {
 }
 
 pub fn build_openapi_document(title: &str, routes: &[HttpRoute]) -> Value {
-    validate_openapi_routes_context_selectors(routes)
+    build_openapi_document_with_external_prefixes(title, routes, &[])
+}
+
+/// [`build_openapi_document`] for a host that serves an upstream protocol.
+///
+/// `external_prefixes` must be the same list the host declares to the runtime
+/// profile as `external_protocol_prefixes`
+/// (`API_SPEC.md` §4.5.2). The document validator below is the materialization-time
+/// half of that exemption; without the prefixes this function panics on the very
+/// parameters and body fields the upstream requires.
+pub fn build_openapi_document_with_external_prefixes(
+    title: &str,
+    routes: &[HttpRoute],
+    external_prefixes: &[&str],
+) -> Value {
+    validate_openapi_routes_context_selectors_with_external_prefixes(routes, external_prefixes)
         .expect("route manifest violates client context selector rules");
     let mut paths = Map::new();
     for route in routes {
@@ -435,8 +450,11 @@ pub fn build_openapi_document(title: &str, routes: &[HttpRoute]) -> Value {
         },
         "paths": paths
     });
-    validate_openapi_document_context_selectors(&document)
-        .expect("materialized OpenAPI violates client context selector rules");
+    validate_openapi_document_context_selectors_with_external_prefixes(
+        &document,
+        external_prefixes,
+    )
+    .expect("materialized OpenAPI violates client context selector rules");
     document
 }
 
@@ -527,11 +545,66 @@ fn is_forbidden_context_selector_param(name: &str) -> bool {
         .any(|candidate| candidate == &normalized)
 }
 
+/// Whether `path` is one of, or sits beneath, a declared vendor-compatibility prefix.
+///
+/// `API_SPEC.md` §4.5.2 exempts such a prefix from SDKWork-owned request
+/// vocabulary rules. A declared prefix covers itself and everything beneath it
+/// and nothing that merely shares its opening characters: `/v1` covers `/v1` and
+/// `/v1/ping/`, never `/v1beta`. This mirrors `sdkwork_web_core::surface::matches_prefix`,
+/// which the runtime exemption uses; the two must agree, or a path would be
+/// exempt at runtime and rejected at materialization.
+fn is_under_external_prefix(path: &str, external_prefixes: &[&str]) -> bool {
+    if external_prefixes.is_empty() {
+        return false;
+    }
+    let normalized = path.split('?').next().unwrap_or(path).trim_end_matches('/');
+    external_prefixes.iter().any(|prefix| {
+        let prefix = prefix
+            .split('?')
+            .next()
+            .unwrap_or(prefix)
+            .trim_end_matches('/');
+        !prefix.is_empty()
+            && normalized
+                .strip_prefix(prefix)
+                .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+    })
+}
+
 /// Validates route manifest paths before OpenAPI materialization (B8 / API_SPEC §10.0).
+///
+/// Declares no vendor-compatibility prefix, so every guarded path is held to the
+/// client context-selector rule. A host serving an upstream protocol must call
+/// [`validate_openapi_routes_context_selectors_with_external_prefixes`] instead.
 pub fn validate_openapi_routes_context_selectors(routes: &[HttpRoute]) -> Result<(), String> {
+    validate_openapi_routes_context_selectors_with_external_prefixes(routes, &[])
+}
+
+/// [`validate_openapi_routes_context_selectors`] with the vendor-compatibility
+/// exemption declared (`API_SPEC.md` §4.5.2).
+///
+/// `external_prefixes` are the path prefixes hosting an upstream protocol whose
+/// request vocabulary is the upstream's own. Paths under them are exempt from the
+/// context-selector rule, by the same prefixes and for the same reason the
+/// runtime exemption uses (`WebRequestContextProfile::external_protocol_prefixes`):
+/// on such a wire `user_id`/`app_id` are payload — the entity a record is filed
+/// under — not an attempt to select ambient tenant context, and the official
+/// clients cannot be changed.
+///
+/// **The declared list must be the same list the host declares at runtime.** A
+/// prefix exempt in one place and not the other makes the materialized contract
+/// disagree with the running service, which is the asymmetry this exemption
+/// exists to prevent.
+pub fn validate_openapi_routes_context_selectors_with_external_prefixes(
+    routes: &[HttpRoute],
+    external_prefixes: &[&str],
+) -> Result<(), String> {
     for route in routes {
         let surface = infer_api_surface_from_path(route.path);
         if !requires_context_selector_guard(surface) {
+            continue;
+        }
+        if is_under_external_prefix(route.path, external_prefixes) {
             continue;
         }
         let normalized = route.path.to_ascii_lowercase();
@@ -552,7 +625,26 @@ pub fn validate_openapi_routes_context_selectors(routes: &[HttpRoute]) -> Result
 }
 
 /// Validates materialized OpenAPI documents forbid client context selector params on SaaS surfaces.
+///
+/// Declares no vendor-compatibility prefix; see
+/// [`validate_openapi_document_context_selectors_with_external_prefixes`].
 pub fn validate_openapi_document_context_selectors(document: &Value) -> Result<(), String> {
+    validate_openapi_document_context_selectors_with_external_prefixes(document, &[])
+}
+
+/// [`validate_openapi_document_context_selectors`] with the vendor-compatibility
+/// exemption declared (`API_SPEC.md` §4.5.2).
+///
+/// Required to validate a mixed-protocol authority. A document whose paths
+/// include an upstream protocol declares those prefixes here; without them the
+/// materialized contract cannot be validated at all, because the upstream's own
+/// query parameters and body fields (`user_id`, `app_id`, ...) are exactly what
+/// the SDKWork rule forbids. Pass the same prefixes the host declares to the
+/// runtime profile.
+pub fn validate_openapi_document_context_selectors_with_external_prefixes(
+    document: &Value,
+    external_prefixes: &[&str],
+) -> Result<(), String> {
     let paths = document
         .get("paths")
         .and_then(Value::as_object)
@@ -561,6 +653,9 @@ pub fn validate_openapi_document_context_selectors(document: &Value) -> Result<(
     for (path, path_item) in paths {
         let surface = infer_api_surface_from_path(path);
         if !requires_context_selector_guard(surface) {
+            continue;
+        }
+        if is_under_external_prefix(path, external_prefixes) {
             continue;
         }
         let normalized = path.to_ascii_lowercase();
@@ -1681,5 +1776,147 @@ mod tests {
         let error =
             validate_openapi_document_context_selectors(&document).expect_err("tenant path param");
         assert!(error.contains("tenantId"));
+    }
+
+    // --- vendor compatibility exemption (API_SPEC.md section 4.5.2) -------------
+    // The runtime guard suspends the client context-selector rule for a declared
+    // upstream prefix. These pin the materialization-time half of the same
+    // exemption: without it a host could not validate the very contract its own
+    // service serves, because an upstream's parameters are what the rule forbids.
+
+    #[test]
+    fn external_prefix_covers_itself_and_its_subtree_only() {
+        assert!(is_under_external_prefix("/v1", &["/v1"]));
+        assert!(is_under_external_prefix("/v1/", &["/v1"]));
+        assert!(is_under_external_prefix("/v1/ping/", &["/v1"]));
+        assert!(is_under_external_prefix("/v1/ping/?page=2", &["/v1/"]));
+        assert!(is_under_external_prefix("/v3/memories/add/", &["/v1", "/v3"]));
+
+        // A merely similar sibling is a different protocol and keeps its guard.
+        assert!(!is_under_external_prefix("/v1beta/ping/", &["/v1"]));
+        assert!(!is_under_external_prefix("/v10/ping/", &["/v1"]));
+        // The SDKWork-owned surface is not covered by an upstream declaration.
+        assert!(!is_under_external_prefix(
+            "/mem/v3/api/memory/memories",
+            &["/v1", "/v3"]
+        ));
+
+        // Nothing is exempt until a prefix is declared, and a degenerate
+        // declaration must not exempt the whole document.
+        assert!(!is_under_external_prefix("/v1/ping/", &[]));
+        assert!(!is_under_external_prefix("/mem/v3/api/x", &[""]));
+        assert!(!is_under_external_prefix("/mem/v3/api/x", &["/"]));
+    }
+
+    #[test]
+    fn external_prefix_suspends_the_route_context_selector_rule() {
+        // A path marker the rule forbids, on an upstream prefix.
+        let upstream = HttpRoute::api_key(
+            HttpMethod::Get,
+            "/v1/tenants/{tenantId}/members",
+            "memory",
+            "mem0.tenants.members",
+        );
+        // Mutation control: without the declaration the rule still fires, so the
+        // exemption below is doing the work rather than the rule being inert.
+        let error = validate_openapi_routes_context_selectors(&[upstream])
+            .expect_err("undeclared prefix keeps the guard");
+        assert!(error.contains("/v1/tenants/{tenantId}/members"), "{error}");
+        assert!(error.contains("`/tenants/`"), "{error}");
+        validate_openapi_routes_context_selectors_with_external_prefixes(&[upstream], &["/v1"])
+            .expect("a declared upstream prefix suspends the rule");
+
+        // The same path on the SDKWork-owned surface must stay rejected even
+        // while an upstream prefix is declared.
+        let owned = HttpRoute::api_key(
+            HttpMethod::Get,
+            "/mem/v3/api/memory/tenants/{tenantId}/members",
+            "memory",
+            "memory.tenants.members",
+        );
+        let error =
+            validate_openapi_routes_context_selectors_with_external_prefixes(&[owned], &["/v1"])
+                .expect_err("the exemption is bounded by prefix");
+        assert!(error.contains("/tenants/"), "{error}");
+    }
+
+    #[test]
+    fn external_prefix_suspends_the_document_context_selector_rule() {
+        // `DELETE /v1/memories/` in mem0's own contract: `user_id` and `app_id`
+        // are query parameters naming the entity the memories belong to. There is
+        // no tenant selector on this wire at all — the principal still comes from
+        // the credential — so the SDKWork rule does not describe it.
+        let upstream_only = json!({
+            "paths": {
+                "/v1/memories/": {
+                    "delete": {
+                        "parameters": [
+                            { "name": "user_id", "in": "query" },
+                            { "name": "app_id", "in": "query" }
+                        ]
+                    }
+                }
+            }
+        });
+        let error = validate_openapi_document_context_selectors(&upstream_only)
+            .expect_err("undeclared prefix keeps the guard");
+        assert!(error.contains("user_id"), "{error}");
+        validate_openapi_document_context_selectors_with_external_prefixes(
+            &upstream_only,
+            &["/v1", "/v3"],
+        )
+        .expect("a declared upstream prefix suspends the rule");
+
+        // Mixed document: the same parameter on an SDKWork-owned path is still a
+        // violation, so the exemption cannot silently cover the whole authority.
+        let mixed = json!({
+            "paths": {
+                "/v1/memories/": {
+                    "delete": {
+                        "parameters": [{ "name": "user_id", "in": "query" }]
+                    }
+                },
+                "/mem/v3/api/memory/memories": {
+                    "get": {
+                        "parameters": [{ "name": "user_id", "in": "query" }]
+                    }
+                }
+            }
+        });
+        let error = validate_openapi_document_context_selectors_with_external_prefixes(
+            &mixed,
+            &["/v1", "/v3"],
+        )
+        .expect_err("the owned surface keeps the rule");
+        assert!(error.contains("/mem/v3/api/memory/memories"), "{error}");
+        assert!(error.contains("user_id"), "{error}");
+
+        // Body fields are exempt on the same terms: mem0's add body carries
+        // `user_id` as a top-level key.
+        let body = json!({
+            "paths": {
+                "/v3/memories/add/": {
+                    "post": {
+                        "requestBody": {
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": { "user_id": { "type": "string" } }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        assert!(
+            validate_openapi_document_context_selectors(&body)
+                .expect_err("undeclared prefix keeps the guard")
+                .contains("user_id")
+        );
+        validate_openapi_document_context_selectors_with_external_prefixes(&body, &["/v3"])
+            .expect("a declared upstream prefix suspends the body rule");
     }
 }

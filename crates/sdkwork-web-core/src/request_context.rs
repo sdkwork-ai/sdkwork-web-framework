@@ -203,6 +203,29 @@ pub struct WebRequestContextProfile {
     pub open_api_prefixes: Vec<String>,
     pub public_path_prefixes: Vec<String>,
     pub gateway_api_prefixes: Vec<String>,
+    /// Path prefixes hosting a **vendor-compatibility** protocol, whose request
+    /// vocabulary is the upstream's rather than SDKWork's (`API_SPEC.md` §4.5.2
+    /// "Vendor Compatibility open-api Exemption").
+    ///
+    /// The context-selector guard (`crate::client_context_guard`) rejects
+    /// `tenant_id` / `organization_id` / `app_id` / `user_id` / `session_id`
+    /// when a client supplies them as a query parameter or a top-level JSON
+    /// object key. That rule is correct for an SDKWork-owned surface, where
+    /// those names can only be an attempt to select ambient tenant context. On
+    /// an upstream wire they are ordinary **payload**: mem0's `POST
+    /// /v3/memories/add/` body carries `user_id`/`app_id` as the entity the
+    /// memory is filed under, and its `DELETE /v1/memories/` takes them as query
+    /// parameters — with no way for the caller to select a tenant at all, since
+    /// the principal still comes from the credential.
+    ///
+    /// Requiring the upstream to rename its own parameters is not an option: the
+    /// official clients are fixed. Listing a prefix here suspends that one
+    /// guard for it, and nothing else — authentication, authorization, tenant
+    /// isolation, and the credential-profile allowlist are untouched, and an
+    /// undeclared prefix keeps the guard exactly as before. A host declares the
+    /// exemption per prefix rather than per route so that a newly added
+    /// operation under the same protocol cannot silently lose it.
+    pub external_protocol_prefixes: Vec<String>,
     /// Deployment environment for dynamic policy lookups (e.g. EP-16 CORS).
     pub environment: WebEnvironment,
 }
@@ -220,8 +243,25 @@ impl Default for WebRequestContextProfile {
                 "/metrics".to_owned(),
             ],
             gateway_api_prefixes: vec![crate::constants::GATEWAY_API_PREFIX.to_owned()],
+            external_protocol_prefixes: Vec::new(),
             environment: WebEnvironment::Dev,
         }
+    }
+}
+
+impl WebRequestContextProfile {
+    /// Whether `path` is served by a declared vendor-compatibility protocol.
+    ///
+    /// Matched the same way every other prefix in this profile is matched, so a
+    /// declared `/v1` covers `/v1/...` and `/v1` alike, and never `/v1beta`.
+    pub fn is_external_protocol_path(&self, path: &str) -> bool {
+        if self.external_protocol_prefixes.is_empty() {
+            return false;
+        }
+        let normalized = crate::surface::normalize_path(path);
+        self.external_protocol_prefixes
+            .iter()
+            .any(|prefix| crate::surface::matches_prefix(&normalized, prefix))
     }
 }
 
@@ -531,3 +571,35 @@ pub type AppRequestDeploymentMode = WebDeploymentMode;
 pub type AppRequestAuthLevel = WebAuthLevel;
 pub type AppRequestLoginScope = WebLoginScope;
 pub type AppRequestContextProfile = WebRequestContextProfile;
+
+#[cfg(test)]
+mod external_protocol_prefix_tests {
+    use super::*;
+
+    fn profile_with(prefixes: &[&str]) -> WebRequestContextProfile {
+        WebRequestContextProfile {
+            external_protocol_prefixes: prefixes.iter().map(|value| (*value).to_owned()).collect(),
+            ..WebRequestContextProfile::default()
+        }
+    }
+
+    #[test]
+    fn nothing_is_exempt_until_a_prefix_is_declared() {
+        let profile = WebRequestContextProfile::default();
+        assert!(profile.external_protocol_prefixes.is_empty());
+        assert!(!profile.is_external_protocol_path("/v1/memories/add/"));
+    }
+
+    #[test]
+    fn a_declared_prefix_covers_itself_and_its_subtree_only() {
+        let profile = profile_with(&["/v1"]);
+        assert!(profile.is_external_protocol_path("/v1"));
+        assert!(profile.is_external_protocol_path("/v1/"));
+        assert!(profile.is_external_protocol_path("/v1/memories/add/"));
+        assert!(profile.is_external_protocol_path("/v1//memories"));
+        // A merely similar sibling is a different protocol and keeps the guard.
+        assert!(!profile.is_external_protocol_path("/v1beta/memories"));
+        assert!(!profile.is_external_protocol_path("/v10/memories"));
+        assert!(!profile.is_external_protocol_path("/mem/v3/api/memory/memories"));
+    }
+}

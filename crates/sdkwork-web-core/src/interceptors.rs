@@ -176,11 +176,20 @@ where
                     runtime
                         .security_policy
                         .reject_client_identity_projection(request.headers())?;
-                    crate::client_context_guard::reject_client_context_selectors(
-                        &state.path,
-                        request.uri().query(),
-                        state.api_surface.clone(),
-                    )?;
+                    // A declared vendor-compatibility prefix carries the upstream
+                    // protocol's own parameter vocabulary, in which these names
+                    // are payload rather than tenant selectors — see
+                    // `WebRequestContextProfile::external_protocol_prefixes`.
+                    // Identity-projection headers above are still rejected: they
+                    // are `x-sdkwork-*` names, so no upstream client can send
+                    // one by accident.
+                    if !runtime.profile.is_external_protocol_path(&state.path) {
+                        crate::client_context_guard::reject_client_context_selectors(
+                            &state.path,
+                            request.uri().query(),
+                            state.api_surface.clone(),
+                        )?;
+                    }
                 }
                 if runtime.optional_features.dynamic_tenant_runtime_profile {
                     refresh_tenant_runtime_profile(state, runtime).await?;
@@ -301,12 +310,19 @@ where
                         .request_size_limit
                         .max_content_length)
                     .unwrap_or(16 * 1024 * 1024);
-                crate::client_context_guard::inspect_json_body_context_selectors(
-                    request,
-                    json_inspect_limit,
-                    state.api_surface.clone(),
-                )
-                .await?;
+                // Same exemption as the query guard in `SurfaceClassification`,
+                // and skipped for the same reason: an upstream protocol's
+                // top-level keys are its payload schema. Skipping the call also
+                // keeps the body unbuffered, which is how a request that is not
+                // inspected is expected to reach its extractor.
+                if !runtime.profile.is_external_protocol_path(&state.path) {
+                    crate::client_context_guard::inspect_json_body_context_selectors(
+                        request,
+                        json_inspect_limit,
+                        state.api_surface.clone(),
+                    )
+                    .await?;
+                }
             }
             StandardWebCallInterceptorKind::RateLimit => {
                 // Skip rate limiting for health check and metrics endpoints.

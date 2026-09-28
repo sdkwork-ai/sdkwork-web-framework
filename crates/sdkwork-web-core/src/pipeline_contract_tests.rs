@@ -608,6 +608,130 @@ async fn gateway_api_surface_skips_client_identity_projection_rejection_for_stri
     assert!(!state.public_path);
 }
 
+/// The context-selector guard exists to stop a client from selecting *SDKWork*
+/// ambient tenant/app/user context. On a declared vendor-compatibility prefix the
+/// same key names are the upstream protocol's payload — mem0 files a memory
+/// under `user_id`/`app_id` and deletes by them as query parameters, and its
+/// clients are fixed, so renaming is not available to us. The declaration
+/// suspends that one guard for that prefix, and only for a declared prefix.
+#[tokio::test]
+async fn declared_external_protocol_prefix_suspends_the_context_selector_guard() {
+    use crate::request_context::WebApiSurface;
+    use sdkwork_web_contract::{HttpMethod, HttpRoute};
+
+    const ROUTES: &[HttpRoute] = &[
+        HttpRoute::api_key(
+            HttpMethod::Post,
+            "/v3/memories/add/",
+            "memory",
+            "mem0.memory.add",
+        ),
+        HttpRoute::api_key(
+            HttpMethod::Delete,
+            "/v1/memories/",
+            "memory",
+            "mem0.memory.removeAll",
+        ),
+    ];
+    // The configuration the memory open-api host runs with: the upstream
+    // prefixes are claimed for the open-api surface and *not* for the gateway
+    // surface, which is what makes them guarded in the first place.
+    let guarded = WebRequestContextProfile {
+        open_api_prefixes: vec!["/v1".to_owned(), "/v3".to_owned()],
+        gateway_api_prefixes: Vec::new(),
+        ..Default::default()
+    };
+    assert_eq!(
+        WebApiSurface::OpenApi,
+        crate::surface::classify_api_surface("/v3/memories/add/", &guarded),
+    );
+
+    const API_KEY: &str = "api_key_id=key-1;tenant_id=100001;user_id=30;app_id=appbase";
+    const ADD_BODY: &str = r#"{"messages":[{"role":"user","content":"x"}],"user_id":"alice"}"#;
+
+    let runtime = WebCallRuntime::new(DefaultOpenApiWebRequestContextResolver::default())
+        .with_profile(guarded.clone())
+        .with_route_manifest(HttpRouteManifest::new(ROUTES));
+    let chain = WebCallInterceptorChain::standard();
+
+    // Undeclared: both shapes are refused, each by the stage that owns it — the
+    // query selector during surface classification, the body selector during the
+    // size-limit stage.
+    let mut request = Request::builder()
+        .method("POST")
+        .uri("/v3/memories/add/")
+        .header("X-API-Key", API_KEY)
+        .header("content-type", "application/json")
+        .header("content-length", ADD_BODY.len().to_string())
+        .body(Body::from(ADD_BODY))
+        .expect("request");
+    let mut state = WebCallState::from_request(&request);
+    let error = chain
+        .before(&mut state, &mut request, &runtime)
+        .await
+        .expect_err("an undeclared upstream body key is still a context selector");
+    assert!(error.message.contains("user_id"), "{}", error.message);
+
+    let mut request = Request::builder()
+        .method("DELETE")
+        .uri("/v1/memories/?user_id=alice")
+        .header("X-API-Key", API_KEY)
+        .body(Body::empty())
+        .expect("request");
+    let mut state = WebCallState::from_request(&request);
+    let error = chain
+        .before(&mut state, &mut request, &runtime)
+        .await
+        .expect_err("an undeclared upstream query key is still a context selector");
+    assert!(error.message.contains("user_id"), "{}", error.message);
+
+    // Declared: the same two requests authenticate normally, and the skipped
+    // body inspection leaves the body where the extractor can still read it.
+    let declared = WebRequestContextProfile {
+        external_protocol_prefixes: vec!["/v1".to_owned(), "/v3".to_owned()],
+        ..guarded.clone()
+    };
+    let runtime = WebCallRuntime::new(DefaultOpenApiWebRequestContextResolver::default())
+        .with_profile(declared)
+        .with_route_manifest(HttpRouteManifest::new(ROUTES));
+
+    let mut request = Request::builder()
+        .method("POST")
+        .uri("/v3/memories/add/")
+        .header("X-API-Key", API_KEY)
+        .header("content-type", "application/json")
+        .header("content-length", ADD_BODY.len().to_string())
+        .body(Body::from(ADD_BODY))
+        .expect("request");
+    let mut state = WebCallState::from_request(&request);
+    chain
+        .before(&mut state, &mut request, &runtime)
+        .await
+        .expect("a declared external protocol carries its own body vocabulary");
+    assert_eq!(WebAuthMode::ApiKey, state.auth_mode);
+    let body = axum::body::to_bytes(request.into_body(), usize::MAX)
+        .await
+        .expect("body reads");
+    assert_eq!(
+        ADD_BODY.as_bytes(),
+        body.as_ref(),
+        "skipping the inspection must not consume the body"
+    );
+
+    let mut request = Request::builder()
+        .method("DELETE")
+        .uri("/v1/memories/?user_id=alice")
+        .header("X-API-Key", API_KEY)
+        .body(Body::empty())
+        .expect("request");
+    let mut state = WebCallState::from_request(&request);
+    chain
+        .before(&mut state, &mut request, &runtime)
+        .await
+        .expect("a declared external protocol carries its own query vocabulary");
+    assert_eq!(WebApiSurface::OpenApi, state.api_surface);
+}
+
 #[tokio::test]
 async fn audit_fact_includes_tenant_and_user_from_principal() {
     use std::sync::{Arc, Mutex};
