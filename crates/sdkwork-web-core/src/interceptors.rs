@@ -1147,6 +1147,50 @@ where
         }
         return Err(error);
     }
+    // Pre-auth aggregate ceiling: per-credential keying alone lets a caller
+    // fragment the limit by rotating synthetic credentials, each earning a
+    // fresh bucket. When the deployment opts in, credential-bearing requests
+    // whose principal is not resolved also share one bucket per path+tier, so
+    // credential-stuffing is bounded in aggregate. Post-auth traffic is not
+    // affected: resolved principals key on their tenant.
+    let aggregate_multiplier = runtime
+        .security_policy
+        .rate_limit
+        .pre_auth_aggregate_multiplier;
+    if let Some(multiplier) = aggregate_multiplier {
+        if state.principal.is_none() && state.credentials_present() && multiplier > 0 {
+            use crate::hashing::hash_key_material;
+            let path_hash = hash_key_material(&state.path);
+            let tier_suffix = state
+                .rate_limit_tier
+                .map(|tier| format!(":tier:{tier:?}"))
+                .unwrap_or_default();
+            let aggregate_limit = resolved
+                .max_requests
+                .saturating_mul(multiplier)
+                .max(1);
+            if let Err(error) = runtime
+                .rate_limit_store
+                .check_and_record(
+                    &format!("preauth:path:{path_hash}{tier_suffix}"),
+                    aggregate_limit,
+                    Duration::from_secs(resolved.window_secs.max(1)),
+                )
+                .await
+            {
+                if error.kind == WebFrameworkErrorKind::RateLimitExceeded {
+                    emit_security_event(
+                        runtime,
+                        state,
+                        SecurityEventKind::RateLimitExceeded,
+                        error.message.clone(),
+                    )
+                    .await?;
+                }
+                return Err(error);
+            }
+        }
+    }
     Ok(())
 }
 

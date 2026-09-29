@@ -325,6 +325,18 @@
             }
           },
           {
+            "deprecated": true,
+            "description": "Legacy alias for page_size (cursor mode).",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
             "description": "Opaque keyset cursor (audit/security event id).",
             "in": "query",
             "name": "cursor",
@@ -457,6 +469,18 @@
               "minimum": 1,
               "type": "integer"
             }
+          },
+          {
+            "deprecated": true,
+            "description": "Legacy alias for page_size (offset mode).",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -549,7 +573,7 @@
         "x-sdkwork-route-auth": "dual-token"
       },
       "post": {
-        "operationId": "webFramework.controlNodes.create",
+        "operationId": "webFramework.controlNodes.register",
         "responses": {
           "200": {
             "content": {
@@ -897,6 +921,18 @@
               "minimum": 1,
               "type": "integer"
             }
+          },
+          {
+            "deprecated": true,
+            "description": "Legacy alias for page_size (offset mode).",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -992,7 +1028,7 @@
         "x-sdkwork-route-auth": "dual-token"
       },
       "put": {
-        "operationId": "webFramework.corsPolicies.update",
+        "operationId": "webFramework.corsPolicies.upsert",
         "responses": {
           "200": {
             "content": {
@@ -1095,7 +1131,7 @@
     },
     "/backend/v3/api/web-framework/optional_features": {
       "get": {
-        "operationId": "webFramework.optionalFeatures.list",
+        "operationId": "webFramework.optionalFeatures.snapshot",
         "responses": {
           "200": {
             "content": {
@@ -1214,6 +1250,18 @@
               "minimum": 1,
               "type": "integer"
             }
+          },
+          {
+            "deprecated": true,
+            "description": "Legacy alias for page_size (offset mode).",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -1309,7 +1357,7 @@
         "x-sdkwork-route-auth": "dual-token"
       },
       "put": {
-        "operationId": "webFramework.rateLimitPolicies.update",
+        "operationId": "webFramework.rateLimitPolicies.upsert",
         "responses": {
           "200": {
             "content": {
@@ -1412,7 +1460,7 @@
     },
     "/backend/v3/api/web-framework/runtime_defaults": {
       "get": {
-        "operationId": "webFramework.runtimeDefaults.retrieve",
+        "operationId": "webFramework.runtimeDefaults.snapshot",
         "responses": {
           "200": {
             "content": {
@@ -1500,6 +1548,18 @@
           {
             "in": "query",
             "name": "page_size",
+            "required": false,
+            "schema": {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "deprecated": true,
+            "description": "Legacy alias for page_size (cursor mode).",
+            "in": "query",
+            "name": "limit",
             "required": false,
             "schema": {
               "maximum": 200,
@@ -1645,6 +1705,18 @@
               "minimum": 1,
               "type": "integer"
             }
+          },
+          {
+            "deprecated": true,
+            "description": "Legacy alias for page_size (offset mode).",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "maximum": 200,
+              "minimum": 1,
+              "type": "integer"
+            }
           }
         ],
         "responses": {
@@ -1740,7 +1812,7 @@
         "x-sdkwork-route-auth": "dual-token"
       },
       "put": {
-        "operationId": "webFramework.tenantRuntimeProfiles.update",
+        "operationId": "webFramework.tenantRuntimeProfiles.upsert",
         "responses": {
           "200": {
             "content": {

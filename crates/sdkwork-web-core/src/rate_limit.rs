@@ -125,6 +125,7 @@ mod tests {
             window_secs: 60,
             pre_auth_rate_limit: true,
             tenant_limit_after_auth: false,
+            pre_auth_aggregate_multiplier: None,
         };
         let resolved = resolver.resolve(&state, &global);
         assert_eq!(10, resolved.max_requests);

@@ -219,6 +219,79 @@ async fn manifest_idempotent_bounds_key_before_store_access() {
     assert_eq!(Some("invalid-idempotency-key"), error.reason.as_deref());
 }
 
+/// Drives one pre-auth request carrying the credential headers of one kind,
+/// the way a credential-stuffing attacker rotates them.
+async fn pre_auth_request_with_credential_kind(
+    runtime: &WebCallRuntime<DefaultWebRequestContextResolver>,
+    kind: usize,
+) -> Result<(), WebFrameworkError> {
+    let chain = WebCallInterceptorChain::standard();
+    let mut builder = Request::builder().uri("/app/v3/api/users");
+    builder = match kind % 3 {
+        0 => builder.header("Authorization", fixture_auth_header()),
+        1 => builder.header("Access-Token", fixture_access_header()),
+        _ => builder.header("X-Api-Key", fixture_ingress_token()),
+    };
+    let mut request = builder.body(Body::empty()).expect("request");
+    let mut state = WebCallState::from_request(&request);
+    chain.before(&mut state, &mut request, runtime).await
+}
+
+fn rate_limit_security(multiplier: Option<u32>) -> crate::security::SecurityPolicy {
+    crate::security::SecurityPolicy {
+        rate_limit: crate::security::RateLimitPolicy {
+            enabled: true,
+            max_requests_per_window: 1,
+            window_secs: 60,
+            pre_auth_rate_limit: true,
+            tenant_limit_after_auth: false,
+            pre_auth_aggregate_multiplier: multiplier,
+        },
+        ..crate::security::SecurityPolicy::default()
+    }
+}
+
+#[tokio::test]
+async fn the_pre_auth_aggregate_bucket_bounds_cross_kind_credential_rotation() {
+    let runtime = WebCallRuntime::new(DefaultWebRequestContextResolver::default())
+        .with_security_policy(rate_limit_security(Some(1)))
+        .with_rate_limit_store(crate::memory_rate_limit_store());
+
+    // The per-credential key hashes the credential KIND mask, so rotating the
+    // header kind (Bearer → Access-Token → X-Api-Key) opens a fresh bucket per
+    // kind. With the aggregate opted in, the second kind crosses the shared
+    // per-path ceiling even though its own kind bucket is untouched.
+    assert!(pre_auth_request_with_credential_kind(&runtime, 0)
+        .await
+        .is_err());
+    let error = pre_auth_request_with_credential_kind(&runtime, 1)
+        .await
+        .expect_err("aggregate ceiling");
+    assert_eq!(WebFrameworkErrorKind::RateLimitExceeded, error.kind);
+}
+
+#[tokio::test]
+async fn without_the_opt_in_each_credential_kind_has_its_own_bucket() {
+    let runtime = WebCallRuntime::new(DefaultWebRequestContextResolver::default())
+        .with_security_policy(rate_limit_security(None))
+        .with_rate_limit_store(crate::memory_rate_limit_store());
+
+    // Default-off keeps the historical kind-mask keying: one request per kind
+    // never exhausts anything (each fails later at authentication), so the
+    // rejection must not be rate limiting. This is the residual rotation
+    // budget the aggregate multiplier exists to bound.
+    for kind in 0..3 {
+        let error = pre_auth_request_with_credential_kind(&runtime, kind)
+            .await
+            .expect_err("unresolved credentials fail authentication");
+        assert_ne!(
+            WebFrameworkErrorKind::RateLimitExceeded,
+            error.kind,
+            "no aggregate rejection is possible without the opt-in"
+        );
+    }
+}
+
 #[tokio::test]
 async fn authorization_policy_is_invoked_for_protected_routes() {
     let calls = Arc::new(AtomicUsize::new(0));

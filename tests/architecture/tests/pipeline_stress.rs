@@ -99,6 +99,7 @@ async fn rate_limit_exceeded_maps_to_expected_error_kind() {
         window_secs: 60,
         pre_auth_rate_limit: true,
         tenant_limit_after_auth: false,
+        pre_auth_aggregate_multiplier: None,
     };
     runtime.profile.public_path_prefixes = vec![];
     let chain = WebCallInterceptorChain::standard();

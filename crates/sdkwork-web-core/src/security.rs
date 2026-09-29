@@ -67,6 +67,18 @@ pub struct RateLimitPolicy {
     pub pre_auth_rate_limit: bool,
     /// After authentication, apply an additional tenant-scoped limit (stage 12).
     pub tenant_limit_after_auth: bool,
+    /// Pre-auth aggregate ceiling over every credential-bearing request whose
+    /// principal is not yet resolved, one shared bucket per path+tier.
+    ///
+    /// `None` keeps the historical per-credential keying only, which a caller
+    /// can fragment by rotating synthetic credentials (each fake key gets a
+    /// fresh bucket). `Some(multiplier)` additionally charges a shared bucket
+    /// per path+tier whose limit is `max_requests_per_window * multiplier`,
+    /// so credential-stuffing is bounded in aggregate; legitimate keys resolve
+    /// to their tenant bucket post-auth and only share the aggregate with the
+    /// invalid-credential traffic they arrive alongside. Default `None`: no
+    /// behavior change unless a deployment opts in.
+    pub pre_auth_aggregate_multiplier: Option<u32>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -226,6 +238,7 @@ impl Default for RateLimitPolicy {
             window_secs: 60,
             pre_auth_rate_limit: true,
             tenant_limit_after_auth: true,
+            pre_auth_aggregate_multiplier: None,
         }
     }
 }
@@ -1021,6 +1034,7 @@ impl SecurityPolicy {
                 window_secs: 60,
                 pre_auth_rate_limit: true,
                 tenant_limit_after_auth: true,
+                pre_auth_aggregate_multiplier: None,
             },
             json_content_type: JsonContentTypePolicy { enabled: true },
             ..Self::default()
