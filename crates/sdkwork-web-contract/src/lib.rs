@@ -13,8 +13,8 @@ pub use inventory::{
 pub use openapi::{
     build_openapi_document, build_openapi_document_with_external_prefixes, build_openapi_operation,
     build_openapi_path_item, build_owned_openapi_document, enrich_owned_openapi_document,
-    infer_api_surface_from_path, is_canonical_iam_context_resource_path, openapi_extensions_for_route,
-    validate_openapi_document_context_selectors,
+    infer_api_surface_from_path, is_canonical_iam_context_resource_path,
+    openapi_extensions_for_route, validate_openapi_document_context_selectors,
     validate_openapi_document_context_selectors_with_external_prefixes,
     validate_openapi_routes_context_selectors,
     validate_openapi_routes_context_selectors_with_external_prefixes,

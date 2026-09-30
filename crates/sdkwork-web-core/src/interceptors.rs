@@ -1165,10 +1165,7 @@ where
                 .rate_limit_tier
                 .map(|tier| format!(":tier:{tier:?}"))
                 .unwrap_or_default();
-            let aggregate_limit = resolved
-                .max_requests
-                .saturating_mul(multiplier)
-                .max(1);
+            let aggregate_limit = resolved.max_requests.saturating_mul(multiplier).max(1);
             if let Err(error) = runtime
                 .rate_limit_store
                 .check_and_record(

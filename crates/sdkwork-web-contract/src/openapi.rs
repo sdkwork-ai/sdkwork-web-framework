@@ -1790,7 +1790,10 @@ mod tests {
         assert!(is_under_external_prefix("/v1/", &["/v1"]));
         assert!(is_under_external_prefix("/v1/ping/", &["/v1"]));
         assert!(is_under_external_prefix("/v1/ping/?page=2", &["/v1/"]));
-        assert!(is_under_external_prefix("/v3/memories/add/", &["/v1", "/v3"]));
+        assert!(is_under_external_prefix(
+            "/v3/memories/add/",
+            &["/v1", "/v3"]
+        ));
 
         // A merely similar sibling is a different protocol and keeps its guard.
         assert!(!is_under_external_prefix("/v1beta/ping/", &["/v1"]));
@@ -1911,11 +1914,9 @@ mod tests {
                 }
             }
         });
-        assert!(
-            validate_openapi_document_context_selectors(&body)
-                .expect_err("undeclared prefix keeps the guard")
-                .contains("user_id")
-        );
+        assert!(validate_openapi_document_context_selectors(&body)
+            .expect_err("undeclared prefix keeps the guard")
+            .contains("user_id"));
         validate_openapi_document_context_selectors_with_external_prefixes(&body, &["/v3"])
             .expect("a declared upstream prefix suspends the body rule");
     }

@@ -248,14 +248,14 @@ fn is_noop_security_event_emitter(emitter: Option<&Arc<dyn SecurityEventEmitter>
 fn uses_memory_rate_limit_store(store: Option<&Arc<dyn RateLimitStore>>) -> bool {
     match store {
         None => true,
-        Some(store) => (store.as_ref() as &dyn Any).is::<MemoryRateLimitStore>(),
+        Some(store) => <dyn Any>::is::<MemoryRateLimitStore>(store),
     }
 }
 
 fn uses_memory_idempotency_store(store: Option<&Arc<dyn IdempotencyStore>>) -> bool {
     match store {
         None => true,
-        Some(store) => (store.as_ref() as &dyn Any).is::<MemoryIdempotencyStore>(),
+        Some(store) => <dyn Any>::is::<MemoryIdempotencyStore>(store),
     }
 }
 
@@ -278,7 +278,7 @@ fn uses_memory_concurrent_admission_store(
 ) -> bool {
     match store {
         None => true,
-        Some(store) => (store.as_ref() as &dyn Any).is::<MemoryConcurrentAdmissionStore>(),
+        Some(store) => <dyn Any>::is::<MemoryConcurrentAdmissionStore>(store),
     }
 }
 
