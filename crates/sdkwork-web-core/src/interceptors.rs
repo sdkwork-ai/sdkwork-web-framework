@@ -450,21 +450,28 @@ where
                     let ctx = state.to_context()?;
                     if let Some(manifest) = runtime.route_manifest.as_ref() {
                         if let Some(route) = manifest.match_route(&state.method, &state.path) {
-                            if let Err(error) =
-                                crate::path_resource_guard::verify_path_resource_ids_match_principal(
-                                    &ctx,
-                                    route.path,
-                                    route.required_permission,
-                                )
-                            {
-                                emit_security_event(
-                                    runtime,
-                                    state,
-                                    SecurityEventKind::TenantIsolationDenied,
-                                    error.message.clone(),
-                                )
-                                .await?;
-                                return Err(error);
+                            // Mirrored external wires (API_SPEC §4.5.2) use the
+                            // vendor's own path-parameter vocabulary: an
+                            // `{orgId}` on a mem0 route is the vendor's
+                            // identifier, never an SDKWork organization id,
+                            // so the path-resource guard does not apply.
+                            if route.external_wire_protocol.is_none() {
+                                if let Err(error) = crate::path_resource_guard::
+                                    verify_path_resource_ids_match_principal(
+                                        &ctx,
+                                        route.path,
+                                        route.required_permission,
+                                    )
+                                {
+                                    emit_security_event(
+                                        runtime,
+                                        state,
+                                        SecurityEventKind::TenantIsolationDenied,
+                                        error.message.clone(),
+                                    )
+                                    .await?;
+                                    return Err(error);
+                                }
                             }
                         }
                     }

@@ -368,8 +368,27 @@ pub fn build_openapi_document_with_external_prefixes(
     routes: &[HttpRoute],
     external_prefixes: &[&str],
 ) -> Value {
-    validate_openapi_routes_context_selectors_with_external_prefixes(routes, external_prefixes)
-        .expect("route manifest violates client context selector rules");
+    // Routes that declare a mirrored external wire contribute their own
+    // first-segment prefixes to the document-level exemption: the caller may
+    // not know them, but the route declarations are the single source of
+    // truth for which paths speak a vendor's vocabulary.
+    let mut effective_prefixes: Vec<&str> = external_prefixes.to_vec();
+    for route in routes {
+        if route.external_wire_protocol.is_some() {
+            let path = route.path.trim_start_matches('/');
+            if let Some(end) = path.find('/') {
+                let prefix = &route.path[..route.path.len() - (path.len() - end)];
+                if !effective_prefixes.contains(&prefix) {
+                    effective_prefixes.push(prefix);
+                }
+            }
+        }
+    }
+    validate_openapi_routes_context_selectors_with_external_prefixes(
+        routes,
+        &effective_prefixes,
+    )
+    .expect("route manifest violates client context selector rules");
     let mut paths = Map::new();
     for route in routes {
         paths
@@ -452,7 +471,7 @@ pub fn build_openapi_document_with_external_prefixes(
     });
     validate_openapi_document_context_selectors_with_external_prefixes(
         &document,
-        external_prefixes,
+        &effective_prefixes,
     )
     .expect("materialized OpenAPI violates client context selector rules");
     document
@@ -605,6 +624,14 @@ pub fn validate_openapi_routes_context_selectors_with_external_prefixes(
             continue;
         }
         if is_under_external_prefix(route.path, external_prefixes) {
+            continue;
+        }
+        // A route that declares a mirrored external wire (API_SPEC §4.5.2)
+        // uses the vendor's path vocabulary — `/organizations/{org_id}/` on a
+        // mem0 route is the vendor's org identifier, not an ambient SDKWork
+        // context selector — so the per-route declaration exempts it here as
+        // well, independent of which prefixes the caller passes.
+        if route.external_wire_protocol.is_some() {
             continue;
         }
         let normalized = route.path.to_ascii_lowercase();

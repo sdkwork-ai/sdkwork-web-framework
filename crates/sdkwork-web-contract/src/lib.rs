@@ -239,6 +239,13 @@ pub struct HttpRoute {
     pub compatibility_auth: Option<CompatibilityAuth>,
     /// Exact upstream-compatible OpenAPI operation JSON for compatibility routes.
     pub compatibility_openapi_operation: Option<&'static str>,
+    /// Vendor-compatibility wire identifier (API_SPEC §4.5.2, for example
+    /// `"mem0-platform"`) for routes that mirror an upstream platform wire.
+    /// Mirrored operations use the upstream's own path-parameter vocabulary —
+    /// an `{orgId}` on such a route is the vendor's identifier, not an
+    /// SDKWork organization id — so tenant-isolation path-resource guards do
+    /// not apply to them.
+    pub external_wire_protocol: Option<&'static str>,
 }
 
 impl HttpRoute {
@@ -263,6 +270,7 @@ impl HttpRoute {
             forbid_credential_headers: false,
             compatibility_auth: None,
             compatibility_openapi_operation: None,
+            external_wire_protocol: None,
         }
     }
 
@@ -300,6 +308,14 @@ impl HttpRoute {
 
     pub const fn with_forbid_credential_headers(mut self, forbid: bool) -> Self {
         self.forbid_credential_headers = forbid;
+        self
+    }
+
+    /// Marks this route as mirroring an external platform wire (API_SPEC
+    /// §4.5.2). Mirrored routes keep the vendor's own path-parameter
+    /// vocabulary, so tenant-isolation path-resource guards do not apply.
+    pub const fn with_external_wire_protocol(mut self, protocol: &'static str) -> Self {
+        self.external_wire_protocol = Some(protocol);
         self
     }
 
