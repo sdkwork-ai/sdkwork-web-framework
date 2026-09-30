@@ -15,6 +15,13 @@ pub trait RateLimitStore: Send + Sync + Any {
         false
     }
 
+    /// `true` when the store keeps all state in process memory only.
+    /// Production assemblies reject in-process stores because restarts and
+    /// replicas would see different rate-limit state.
+    fn is_in_process(&self) -> bool {
+        false
+    }
+
     async fn check_and_record(
         &self,
         key: &str,
@@ -28,6 +35,13 @@ pub trait RateLimitStore: Send + Sync + Any {
 pub trait IdempotencyStore: Send + Sync + Any {
     /// `true` when the store is safe for multi-replica SaaS production (e.g. Redis).
     fn is_distributed_ha(&self) -> bool {
+        false
+    }
+
+    /// `true` when the store keeps all state in process memory only.
+    /// Production assemblies reject in-process stores because restarts and
+    /// replicas would see different idempotency state.
+    fn is_in_process(&self) -> bool {
         false
     }
 
@@ -113,6 +127,10 @@ pub struct MemoryRateLimitStore {
 
 #[async_trait]
 impl RateLimitStore for MemoryRateLimitStore {
+    fn is_in_process(&self) -> bool {
+        true
+    }
+
     async fn check_and_record(
         &self,
         key: &str,
@@ -145,10 +163,16 @@ impl RateLimitStore for MemoryRateLimitStore {
 struct MemoryIdempotencyEntry {
     fingerprint: String,
     response: Option<IdempotencyResponseRecord>,
+    /// Cached response body size in bytes (0 while the key is in progress).
+    payload_bytes: usize,
     created: Instant,
 }
 
 const MEMORY_IDEMPOTENCY_MAX_ENTRIES: usize = 10_000;
+/// Total cached response bytes across all keys. The entry cap alone does not
+/// bound memory: model-output-sized bodies (single-digit MiB each) can reach
+/// tens of GiB within the entry cap. Eviction is oldest-inserted first.
+const MEMORY_IDEMPOTENCY_MAX_CACHED_BYTES: u64 = 256 * 1024 * 1024;
 
 #[derive(Default)]
 pub struct MemoryIdempotencyStore {
@@ -156,25 +180,54 @@ pub struct MemoryIdempotencyStore {
 }
 
 impl MemoryIdempotencyStore {
-    fn purge_expired(entries: &mut HashMap<String, MemoryIdempotencyEntry>, ttl: Duration) {
+    fn evict_over_budget(
+        entries: &mut HashMap<String, MemoryIdempotencyEntry>,
+        max_entries: usize,
+        max_bytes: u64,
+    ) {
+        let mut cached_bytes: u64 = entries
+            .values()
+            .map(|entry| entry.payload_bytes as u64)
+            .sum();
+        let mut overflow =
+            entries.len() > max_entries || cached_bytes > max_bytes;
+        if !overflow {
+            return;
+        }
+        let mut oldest: Vec<_> = entries
+            .iter()
+            .map(|(key, entry)| (key.clone(), entry.created, entry.payload_bytes as u64))
+            .collect();
+        oldest.sort_by_key(|(_, created, _)| *created);
+        for (key, _, payload_bytes) in oldest {
+            if entries.len() <= max_entries && cached_bytes <= max_bytes {
+                break;
+            }
+            if entries.remove(&key).is_some() {
+                cached_bytes = cached_bytes.saturating_sub(payload_bytes);
+            }
+            overflow = false;
+        }
+    }
+
+    fn purge_expired(
+        entries: &mut HashMap<String, MemoryIdempotencyEntry>,
+        ttl: Duration,
+        max_entries: usize,
+        max_bytes: u64,
+    ) {
         let now = Instant::now();
         entries.retain(|_, entry| now.duration_since(entry.created) < ttl);
-        if entries.len() > MEMORY_IDEMPOTENCY_MAX_ENTRIES {
-            let excess = entries.len() - MEMORY_IDEMPOTENCY_MAX_ENTRIES;
-            let mut oldest: Vec<_> = entries
-                .iter()
-                .map(|(key, entry)| (key.clone(), entry.created))
-                .collect();
-            oldest.sort_by_key(|(_, created)| *created);
-            for (key, _) in oldest.into_iter().take(excess) {
-                entries.remove(&key);
-            }
-        }
+        Self::evict_over_budget(entries, max_entries, max_bytes);
     }
 }
 
 #[async_trait]
 impl IdempotencyStore for MemoryIdempotencyStore {
+    fn is_in_process(&self) -> bool {
+        true
+    }
+
     async fn begin(
         &self,
         key: &str,
@@ -182,7 +235,12 @@ impl IdempotencyStore for MemoryIdempotencyStore {
         ttl: Duration,
     ) -> Result<IdempotencyBeginOutcome, WebFrameworkError> {
         let mut entries = self.entries.lock().await;
-        Self::purge_expired(&mut entries, ttl);
+        Self::purge_expired(
+            &mut entries,
+            ttl,
+            MEMORY_IDEMPOTENCY_MAX_ENTRIES,
+            MEMORY_IDEMPOTENCY_MAX_CACHED_BYTES,
+        );
         if let Some(entry) = entries.get(key) {
             if entry.fingerprint != fingerprint {
                 return Err(WebFrameworkError::conflict(
@@ -201,6 +259,7 @@ impl IdempotencyStore for MemoryIdempotencyStore {
             MemoryIdempotencyEntry {
                 fingerprint: fingerprint.to_owned(),
                 response: None,
+                payload_bytes: 0,
                 created: Instant::now(),
             },
         );
@@ -215,7 +274,12 @@ impl IdempotencyStore for MemoryIdempotencyStore {
         ttl: Duration,
     ) -> Result<(), WebFrameworkError> {
         let mut entries = self.entries.lock().await;
-        Self::purge_expired(&mut entries, ttl);
+        Self::purge_expired(
+            &mut entries,
+            ttl,
+            MEMORY_IDEMPOTENCY_MAX_ENTRIES,
+            MEMORY_IDEMPOTENCY_MAX_CACHED_BYTES,
+        );
         let entry = entries
             .get_mut(key)
             .ok_or_else(|| WebFrameworkError::bad_request("idempotency key was not reserved"))?;
@@ -224,7 +288,16 @@ impl IdempotencyStore for MemoryIdempotencyStore {
                 "idempotency key fingerprint mismatch while completing response",
             ));
         }
+        entry.payload_bytes = record.body.len();
         entry.response = Some(record);
+        // A single oversized completion may push the store over budget; shed
+        // the oldest cached entries immediately instead of waiting for the
+        // next purge.
+        Self::evict_over_budget(
+            &mut entries,
+            MEMORY_IDEMPOTENCY_MAX_ENTRIES,
+            MEMORY_IDEMPOTENCY_MAX_CACHED_BYTES,
+        );
         Ok(())
     }
 
@@ -303,6 +376,37 @@ mod tests {
     use super::*;
     use crate::idempotency::IdempotencyBeginOutcome;
     use crate::WebCallState;
+
+    #[tokio::test]
+    async fn byte_budget_sheds_oldest_cached_responses() {
+        let store = MemoryIdempotencyStore::default();
+        let ttl = Duration::from_secs(60);
+        let body = vec![b'x'; 3 * 1024 * 1024];
+        for key in ["k1", "k2"] {
+            store.begin(key, "fp", ttl).await.expect("leader");
+            store
+                .complete(
+                    key,
+                    "fp",
+                    IdempotencyResponseRecord {
+                        status_code: 200,
+                        body: body.clone(),
+                        content_type: None,
+                    },
+                    ttl,
+                )
+                .await
+                .expect("complete");
+        }
+        let mut entries = store.entries.lock().await;
+        // A budget fitting only one 3 MiB payload must shed the oldest entry.
+        MemoryIdempotencyStore::evict_over_budget(&mut entries, 10_000, 4 * 1024 * 1024);
+        assert_eq!(entries.len(), 1);
+        assert!(
+            entries.contains_key("k2"),
+            "oldest cached entry must be evicted first"
+        );
+    }
 
     #[tokio::test]
     async fn release_clears_in_progress_reservation() {

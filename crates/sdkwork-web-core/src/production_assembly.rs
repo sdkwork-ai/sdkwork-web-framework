@@ -248,14 +248,17 @@ fn is_noop_security_event_emitter(emitter: Option<&Arc<dyn SecurityEventEmitter>
 fn uses_memory_rate_limit_store(store: Option<&Arc<dyn RateLimitStore>>) -> bool {
     match store {
         None => true,
-        Some(store) => <dyn Any>::is::<MemoryRateLimitStore>(store),
+        // Polymorphic check, not type reflection: a `&Arc<dyn RateLimitStore>`
+        // coerced to `&dyn Any` reports the Arc pointer itself, so the
+        // previous `<dyn Any>::is::<MemoryRateLimitStore>` never matched.
+        Some(store) => store.is_in_process(),
     }
 }
 
 fn uses_memory_idempotency_store(store: Option<&Arc<dyn IdempotencyStore>>) -> bool {
     match store {
         None => true,
-        Some(store) => <dyn Any>::is::<MemoryIdempotencyStore>(store),
+        Some(store) => store.is_in_process(),
     }
 }
 
