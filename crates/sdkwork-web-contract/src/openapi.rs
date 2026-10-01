@@ -384,11 +384,8 @@ pub fn build_openapi_document_with_external_prefixes(
             }
         }
     }
-    validate_openapi_routes_context_selectors_with_external_prefixes(
-        routes,
-        &effective_prefixes,
-    )
-    .expect("route manifest violates client context selector rules");
+    validate_openapi_routes_context_selectors_with_external_prefixes(routes, &effective_prefixes)
+        .expect("route manifest violates client context selector rules");
     let mut paths = Map::new();
     for route in routes {
         paths
