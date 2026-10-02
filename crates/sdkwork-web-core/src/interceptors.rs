@@ -1078,6 +1078,18 @@ fn require_authenticated_context(state: &WebCallState) -> Result<(), WebFramewor
     if state.public_path || is_cors_preflight(state) {
         return Ok(());
     }
+    // Optional-credential routes (DualTokenOrAnonymous) resolve to a public
+    // context when the request carries no credentials at all: the declared
+    // contract authorizes anonymous visitors (policies.rs
+    // `is_optional_credential`) and the domain layer decides whether the
+    // operation needs an identity. Partial-credential requests still require
+    // a resolved principal so malformed credentials never pass anonymously.
+    if state.route_auth == Some(RouteAuth::DualTokenOrAnonymous)
+        && state.auth_mode == WebAuthMode::Public
+        && !state.credentials_present()
+    {
+        return Ok(());
+    }
     if state.principal.is_none() {
         return Err(WebFrameworkError::missing_credentials(
             "protected routes require authenticated credentials",
@@ -1273,4 +1285,49 @@ where
     // fail-closed：安全事件 emit 失败时返回 503 DependencyUnavailable，
     // 而非静默丢弃。SECURITY_SPEC §5.1 / WEB_FRAMEWORK_STANDARD §9。
     runtime.security_event_emitter.emit(event).await
+}
+
+#[cfg(test)]
+mod optional_credential_auth_tests {
+    use super::*;
+    use axum::body::Body;
+
+    fn state_for(method: &str, path: &str) -> WebCallState {
+        let request = Request::builder()
+            .method(method)
+            .uri(path)
+            .body(Body::empty())
+            .expect("request");
+        let mut state = WebCallState::from_request(&request);
+        state.api_surface = WebApiSurface::AppApi;
+        state
+    }
+
+    #[test]
+    fn given_optional_credential_route_without_credentials_when_authenticated_stage_runs_then_anonymous_context_passes() {
+        let mut state = state_for("GET", "/app/v3/api/catalog/items");
+        state.route_auth = Some(RouteAuth::DualTokenOrAnonymous);
+        state.auth_mode = WebAuthMode::Public;
+        state.principal = None;
+        require_authenticated_context(&state).expect("anonymous optional-credential context passes");
+    }
+
+    #[test]
+    fn given_optional_credential_route_with_partial_credentials_when_authenticated_stage_runs_then_request_is_rejected() {
+        let mut state = state_for("GET", "/app/v3/api/catalog/items");
+        state.route_auth = Some(RouteAuth::DualTokenOrAnonymous);
+        state.auth_mode = WebAuthMode::Public;
+        state.principal = None;
+        state.credentials.access_token = Some("access-only".to_owned());
+        assert!(require_authenticated_context(&state).is_err());
+    }
+
+    #[test]
+    fn given_dual_token_route_without_principal_when_authenticated_stage_runs_then_request_is_rejected() {
+        let mut state = state_for("GET", "/app/v3/api/missory/my_profile");
+        state.route_auth = Some(RouteAuth::DualToken);
+        state.auth_mode = WebAuthMode::DualToken;
+        state.principal = None;
+        assert!(require_authenticated_context(&state).is_err());
+    }
 }
