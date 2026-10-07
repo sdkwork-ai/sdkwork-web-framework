@@ -364,10 +364,17 @@ fn path_segments(path: &str) -> Vec<String> {
 }
 
 /// True when the manifest template contains at least one `{param}` segment.
+///
+/// A parameter may fill a whole segment (`{model}`) or only part of one — the
+/// Gemini action suffix travels inside the same segment
+/// (`{model}:generateImages`), so any `{...}` span in a segment counts.
 fn template_has_parameters(manifest_path: &str) -> bool {
-    path_segments(manifest_path)
-        .iter()
-        .any(|segment| segment.starts_with('{') && segment.ends_with('}'))
+    path_segments(manifest_path).iter().any(|segment| {
+        match (segment.find('{'), segment.find('}')) {
+            (Some(start), Some(end)) => end > start + 1,
+            _ => false,
+        }
+    })
 }
 
 /// Matches OpenAPI-style manifest paths (including `{param}` segments) to request paths.
@@ -380,13 +387,38 @@ pub fn route_path_matches(manifest_path: &str, request_path: &str) -> bool {
     template_segments
         .iter()
         .zip(request_segments.iter())
-        .all(|(template, actual)| {
-            if template.starts_with('{') && template.ends_with('}') {
-                !actual.is_empty()
-            } else {
-                template == actual
-            }
-        })
+        .all(|(template, actual)| template_segment_matches(template, actual))
+}
+
+/// Matches one manifest template segment against one request segment.
+///
+/// A full-segment `{param}` matches any non-empty value. A mixed segment — a
+/// literal with exactly one `{param}` span inside it, such as
+/// `{model}:generateImages` — matches when the value carries the same literal
+/// prefix/suffix and leaves the placeholder non-empty. Segments with more than
+/// one placeholder span stay literal: no manifest template uses that shape,
+/// and keeping them literal means the semantics never loosen silently.
+fn template_segment_matches(template: &str, actual: &str) -> bool {
+    if template.starts_with('{') && template.ends_with('}') {
+        return !actual.is_empty();
+    }
+    let Some(brace_start) = template.find('{') else {
+        return template == actual;
+    };
+    let Some(brace_rel) = template[brace_start..].find('}') else {
+        // Unterminated `{`: no manifest template is written this way; treat
+        // the segment as the literal it literally reads as.
+        return template == actual;
+    };
+    let brace_end = brace_start + brace_rel;
+    let prefix = &template[..brace_start];
+    let suffix = &template[brace_end + 1..];
+    if suffix.contains('{') {
+        return template == actual;
+    }
+    actual.len() > prefix.len() + suffix.len()
+        && actual.starts_with(prefix)
+        && actual.ends_with(suffix)
 }
 
 fn http_method_label(method: HttpMethod) -> &'static str {
@@ -543,6 +575,48 @@ mod tests {
         assert!(!route_path_matches(
             "/app/v3/api/oauth/callbacks/{providerCode}",
             "/app/v3/api/oauth/callbacks/github/extra"
+        ));
+    }
+
+    #[test]
+    fn route_path_matches_supports_mixed_literal_and_placeholder_segments() {
+        // Gemini mounts its action suffix inside the model segment:
+        // `{model}:generateImages`. The whole segment must not be treated as a
+        // literal, and the action suffix must actually be required.
+        assert!(route_path_matches(
+            "/google/v1beta/models/{model}:generateImages",
+            "/google/v1beta/models/gemini-3-pro-image:generateImages"
+        ));
+        assert!(!route_path_matches(
+            "/google/v1beta/models/{model}:generateImages",
+            "/google/v1beta/models/gemini-3-pro-image:generateVideos"
+        ));
+        assert!(!route_path_matches(
+            "/google/v1beta/models/{model}:generateImages",
+            "/google/v1beta/models/:generateImages"
+        ));
+        assert!(route_path_matches(
+            "/google/v1beta/models/{model}:generateContent",
+            "/google/v1beta/models/gemini-2.5-flash:generateContent"
+        ));
+        // A placeholder that fills the entire segment keeps matching any
+        // non-empty value, and multi-placeholder segments stay literal so the
+        // semantics cannot loosen silently.
+        assert!(route_path_matches(
+            "/v1/models/{model}",
+            "/v1/models/gpt-image-2"
+        ));
+        assert!(!route_path_matches(
+            "/v1/models/{model}",
+            "/v1/models/"
+        ));
+        // Pre-existing full-placeholder semantics: a segment that both starts
+        // with `{` and ends with `}` matches any non-empty value, even when
+        // inner placeholder spans exist. Preserved verbatim so this fix stays
+        // strictly additive.
+        assert!(route_path_matches(
+            "/literal/{a}x{b}",
+            "/literal/1x2"
         ));
     }
 
