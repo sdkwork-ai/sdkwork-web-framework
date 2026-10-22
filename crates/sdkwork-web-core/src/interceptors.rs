@@ -1304,16 +1304,19 @@ mod optional_credential_auth_tests {
     }
 
     #[test]
-    fn given_optional_credential_route_without_credentials_when_authenticated_stage_runs_then_anonymous_context_passes() {
+    fn given_optional_credential_route_without_credentials_when_authenticated_stage_runs_then_anonymous_context_passes(
+    ) {
         let mut state = state_for("GET", "/app/v3/api/catalog/items");
         state.route_auth = Some(RouteAuth::DualTokenOrAnonymous);
         state.auth_mode = WebAuthMode::Public;
         state.principal = None;
-        require_authenticated_context(&state).expect("anonymous optional-credential context passes");
+        require_authenticated_context(&state)
+            .expect("anonymous optional-credential context passes");
     }
 
     #[test]
-    fn given_optional_credential_route_with_partial_credentials_when_authenticated_stage_runs_then_request_is_rejected() {
+    fn given_optional_credential_route_with_partial_credentials_when_authenticated_stage_runs_then_request_is_rejected(
+    ) {
         let mut state = state_for("GET", "/app/v3/api/catalog/items");
         state.route_auth = Some(RouteAuth::DualTokenOrAnonymous);
         state.auth_mode = WebAuthMode::Public;
@@ -1323,7 +1326,8 @@ mod optional_credential_auth_tests {
     }
 
     #[test]
-    fn given_dual_token_route_without_principal_when_authenticated_stage_runs_then_request_is_rejected() {
+    fn given_dual_token_route_without_principal_when_authenticated_stage_runs_then_request_is_rejected(
+    ) {
         let mut state = state_for("GET", "/app/v3/api/missory/my_profile");
         state.route_auth = Some(RouteAuth::DualToken);
         state.auth_mode = WebAuthMode::DualToken;

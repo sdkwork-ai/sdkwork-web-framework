@@ -12,7 +12,9 @@ use crate::policies::{
 use crate::request_context::WebEnvironment;
 use crate::resolvers::{ResolverProductionProfile, WebRequestParserResolver};
 use crate::security::SecurityPolicy;
-use crate::stores::{ConcurrentAdmissionStore, IdempotencyStore, MemoryConcurrentAdmissionStore, RateLimitStore};
+use crate::stores::{
+    ConcurrentAdmissionStore, IdempotencyStore, MemoryConcurrentAdmissionStore, RateLimitStore,
+};
 use crate::DefaultApiKeyLookupService;
 use crate::{
     AuditEmitter, AuthorizationPolicy, SecurityEventEmitter, TenantIsolationPolicy,
@@ -344,11 +346,11 @@ where
 mod tests {
     use super::*;
     // The forbidden-memory-store assertions reference these types by name.
-    use crate::stores::{MemoryIdempotencyStore, MemoryRateLimitStore};
     use crate::error::WebFrameworkError;
     use crate::policies::{AuditFact, DenyAllAuthorizationPolicy, SecurityEvent};
     use crate::request_context::WebRequestContext;
     use crate::resolvers::DefaultWebRequestContextResolver;
+    use crate::stores::{MemoryIdempotencyStore, MemoryRateLimitStore};
     use async_trait::async_trait;
 
     #[derive(Clone)]

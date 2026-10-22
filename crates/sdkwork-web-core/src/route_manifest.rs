@@ -606,18 +606,12 @@ mod tests {
             "/v1/models/{model}",
             "/v1/models/gpt-image-2"
         ));
-        assert!(!route_path_matches(
-            "/v1/models/{model}",
-            "/v1/models/"
-        ));
+        assert!(!route_path_matches("/v1/models/{model}", "/v1/models/"));
         // Pre-existing full-placeholder semantics: a segment that both starts
         // with `{` and ends with `}` matches any non-empty value, even when
         // inner placeholder spans exist. Preserved verbatim so this fix stays
         // strictly additive.
-        assert!(route_path_matches(
-            "/literal/{a}x{b}",
-            "/literal/1x2"
-        ));
+        assert!(route_path_matches("/literal/{a}x{b}", "/literal/1x2"));
     }
 
     #[test]
