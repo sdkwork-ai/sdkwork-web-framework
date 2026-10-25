@@ -17,7 +17,7 @@ Canonical entrypoint: `../sdkwork-specs/README.md`. Do not copy root standards i
 
 ## Application Identity
 
-This repository is a platform framework workspace, not an SDKWork application root. PC demo app identity lives in `apps/sdkwork-web-framework-pc/sdkwork.app.config.json`.
+This repository is a platform framework workspace, not an SDKWork application root. PC demo app identity lives in `apps/sdkwork-web-framework-pc/agent.app.config.json`.
 
 ## Local Dictionary Structure
 
@@ -118,7 +118,7 @@ Architecture guard: no `cargo tree` edges to `sdkwork-appbase`, `sdkwork-iam-*`,
 **All image build, package, deploy, rollback, log, backup, and config operations MUST go through
 the `bin/` entrypoints.** Never invoke `docker build`, `docker compose`, `cargo build --release`,
 or hand-edit a deployed bundle directly — the entrypoints resolve the image tag from
-`sdkwork.app.config.json` → `release.currentVersion`, bridge Windows→WSL automatically
+`agent.app.config.json` → `release.currentVersion`, bridge Windows→WSL automatically
 (`sdkwork_local_run`), pass the full registry reference required by `DOCKER_SPEC.md` §2.1, and
 append audit evidence to `target/bin-evidence/evidence.log`. Raw `docker`/`cargo` calls bypass
 version pinning, WSL bridging, and the evidence trap.
@@ -129,7 +129,7 @@ Full reference: [`bin/README.md`](bin/README.md). Entrypoint contract:
 ### Release workflow (build → deploy → verify)
 
 ```sh
-# 0. Bump release.currentVersion in sdkwork.app.config.json FIRST (tag source of truth).
+# 0. Bump release.currentVersion in agent.app.config.json FIRST (tag source of truth).
 # 1. Build the container image (runs in WSL where required).
 bin/docker-image.sh build --image-tag <version>
 # 2. Deploy per environment (production mutations require --yes).

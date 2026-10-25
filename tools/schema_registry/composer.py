@@ -454,7 +454,7 @@ def _infer_app_root(registry_path: Path) -> Path:
     for candidate in [resolved.parent, *resolved.parents]:
         if (candidate / "database" / "database.manifest.json").is_file():
             return candidate
-        if (candidate / "sdkwork.app.config.json").is_file():
+        if (candidate / "agent.app.config.json").is_file():
             return candidate
     return resolved.parent.parent.parent
 

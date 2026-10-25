@@ -3,7 +3,7 @@
 Environments: `development|test|staging|demo|production`. Commands run on the
 local WSL host by default; append `--host ssh://[user@]host[:port]` for remote
 targets. Image reference: `registry.sdkwork.com/apps/sdkwork-web-framework-standalone:0.1.0`
-(tag from `sdkwork.app.config.json` → `release.currentVersion`).
+(tag from `agent.app.config.json` → `release.currentVersion`).
 
 > ℹ️ **Module shape**: this is an assembly-only module (it ships assembly crates but no standalone server binary),
 > so the image build hook is marked not-applicable and fails closed; wire it per MODULE_BIN_SPEC.md §4.1 if a standalone

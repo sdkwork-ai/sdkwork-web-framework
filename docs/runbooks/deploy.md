@@ -1,6 +1,6 @@
 # Runbook — sdkwork-web-framework 部署 / 升级 / 回滚（中文）
 
-适用环境：`development|test|staging|demo|production`。所有命令默认在本机 WSL 执行，远程主机加 `--host ssh://[user@]host[:port]`。镜像参考：`registry.sdkwork.com/apps/sdkwork-web-framework-standalone:0.1.0`（tag 取自 `sdkwork.app.config.json` → `release.currentVersion`）。
+适用环境：`development|test|staging|demo|production`。所有命令默认在本机 WSL 执行，远程主机加 `--host ssh://[user@]host[:port]`。镜像参考：`registry.sdkwork.com/apps/sdkwork-web-framework-standalone:0.1.0`（tag 取自 `agent.app.config.json` → `release.currentVersion`）。
 
 > ℹ️ **模块形态**：本模块为 assembly-only（仅提供装配层 crate，不产出 standalone 服务端二进制），
 > 因此镜像构建钩子按“不适用”标注并 fail-closed；若后续落地 standalone gateway 二进制，再按 MODULE_BIN_SPEC.md §4.1 接线。

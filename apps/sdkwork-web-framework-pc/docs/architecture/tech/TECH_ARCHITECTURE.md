@@ -120,7 +120,7 @@ apps/sdkwork-web-framework-pc/
 ├── docs/                              # PRD, TECH_ARCHITECTURE, runbooks
 ├── playwright.config.ts               # Smoke e2e (port 4175)
 ├── playwright.integration.config.ts   # Integration e2e (port 4176, live backend)
-└── sdkwork.app.config.json            # App identity + env bindings
+└── agent.app.config.json            # App identity + env bindings
 ```
 
 ## 5. API, SDK, And Data Ownership
