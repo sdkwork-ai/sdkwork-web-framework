@@ -11,7 +11,7 @@
 ## Packaging
 
 - CI verification: `.github/workflows/verify.yml`
-- Release packaging contract: `sdkwork.workflow.json` (delegates to `sdkwork-github-workflow` on tag/release)
+- Release packaging contract: `agent.workflow.json` (delegates to `sdkwork-github-workflow` on tag/release)
 - Deployment profiles (`standalone` / `cloud`) follow `../sdkwork-specs/DEPLOYMENT_SPEC.md`
 
 ## Production assembly checklist

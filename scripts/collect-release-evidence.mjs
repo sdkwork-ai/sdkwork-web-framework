@@ -92,7 +92,7 @@ const bundle = {
     adoptionTemplate: "specs/production-adoption.evidence.template.json",
     frameworkPathfinderAdoptions: "specs/framework-adoption.evidence.json",
     adminServerBinary: "target/release/sdkwork-web-admin-server",
-    workflowManifest: "sdkwork.workflow.json",
+    workflowManifest: "agent.workflow.json",
   },
   benchmark: {
     command:
