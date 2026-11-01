@@ -27,13 +27,7 @@ target-alt/
 .env.*
 !.env.example
 !.env.*.example
-.env.local
-.env.development.local
-.env.test.local
-.env.staging.local
-.env.production.local
 config/host/postgres.env
-.env.release.local
 
 # Local tooling and workspace state
 .mimocode/
