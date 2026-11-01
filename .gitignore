@@ -32,7 +32,7 @@ target-alt/
 .env.test.local
 .env.staging.local
 .env.production.local
-.env.postgres
+config/host/postgres.env
 .env.release.local
 
 # Local tooling and workspace state
@@ -54,7 +54,7 @@ tools/.gateway-alignment-report.json
 # Cargo local cache
 .cargo/
 **/.cargo/
-!.env.postgres.example
+!config/host/postgres.env.example
 coverage/
 .DS_Store
 Thumbs.db
