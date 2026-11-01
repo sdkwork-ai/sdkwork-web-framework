@@ -117,14 +117,21 @@ impl HttpRouteManifest {
             let surface = classify_api_surface(route.path, profile);
             match surface {
                 WebApiSurface::AppApi => {
-                    if route.auth.is_anonymous() || route.auth == RouteAuth::RefreshToken {
+                    // Optional-credential routes (`dual-token-or-anonymous`)
+                    // are an app-api-only profile by construction: signed-in
+                    // callers carry the Access-Token pair, anonymous visitors
+                    // resolve a public context for catalog browsing.
+                    if route.auth.is_anonymous()
+                        || route.auth == RouteAuth::RefreshToken
+                        || route.auth.is_optional_credential()
+                    {
                         continue;
                     }
                     if !route.auth.requires_dual_token_headers()
                         && !route.auth.requires_access_token_only()
                     {
                         return Err(format!(
-                            "app-api route {} {} must declare RouteAuth::Public, RouteAuth::RefreshToken, or an Access-Token-bearing auth profile: RouteAuth::DualToken or RouteAuth::CredentialEntryBootstrap (found {})",
+                            "app-api route {} {} must declare RouteAuth::Public, RouteAuth::RefreshToken, RouteAuth::DualTokenOrAnonymous, or an Access-Token-bearing auth profile: RouteAuth::DualToken or RouteAuth::CredentialEntryBootstrap (found {})",
                             http_method_label(route.method),
                             route.path,
                             route_auth_label(route.auth),
@@ -700,6 +707,12 @@ mod tests {
                 "Auth",
                 "sessions.create",
             ),
+            HttpRoute::dual_token_or_anonymous(
+                HttpMethod::Get,
+                "/app/v3/api/ai/routing/account_groups",
+                "ai",
+                "routing.accountGroups.list",
+            ),
             HttpRoute::dual_token(
                 HttpMethod::Get,
                 "/backend/v3/api/iam/users",
@@ -710,7 +723,9 @@ mod tests {
         let manifest = HttpRouteManifest::new(ROUTES);
         manifest
             .validate_route_auth_for_surfaces(&WebRequestContextProfile::default())
-            .expect("app-api public, access-token-only, and dual-token routes are valid");
+            .expect(
+                "app-api public, access-token-only, dual-token, and optional-credential routes are valid",
+            );
     }
 
     #[test]
