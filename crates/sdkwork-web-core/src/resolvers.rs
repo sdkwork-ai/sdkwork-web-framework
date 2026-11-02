@@ -203,7 +203,9 @@ where
         let record = self.api_key_lookup.lookup_api_key(&credential).await?;
         Ok(WebRequestPrincipal::builder()
             .tenant_id(record.tenant_id)
-            .organization_id(record.organization_id)
+            .organization_id(Some(normalize_record_organization_id(
+                record.organization_id,
+            )))
             .user_id(record.user_id)
             .app_id(record.app_id)
             .environment(record.environment)
@@ -440,7 +442,9 @@ where
             .await?;
         Ok(WebRequestPrincipal::builder()
             .tenant_id(record.tenant_id)
-            .organization_id(record.organization_id)
+            .organization_id(Some(normalize_record_organization_id(
+                record.organization_id,
+            )))
             .user_id(record.user_id)
             .app_id(record.app_id)
             .environment(record.environment)
@@ -868,6 +872,17 @@ where
         VerifyingOAuthBearerParser::new(verifier),
         oauth_token_lookup,
     )
+}
+
+fn normalize_record_organization_id(value: Option<String>) -> String {
+    let trimmed = value.unwrap_or_default();
+    let trimmed = trimmed.trim();
+    if trimmed.is_empty() || trimmed == "0" {
+        // The platform sentinel for tenant-level scope; never an absent scope.
+        "0".to_owned()
+    } else {
+        trimmed.to_owned()
+    }
 }
 
 fn require_optional_match(
