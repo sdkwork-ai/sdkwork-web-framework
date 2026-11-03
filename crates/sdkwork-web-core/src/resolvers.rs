@@ -8,7 +8,8 @@ use crate::parsers::{
     DefaultOAuthBearerParser, OAuthBearerCredential, OAuthBearerParser,
 };
 use crate::request_context::{
-    WebAuthLevel, WebDeploymentMode, WebEnvironment, WebRequestPrincipal, WebSubjectType,
+    normalize_organization_scope, WebAuthLevel, WebDeploymentMode, WebEnvironment, WebLoginScope,
+    WebRequestPrincipal, WebSubjectType,
 };
 use async_trait::async_trait;
 use std::collections::BTreeMap;
@@ -238,11 +239,6 @@ where
             Some(access.tenant_id.as_str()),
         )?;
         require_optional_match(
-            "organization_id",
-            auth.organization_id.as_deref(),
-            access.organization_id.as_deref(),
-        )?;
-        require_optional_match(
             "user_id",
             Some(auth.user_id.as_str()),
             access.user_id.as_deref(),
@@ -262,10 +258,28 @@ where
             auth.subject_type.as_deref(),
             access.subject_type.as_deref(),
         )?;
-        if auth.login_scope != access.login_scope
-            && auth.organization_id.is_some() == access.organization_id.is_some()
-        {
-            return Err(WebFrameworkError::forbidden(
+        // `API_SPEC.md` §10.2: the auth token is authoritative for overlapping
+        // tenancy claims, and `access_token` MUST be rejected when an overlapping
+        // claim contradicts it *after normalization*. A tenant-level token's
+        // organization scope is the sentinel `0` whether the claim is absent or
+        // literally `"0"`, so a claim-presence comparison would let
+        // `organization_id: "0"` (auth) and `organization_id: "123"` (access)
+        // through. Compare the resolved scopes, not the raw options.
+        let auth_organization_scope = normalize_organization_scope(auth.organization_id.as_deref());
+        let access_organization_scope =
+            normalize_organization_scope(access.organization_id.as_deref());
+        if auth_organization_scope != access_organization_scope {
+            return Err(WebFrameworkError::invalid_credentials(
+                "auth token and access token organization_scope contexts do not match",
+            ));
+        }
+        // Both tokens were parsed with the same consistency rule
+        // (`login_scope` TENANT ⇔ organization scope `0`), so a residual
+        // disagreement can only come from a contradictory pair. Fail closed with
+        // the malformed-claims code required by `API_SPEC.md` §10.4.
+        let login_scope = WebLoginScope::from_organization_id(Some(&auth_organization_scope));
+        if auth.login_scope != login_scope || access.login_scope != login_scope {
+            return Err(WebFrameworkError::invalid_credentials(
                 "auth token and access token login_scope contexts do not match",
             ));
         }
@@ -274,15 +288,11 @@ where
             .tenant_id
             .clone()
             .unwrap_or_else(|| access.tenant_id.clone());
-        let (organization_id, login_scope) = match auth.organization_id.clone() {
-            Some(organization_id) => (Some(organization_id), auth.login_scope),
-            None => (access.organization_id.clone(), access.login_scope),
-        };
 
         Ok(WebRequestPrincipal::builder()
             .tenant_id(tenant_id)
             .login_scope(login_scope)
-            .organization_id(organization_id)
+            .organization_id(Some(auth_organization_scope))
             .user_id(auth.user_id)
             .session_id(auth.session_id.or(access.session_id))
             .app_id(access.app_id)
@@ -875,14 +885,10 @@ where
 }
 
 fn normalize_record_organization_id(value: Option<String>) -> String {
-    let trimmed = value.unwrap_or_default();
-    let trimmed = trimmed.trim();
-    if trimmed.is_empty() || trimmed == "0" {
-        // The platform sentinel for tenant-level scope; never an absent scope.
-        "0".to_owned()
-    } else {
-        trimmed.to_owned()
-    }
+    // Credential records carry no `login_scope` (`IAM_SPEC.md` §5.3.1): the
+    // scope is classified from `organization_id` alone, and the sentinel `0` is
+    // the tenant-level representation — never an absent scope.
+    normalize_organization_scope(value.as_deref())
 }
 
 fn require_optional_match(
@@ -891,9 +897,13 @@ fn require_optional_match(
     right: Option<&str>,
 ) -> Result<(), WebFrameworkError> {
     match (left, right) {
-        (Some(left), Some(right)) if left != right => Err(WebFrameworkError::forbidden(format!(
-            "auth token and access token {claim_name} contexts do not match"
-        ))),
+        // A contradictory overlapping claim is a malformed credential pair, not
+        // an authorization shortfall: `API_SPEC.md` §10.4 maps it to `40103`, and
+        // `WebFrameworkErrorKind::InvalidCredentials` is the mapping that yields
+        // that code. Returning `Forbidden` here produced `40301`.
+        (Some(left), Some(right)) if left != right => Err(WebFrameworkError::invalid_credentials(
+            format!("auth token and access token {claim_name} contexts do not match"),
+        )),
         _ => Ok(()),
     }
 }
@@ -902,7 +912,9 @@ fn principal_from_access_token_claims(access: AccessTokenClaims) -> WebRequestPr
     WebRequestPrincipal::builder()
         .tenant_id(access.tenant_id)
         .login_scope(access.login_scope)
-        .organization_id(access.organization_id)
+        .organization_id(Some(normalize_organization_scope(
+            access.organization_id.as_deref(),
+        )))
         .user_id(access.user_id.unwrap_or_default())
         .session_id(access.session_id)
         .app_id(access.app_id)

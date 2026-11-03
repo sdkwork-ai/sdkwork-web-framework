@@ -107,12 +107,52 @@ pub struct WebOperationBinding {
     pub idempotent: bool,
 }
 
+/// Platform sentinel for a tenant-level organization scope (`API_SPEC.md` §10.4,
+/// `DATABASE_SPEC.md` §6.10). Tenant-level access tokens resolve to this value;
+/// the scope is never absent and never `NULL`.
+pub const TENANT_LEVEL_ORGANIZATION_ID: &str = "0";
+
+/// Normalizes a resolved organization scope to its single runtime representation.
+///
+/// `API_SPEC.md` §10.2/§10.4 require `WebRequestContext.tenancy.organization_id`
+/// to be the access-token scope: the sentinel `0` for a tenant-level token and
+/// the extracted organization id for an organization-level token. An absent
+/// scope, a blank value, and `"0"` therefore all resolve to the sentinel, so no
+/// downstream query, cache key, audit row, or seed has to interpret `None`.
+pub fn normalize_organization_scope(value: Option<&str>) -> String {
+    match value.map(str::trim) {
+        Some(value) if !value.is_empty() && value != TENANT_LEVEL_ORGANIZATION_ID => {
+            value.to_owned()
+        }
+        _ => TENANT_LEVEL_ORGANIZATION_ID.to_owned(),
+    }
+}
+
+/// True when the resolved scope is the tenant-level sentinel `0`.
+pub fn is_tenant_level_organization_scope(value: &str) -> bool {
+    value.trim() == TENANT_LEVEL_ORGANIZATION_ID
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WebTenancyContext {
     pub tenant_id: String,
+    /// Always the resolved scope: `"0"` for tenant-level, otherwise the
+    /// organization id from the verified access token or credential record.
     pub organization_id: Option<String>,
     pub login_scope: WebLoginScope,
+}
+
+impl WebTenancyContext {
+    /// The resolved organization scope with the sentinel applied.
+    pub fn organization_scope(&self) -> String {
+        normalize_organization_scope(self.organization_id.as_deref())
+    }
+
+    /// True when this context is tenant-level (organization scope `0`).
+    pub fn is_tenant_level(&self) -> bool {
+        is_tenant_level_organization_scope(&self.organization_scope())
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -278,6 +318,19 @@ impl WebRequestPrincipal {
         self.tenancy.organization_id.as_deref()
     }
 
+    /// The resolved organization scope, with the tenant-level sentinel applied.
+    ///
+    /// Prefer this accessor in SQL binding, cache/audit keys, and database
+    /// initialization: it returns `"0"` for a tenant-level principal instead of
+    /// an absent value (`API_SPEC.md` §10.4).
+    pub fn organization_scope(&self) -> String {
+        self.tenancy.organization_scope()
+    }
+
+    pub fn is_tenant_level(&self) -> bool {
+        self.tenancy.is_tenant_level()
+    }
+
     pub fn login_scope(&self) -> WebLoginScope {
         self.tenancy.login_scope.clone()
     }
@@ -399,14 +452,19 @@ impl WebRequestPrincipalBuilder {
     }
 
     pub fn build(self) -> WebRequestPrincipal {
-        let organization_id = self.organization_id;
+        // The resolved organization scope has exactly one representation at the
+        // boundary: the sentinel `0` for tenant-level, else the claim/record
+        // value. `API_SPEC.md` §10.2 requires the projection to carry that value
+        // rather than an absent scope, so a `None` from any construction path is
+        // normalized here instead of being interpreted by every consumer.
+        let organization_id = normalize_organization_scope(self.organization_id.as_deref());
         let login_scope = self
             .login_scope
-            .unwrap_or_else(|| WebLoginScope::from_organization_id(organization_id.as_deref()));
+            .unwrap_or_else(|| WebLoginScope::from_organization_id(Some(&organization_id)));
         WebRequestPrincipal {
             tenancy: WebTenancyContext {
                 tenant_id: self.tenant_id.unwrap_or_default(),
-                organization_id,
+                organization_id: Some(organization_id),
                 login_scope,
             },
             app: WebAppContext {
@@ -453,6 +511,20 @@ impl WebRequestContext {
         self.principal
             .as_ref()
             .map(WebRequestPrincipal::login_scope)
+    }
+
+    /// Resolved organization scope for the authenticated principal
+    /// (`"0"` when tenant-level). `None` only when there is no principal.
+    pub fn organization_scope(&self) -> Option<String> {
+        self.principal
+            .as_ref()
+            .map(WebRequestPrincipal::organization_scope)
+    }
+
+    pub fn is_tenant_level(&self) -> bool {
+        self.principal
+            .as_ref()
+            .is_some_and(WebRequestPrincipal::is_tenant_level)
     }
 
     pub fn app_id(&self) -> Option<&str> {

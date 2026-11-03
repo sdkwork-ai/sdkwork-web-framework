@@ -231,11 +231,17 @@ async fn default_dual_token_resolver_rejects_mismatched_tenant() {
         .await
         .expect_err("mismatch");
 
-    assert_eq!(WebFrameworkErrorKind::Forbidden, error.kind);
+    // `API_SPEC.md` §10.4: contradictory claims between the two credentials are a
+    // malformed credential pair (`40103`), not an authorization shortfall.
+    assert_eq!(WebFrameworkErrorKind::InvalidCredentials, error.kind);
 }
 
 #[tokio::test]
-async fn default_dual_token_resolver_prefers_auth_tenant_and_organization_context() {
+async fn default_dual_token_resolver_rejects_organization_scope_contradiction() {
+    // The auth token says organization-level, the access token is tenant-level.
+    // `API_SPEC.md` §10.2 requires the access-token value to win only when it
+    // agrees after normalization; a contradiction MUST be rejected (40103) so a
+    // tenant-level access token can never be escalated by an auth-token claim.
     let resolver = DefaultWebRequestContextResolver::default();
     let auth_token = encode_unsigned_test_jwt(serde_json::json!({
         "token_type": "auth",
@@ -249,22 +255,58 @@ async fn default_dual_token_resolver_prefers_auth_tenant_and_organization_contex
     }));
     let access_token = access_token_jwt("100001", "1", "session-1", "appbase");
 
-    let principal = resolver
+    let error = resolver
         .resolve_dual_token(&auth_token, &access_token)
         .await
-        .expect("auth token context should fill access token omissions");
+        .expect_err("organization scope contradiction");
 
-    assert_eq!("100001", principal.tenant_id());
-    assert_eq!(Some("200001"), principal.organization_id());
-    assert_eq!(WebLoginScope::Organization, principal.login_scope());
+    assert_eq!(WebFrameworkErrorKind::InvalidCredentials, error.kind);
+    assert_eq!(40103, error.result_code());
 }
 
 #[tokio::test]
-async fn default_dual_token_resolver_falls_back_to_access_tenancy_context() {
+async fn default_dual_token_resolver_rejects_sentinel_claim_against_non_zero_scope() {
+    // `organization_id: "0"` and an absent claim both resolve to the sentinel,
+    // so a non-zero access-token scope still contradicts the auth token.
     let resolver = DefaultWebRequestContextResolver::default();
     let auth_token = encode_unsigned_test_jwt(serde_json::json!({
         "token_type": "auth",
+        "tenant_id": "100001",
+        "organization_id": "0",
         "login_scope": "TENANT",
+        "user_id": "1",
+        "session_id": "session-1",
+        "app_id": "appbase",
+        "auth_level": "password"
+    }));
+    let access_token = encode_unsigned_test_jwt(serde_json::json!({
+        "token_type": "access",
+        "tenant_id": "100001",
+        "organization_id": "200001",
+        "login_scope": "ORGANIZATION",
+        "user_id": "1",
+        "session_id": "session-1",
+        "app_id": "appbase",
+        "environment": "prod",
+        "deployment_mode": "saas"
+    }));
+
+    let error = resolver
+        .resolve_dual_token(&auth_token, &access_token)
+        .await
+        .expect_err("sentinel vs non-zero scope");
+
+    assert_eq!(WebFrameworkErrorKind::InvalidCredentials, error.kind);
+}
+
+#[tokio::test]
+async fn default_dual_token_resolver_accepts_matching_organization_scope() {
+    let resolver = DefaultWebRequestContextResolver::default();
+    let auth_token = encode_unsigned_test_jwt(serde_json::json!({
+        "token_type": "auth",
+        "tenant_id": "100001",
+        "organization_id": "200001",
+        "login_scope": "ORGANIZATION",
         "user_id": "1",
         "session_id": "session-1",
         "app_id": "appbase",
@@ -285,11 +327,28 @@ async fn default_dual_token_resolver_falls_back_to_access_tenancy_context() {
     let principal = resolver
         .resolve_dual_token(&auth_token, &access_token)
         .await
-        .expect("access token context should fill auth token omissions");
+        .expect("matching organization scope");
 
-    assert_eq!("100001", principal.tenant_id());
     assert_eq!(Some("200001"), principal.organization_id());
     assert_eq!(WebLoginScope::Organization, principal.login_scope());
+}
+
+#[tokio::test]
+async fn default_dual_token_resolver_projects_tenant_level_scope_as_sentinel() {
+    let resolver = DefaultWebRequestContextResolver::default();
+    let principal = resolver
+        .resolve_dual_token(
+            &auth_token_jwt("100001", "1", "session-1", "appbase"),
+            &access_token_jwt("100001", "1", "session-1", "appbase"),
+        )
+        .await
+        .expect("tenant-level dual token");
+
+    // A tenant-level token resolves to the sentinel, never to an absent scope.
+    assert_eq!(Some("0"), principal.organization_id());
+    assert_eq!("0", principal.organization_scope());
+    assert!(principal.is_tenant_level());
+    assert_eq!(WebLoginScope::Tenant, principal.login_scope());
 }
 
 #[tokio::test]
