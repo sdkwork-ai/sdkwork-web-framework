@@ -8,7 +8,14 @@
     "officialWebsiteUrl": "https://sdkwork.com/apps/app-0tw41m",
     "appType": "APP_HTML"
   },
-  "backend": {},
+  "backend": {
+    "appId": "app-0tw41m",
+    "tenantId": "100001",
+    "organizationId": "0",
+    "accessTokenPermissionScope": [
+      "iam:self"
+    ]
+  },
   "runtime": {
     "framework": "vite-react",
     "supportedDeploymentProfiles": [
