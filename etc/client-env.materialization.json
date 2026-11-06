@@ -20,8 +20,14 @@
   },
   "profiles": [
     "standalone.development",
+    "standalone.test",
+    "standalone.staging",
+    "standalone.demo",
     "standalone.production",
     "cloud.development",
+    "cloud.test",
+    "cloud.staging",
+    "cloud.demo",
     "cloud.production"
   ],
   "surfaces": [

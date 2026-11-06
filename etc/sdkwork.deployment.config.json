@@ -32,6 +32,24 @@
     },
     "cloud.production": {
       "config": "topology/cloud.production.env"
+    },
+    "standalone.test": {
+      "config": "topology/standalone.test.env"
+    },
+    "standalone.staging": {
+      "config": "topology/standalone.staging.env"
+    },
+    "standalone.demo": {
+      "config": "topology/standalone.demo.env"
+    },
+    "cloud.test": {
+      "config": "topology/cloud.test.env"
+    },
+    "cloud.staging": {
+      "config": "topology/cloud.staging.env"
+    },
+    "cloud.demo": {
+      "config": "topology/cloud.demo.env"
     }
   }
 }

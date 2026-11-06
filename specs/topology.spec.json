@@ -20,7 +20,10 @@
     "environment": {
       "allowed": [
         "development",
-        "production"
+        "production",
+        "test",
+        "staging",
+        "demo"
       ]
     }
   },
