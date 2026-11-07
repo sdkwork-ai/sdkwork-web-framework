@@ -205,7 +205,6 @@ impl MemoryIdempotencyStore {
             if entries.remove(&key).is_some() {
                 cached_bytes = cached_bytes.saturating_sub(payload_bytes);
             }
-            overflow = false;
         }
     }
 
