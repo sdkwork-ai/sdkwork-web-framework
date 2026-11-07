@@ -189,7 +189,7 @@ impl MemoryIdempotencyStore {
             .values()
             .map(|entry| entry.payload_bytes as u64)
             .sum();
-        let mut overflow = entries.len() > max_entries || cached_bytes > max_bytes;
+        let overflow = entries.len() > max_entries || cached_bytes > max_bytes;
         if !overflow {
             return;
         }
