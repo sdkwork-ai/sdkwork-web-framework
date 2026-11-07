@@ -30,6 +30,7 @@ pub mod rate_limit_policy;
 pub mod redact;
 pub mod registered_client_origins;
 pub mod registered_console_hosts;
+pub mod registered_subdomain_hosts;
 pub mod request_context;
 pub mod request_identity;
 pub mod resolvers;

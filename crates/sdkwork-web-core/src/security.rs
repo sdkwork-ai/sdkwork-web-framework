@@ -179,8 +179,32 @@ impl Default for CorsPolicy {
                 "x-platform".to_owned(),
                 "traceparent".to_owned(),
                 "tracestate".to_owned(),
+                // Standard HTTP conditional-request headers (RFC 9110 §13).
+                // Browser SDKs implement optimistic concurrency
+                // (`If-Match` / `If-None-Match`) and cache revalidation
+                // (`If-Modified-Since` / `If-Unmodified-Since`) directly against
+                // the documented `ETag` / `Last-Modified` response headers.
+                // Leaving them out of the preflight allowlist rejects every such
+                // write with "Request header field if-match is not allowed by
+                // Access-Control-Allow-Headers", even though the API declares
+                // the header as a required parameter.
+                "if-match".to_owned(),
+                "if-none-match".to_owned(),
+                "if-modified-since".to_owned(),
+                "if-unmodified-since".to_owned(),
             ],
-            expose_headers: vec!["x-request-id".to_owned(), "x-sdkwork-trace-id".to_owned()],
+            expose_headers: vec![
+                "x-request-id".to_owned(),
+                "x-sdkwork-trace-id".to_owned(),
+                // Conditional and resource-location response headers are not
+                // CORS-safelisted, so a browser client cannot read them unless
+                // they are exposed. Without `ETag` an optimistic-concurrency
+                // client can never obtain the value it must echo in `If-Match`.
+                "etag".to_owned(),
+                "last-modified".to_owned(),
+                "location".to_owned(),
+                "retry-after".to_owned(),
+            ],
             allow_credentials: true,
         }
     }
@@ -1463,12 +1487,34 @@ mod tests {
         let mut response = Response::new(Body::empty());
         policy.apply_headers_from_origin(Some("app://dsh"), &mut response);
         assert_eq!(
-            Some("x-request-id, x-sdkwork-trace-id"),
+            Some("x-request-id, x-sdkwork-trace-id, etag, last-modified, location, retry-after"),
             response
                 .headers()
                 .get("access-control-expose-headers")
                 .and_then(|value| value.to_str().ok()),
         );
+    }
+
+    #[test]
+    fn default_policy_allows_conditional_request_headers() {
+        // Optimistic concurrency (`If-Match` / `If-None-Match`) and cache
+        // revalidation (`If-Modified-Since` / `If-Unmodified-Since`) are standard
+        // HTTP semantics: a browser SDK that sends them must not fail preflight.
+        let policy = CorsPolicy::default();
+        for header in [
+            "if-match",
+            "if-none-match",
+            "if-modified-since",
+            "if-unmodified-since",
+        ] {
+            assert!(
+                policy
+                    .allowed_headers
+                    .iter()
+                    .any(|allowed| allowed.eq_ignore_ascii_case(header)),
+                "{header} must be in the default preflight header allow-list"
+            );
+        }
     }
 
     #[test]

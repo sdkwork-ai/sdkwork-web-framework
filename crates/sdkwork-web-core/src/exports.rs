@@ -131,6 +131,11 @@ pub use crate::registered_console_hosts::{
     SHARED_CORS_CONSOLE_HOST_LABELS_ENV_KEY, SHARED_CORS_CONSOLE_HOST_SCHEMES_ENV_KEY,
     SHARED_CORS_CONSOLE_HOST_SUFFIX_ENV_KEY,
 };
+pub use crate::registered_subdomain_hosts::{
+    registered_subdomain_hosts_from_env, registered_subdomain_hosts_from_lookup,
+    RegisteredSubdomainHosts, SHARED_CORS_SUBDOMAIN_BASE_DOMAINS_ENV_KEY,
+    SHARED_CORS_SUBDOMAIN_SCHEMES_ENV_KEY,
+};
 pub use crate::request_context::{
     AppRequestApiSurface, AppRequestAuthLevel, AppRequestAuthMode, AppRequestContext,
     AppRequestContextProfile, AppRequestDeploymentMode, AppRequestEnvironment,
