@@ -446,7 +446,15 @@ where
                 }
             }
             StandardWebCallInterceptorKind::TenantIsolation => {
-                if !state.public_path && !is_cors_preflight(state) {
+                // Optional-credential routes admit anonymous visitors by
+                // contract: there is no principal to isolate, and the domain
+                // layer resolves the public scope on its own (the catalog
+                // services fall back to the platform's public tenant).
+                // Signed-in requests on the same route keep every isolation
+                // check below.
+                let anonymous_optional = state.route_auth == Some(RouteAuth::DualTokenOrAnonymous)
+                    && state.principal.is_none();
+                if !state.public_path && !anonymous_optional && !is_cors_preflight(state) {
                     let ctx = state.to_context()?;
                     if let Some(manifest) = runtime.route_manifest.as_ref() {
                         if let Some(route) = manifest.match_route(&state.method, &state.path) {
@@ -1079,14 +1087,17 @@ fn require_authenticated_context(state: &WebCallState) -> Result<(), WebFramewor
         return Ok(());
     }
     // Optional-credential routes (DualTokenOrAnonymous) resolve to a public
-    // context when the request carries no credentials at all: the declared
+    // context when the request carries no user Authorization: the declared
     // contract authorizes anonymous visitors (policies.rs
     // `is_optional_credential`) and the domain layer decides whether the
-    // operation needs an identity. Partial-credential requests still require
-    // a resolved principal so malformed credentials never pass anonymously.
+    // operation needs an identity. App-api clients send the application
+    // Access-Token on every request — it is the anonymous tier's tenant
+    // credential — so an application-scoped request passes here too. A user
+    // Authorization without the Access-Token it must be paired with is
+    // malformed and still requires a resolved principal.
     if state.route_auth == Some(RouteAuth::DualTokenOrAnonymous)
         && state.auth_mode == WebAuthMode::Public
-        && !state.credentials_present()
+        && state.credentials.auth_token.is_none()
     {
         return Ok(());
     }
@@ -1315,13 +1326,25 @@ mod optional_credential_auth_tests {
     }
 
     #[test]
-    fn given_optional_credential_route_with_partial_credentials_when_authenticated_stage_runs_then_request_is_rejected(
+    fn given_optional_credential_route_with_application_credentials_when_authenticated_stage_runs_then_anonymous_context_passes(
     ) {
         let mut state = state_for("GET", "/app/v3/api/catalog/items");
         state.route_auth = Some(RouteAuth::DualTokenOrAnonymous);
         state.auth_mode = WebAuthMode::Public;
         state.principal = None;
-        state.credentials.access_token = Some("access-only".to_owned());
+        state.credentials.access_token = Some("application-only".to_owned());
+        require_authenticated_context(&state)
+            .expect("application-scoped optional-credential context passes as anonymous");
+    }
+
+    #[test]
+    fn given_optional_credential_route_with_user_credentials_only_when_authenticated_stage_runs_then_request_is_rejected(
+    ) {
+        let mut state = state_for("GET", "/app/v3/api/catalog/items");
+        state.route_auth = Some(RouteAuth::DualTokenOrAnonymous);
+        state.auth_mode = WebAuthMode::Public;
+        state.principal = None;
+        state.credentials.auth_token = Some("auth-only".to_owned());
         assert!(require_authenticated_context(&state).is_err());
     }
 

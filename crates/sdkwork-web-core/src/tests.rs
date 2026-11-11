@@ -509,3 +509,18 @@ fn dual_token_routes_still_reject_anonymous_visitors() {
         .expect_err("dual-token routes must still reject anonymous visitors");
     assert_eq!(WebFrameworkErrorKind::MissingCredentials, error.kind);
 }
+
+#[test]
+fn manifest_validation_accepts_optional_credential_app_api_routes() {
+    // A public app-api catalog shelf declares dual-token-or-anonymous; the
+    // framework's manifest validation must accept that profile on app-api.
+    let manifest = HttpRouteManifest::new(&[HttpRoute::dual_token_or_anonymous(
+        HttpMethod::Get,
+        "/app/v3/api/appstore/catalog/templates",
+        "catalog",
+        "appstore.catalog.templates.list",
+    )]);
+    manifest
+        .validate_route_auth_for_surfaces(&WebRequestContextProfile::default())
+        .expect("optional-credential app-api routes are a valid profile");
+}

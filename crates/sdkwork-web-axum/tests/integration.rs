@@ -11,9 +11,10 @@ use sdkwork_web_axum::{
     run_websocket_session, with_web_request_context, WebFrameworkLayer, WebSocketUpgradeLayer,
 };
 use sdkwork_web_core::{
-    CorsPolicy, DefaultWebRequestContextResolver, HttpMethod, HttpRoute, HttpRouteManifest,
-    SecurityPolicy, WebRequestContext, WebRequestContextProfile, WebSocketCallInterceptorChain,
-    WebSocketCallRuntime, WebSocketSession, SDKWORK_TRACE_ID_HEADER,
+    CorsPolicy, DefaultWebRequestContextResolver, EnforcePrincipalTenantIsolationPolicy,
+    HttpMethod, HttpRoute, HttpRouteManifest, SecurityPolicy, WebRequestContext,
+    WebRequestContextProfile, WebSocketCallInterceptorChain, WebSocketCallRuntime,
+    WebSocketSession, SDKWORK_TRACE_ID_HEADER,
 };
 use std::sync::Arc;
 use tower::ServiceExt;
@@ -225,6 +226,104 @@ async fn ordinary_options_request_does_not_bypass_authentication() {
         .expect("response");
 
     assert_eq!(axum::http::StatusCode::UNAUTHORIZED, response.status());
+}
+
+#[tokio::test]
+async fn optional_credential_route_admits_application_credential_anonymous_request() {
+    // App-api clients attach their application Access-Token to every request,
+    // so a signed-out catalog read reaches an optional-credential route with an
+    // application credential and no user Authorization. That is the anonymous
+    // tier, not malformed partial credentials.
+    let manifest = HttpRouteManifest::new(&[HttpRoute::dual_token_or_anonymous(
+        HttpMethod::Get,
+        "/app/v3/api/appstore/catalog/templates",
+        "catalog",
+        "appstore.catalog.templates.list",
+    )]);
+    let layer = WebFrameworkLayer::new(DefaultWebRequestContextResolver::default())
+        .with_route_manifest(manifest);
+    let app = with_web_request_context(
+        Router::new().route(
+            "/app/v3/api/appstore/catalog/templates",
+            get(|| async { "catalog" }),
+        ),
+        layer,
+    );
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/app/v3/api/appstore/catalog/templates")
+                .header("access-token", "application-token")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("response");
+    assert_eq!(
+        axum::http::StatusCode::OK,
+        response.status(),
+        "an application-scoped request must pass an optional-credential route"
+    );
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/app/v3/api/appstore/catalog/templates")
+                .header("authorization", "Bearer user-token")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("response");
+    assert_eq!(
+        axum::http::StatusCode::UNAUTHORIZED,
+        response.status(),
+        "a user Authorization without its Access-Token is malformed"
+    );
+}
+
+#[tokio::test]
+async fn optional_credential_route_skips_principal_tenant_isolation_for_anonymous_requests() {
+    // The production gateway builder always wires
+    // EnforcePrincipalTenantIsolationPolicy; an anonymous optional-credential
+    // catalog read carries no principal to isolate and must still pass.
+    let manifest = HttpRouteManifest::new(&[HttpRoute::dual_token_or_anonymous(
+        HttpMethod::Get,
+        "/app/v3/api/appstore/catalog/templates",
+        "catalog",
+        "appstore.catalog.templates.list",
+    )]);
+    let layer = WebFrameworkLayer::new(DefaultWebRequestContextResolver::default())
+        .with_route_manifest(manifest)
+        .with_tenant_isolation_policy(Arc::new(EnforcePrincipalTenantIsolationPolicy));
+    let app = with_web_request_context(
+        Router::new().route(
+            "/app/v3/api/appstore/catalog/templates",
+            get(|| async { "catalog" }),
+        ),
+        layer,
+    );
+
+    for request in [
+        Request::builder()
+            .uri("/app/v3/api/appstore/catalog/templates")
+            .body(Body::empty())
+            .unwrap(),
+        Request::builder()
+            .uri("/app/v3/api/appstore/catalog/templates")
+            .header("access-token", "application-token")
+            .body(Body::empty())
+            .unwrap(),
+    ] {
+        let response = app.clone().oneshot(request).await.expect("response");
+        assert_eq!(
+            axum::http::StatusCode::OK,
+            response.status(),
+            "an anonymous optional-credential read must pass tenant isolation"
+        );
+    }
 }
 
 #[tokio::test]
