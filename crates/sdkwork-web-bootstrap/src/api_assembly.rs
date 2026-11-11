@@ -21,6 +21,9 @@ use crate::{
 
 const INFRASTRUCTURE_PATHS: &[&str] = &["/healthz", "/livez", "/metrics", "/readyz"];
 
+/// Path of the composed OpenAPI document the host mounts for every API profile.
+const COMPOSED_OPENAPI_PATH: &str = "/openapi.json";
+
 /// Merges a host-owned manifest with dependency manifests using the shared Web Framework contract.
 pub fn merge_route_manifest_mounts(
     owner: &str,
@@ -75,6 +78,16 @@ pub struct ApiAssemblyContribution {
     pub router: Router,
     pub route_manifest: HttpRouteManifest,
     pub openapi: Value,
+    /// Contract documents this owner publishes for API/SDK reference consumers
+    /// (`/openapi/schema-tabs.json`, per-surface OpenAPI documents, and similar
+    /// static contract assets).
+    ///
+    /// Hosts mount these next to the composed `/openapi.json` in
+    /// [`ComposedApiAssembly::into_hosted`] instead of registering them as API
+    /// routes: a reference document is a public static asset, not an operation,
+    /// so it MUST stay reachable without credentials and MUST NOT enter the
+    /// route manifest or the OpenAPI inventory.
+    pub public_documents: Vec<OpenApiMount>,
     pub permission_catalog: Vec<&'static str>,
     pub domain_context_injectors: Vec<Arc<dyn DomainContextInjector>>,
     pub readiness_check: Arc<dyn ReadinessCheck>,
@@ -166,12 +179,66 @@ impl ApiAssemblyContribution {
             router,
             route_manifest,
             openapi,
+            public_documents: Vec::new(),
             permission_catalog,
             domain_context_injectors,
             readiness_check,
         };
         contribution.validate()?;
         Ok(contribution)
+    }
+
+    /// Publishes one contract document at `path` for API/SDK reference
+    /// consumers.
+    ///
+    /// The host mounts contributed public documents outside the Web Framework
+    /// pipeline, next to the composed `/openapi.json`: reference documents are
+    /// static contract assets, so they must be readable without credentials and
+    /// must never be added to the route manifest or the OpenAPI inventory.
+    #[must_use]
+    pub fn with_public_document(mut self, path: &'static str, document: Arc<Value>) -> Self {
+        self.public_documents.push(OpenApiMount { path, document });
+        self
+    }
+
+    /// Rejects public-document paths a host cannot mount safely.
+    fn validate_public_documents(&self) -> Result<(), String> {
+        let mut seen = BTreeSet::new();
+        for document in &self.public_documents {
+            let path = document.path;
+            let normalized = normalize_route_path(path);
+            if !path.starts_with('/') || normalized == "/" {
+                return Err(format!(
+                    "{} public document path {path:?} must be an absolute path",
+                    self.owner
+                ));
+            }
+            if normalized == COMPOSED_OPENAPI_PATH {
+                return Err(format!(
+                    "{} must not publish the host-owned {COMPOSED_OPENAPI_PATH} document",
+                    self.owner
+                ));
+            }
+            if INFRASTRUCTURE_PATHS.contains(&normalized.as_str()) {
+                return Err(format!(
+                    "{} public document {path} collides with an infrastructure route",
+                    self.owner
+                ));
+            }
+            if !document.document.is_object() {
+                return Err(format!(
+                    "{} public document {path} must be a JSON object",
+                    self.owner
+                ));
+            }
+            if !seen.insert(path) {
+                return Err(format!(
+                    "{} publishes public document {path} more than once",
+                    self.owner
+                ));
+            }
+        }
+        Ok(())
     }
 
     /// Atomically merges a same-origin dependency contribution into this host contribution.
@@ -206,6 +273,7 @@ impl ApiAssemblyContribution {
     pub fn validate(&self) -> Result<(), String> {
         validate_owner(self.owner)?;
         validate_manifest(self.owner, &self.route_manifest)?;
+        self.validate_public_documents()?;
 
         let manifest_inventory = route_inventory_from_routes(self.route_manifest.routes());
         let openapi_inventory = route_inventory_from_openapi(&self.openapi)
@@ -501,6 +569,9 @@ pub struct ComposedApiAssembly {
     pub router: Router,
     pub route_manifest: HttpRouteManifest,
     pub openapi: Value,
+    /// Public contract documents contributed by the selected owners, mounted by
+    /// [`Self::into_hosted`] next to the composed OpenAPI document.
+    pub public_documents: Vec<OpenApiMount>,
     pub permission_catalog: Vec<&'static str>,
     pub domain_context_injectors: Vec<Arc<dyn DomainContextInjector>>,
     pub readiness_check: Arc<dyn ReadinessCheck>,
@@ -531,6 +602,7 @@ impl ComposedApiAssembly {
         let mut router = Router::new();
         let mut routes = Vec::new();
         let mut documents = Vec::with_capacity(contributions.len());
+        let mut public_documents = Vec::new();
         let mut permissions = BTreeSet::new();
         let mut domain_context_injectors = Vec::new();
         let mut readiness_checks = Vec::with_capacity(contributions.len());
@@ -547,9 +619,20 @@ impl ComposedApiAssembly {
             router = router.merge(contribution.router);
             routes.extend_from_slice(contribution.route_manifest.routes());
             documents.push((contribution.owner, contribution.openapi));
+            public_documents.extend(contribution.public_documents);
             permissions.extend(contribution.permission_catalog);
             domain_context_injectors.extend(contribution.domain_context_injectors);
             readiness_checks.push(contribution.readiness_check);
+        }
+
+        let mut public_document_paths = BTreeSet::new();
+        for document in &public_documents {
+            if !public_document_paths.insert(document.path) {
+                return Err(format!(
+                    "public document {} is published by more than one API assembly",
+                    document.path
+                ));
+            }
         }
 
         let route_manifest = HttpRouteManifest::from_owned_routes(routes);
@@ -568,6 +651,7 @@ impl ComposedApiAssembly {
             router,
             route_manifest,
             openapi,
+            public_documents,
             permission_catalog: permissions.into_iter().collect(),
             domain_context_injectors,
             readiness_check: Arc::new(CompositeReadinessCheck::new(readiness_checks)),
@@ -584,6 +668,7 @@ impl ComposedApiAssembly {
             router,
             route_manifest,
             openapi,
+            public_documents,
             permission_catalog,
             domain_context_injectors,
             readiness_check,
@@ -599,13 +684,17 @@ impl ComposedApiAssembly {
         let framework = framework.build();
         let router = framework.mount_contract_fallback(router);
         let router = with_web_request_context(router, framework.layer().clone());
-        let router = mount_openapi_json(
-            router,
-            &[OpenApiMount {
-                path: "/openapi.json",
-                document: Arc::new(openapi.clone()),
-            }],
-        );
+        // Contract documents are mounted after the Web Framework layer, exactly
+        // like the composed `/openapi.json`: they are public static assets, and
+        // the framework's credential, CORS, and route-manifest stages must not
+        // treat them as API operations.
+        let mut document_mounts = Vec::with_capacity(1 + public_documents.len());
+        document_mounts.push(OpenApiMount {
+            path: COMPOSED_OPENAPI_PATH,
+            document: Arc::new(openapi.clone()),
+        });
+        document_mounts.extend(public_documents);
+        let router = mount_openapi_json(router, &document_mounts);
         let router = framework.mount_process_routes(router);
 
         HostedApiAssembly {
@@ -1265,7 +1354,11 @@ mod tests {
             Vec::new(),
             Arc::new(crate::AlwaysReady),
         )
-        .expect("valid contribution");
+        .expect("valid contribution")
+        .with_public_document(
+            "/openapi/widgets.json",
+            Arc::new(serde_json::json!({ "openapi": "3.1.2", "paths": {} })),
+        );
         let composed = ComposedApiAssembly::try_compose("SDKWork API", vec![contribution])
             .expect("valid composition");
         let hosted = composed.into_hosted(WebFrameworkBuilder::new(
@@ -1291,6 +1384,33 @@ mod tests {
         assert_eq!(
             document["paths"]["/app/v3/api/widgets"]["get"][OPENAPI_OWNER_EXTENSION],
             "sdkwork-widgets"
+        );
+
+        // A contributed contract document is mounted publicly, next to the
+        // composed OpenAPI document, and never enters the route manifest.
+        let response = hosted
+            .router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/openapi/widgets.json")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body");
+        let public_document: Value = serde_json::from_slice(&body).expect("public document JSON");
+        assert_eq!(public_document["openapi"], "3.1.2");
+        assert!(
+            hosted
+                .route_manifest
+                .match_route("GET", "/openapi/widgets.json")
+                .is_none(),
+            "public contract documents must not enter the route manifest"
         );
 
         for path in ["/healthz", "/livez", "/readyz", "/metrics"] {
@@ -1439,5 +1559,31 @@ mod tests {
             .expect("route collisions must still fail");
         assert!(error.contains("route collision"), "{error}");
         assert!(error.contains("GET /app/v3/api/widgets/{param}"), "{error}");
+    }
+
+    #[test]
+    fn duplicate_public_document_paths_fail_closed() {
+        let document = Arc::new(serde_json::json!({ "openapi": "3.1.2", "paths": {} }));
+        let widgets =
+            widgets_contribution().with_public_document("/openapi/shared.json", document.clone());
+        let gadgets = gadgets_contribution().with_public_document("/openapi/shared.json", document);
+
+        let error = ComposedApiAssembly::try_compose("SDKWork API", vec![widgets, gadgets])
+            .err()
+            .expect("duplicate public document paths must fail");
+        assert!(error.contains("/openapi/shared.json"), "{error}");
+    }
+
+    #[test]
+    fn contribution_must_not_publish_the_host_owned_openapi_document() {
+        let contribution = widgets_contribution().with_public_document(
+            "/openapi.json",
+            Arc::new(serde_json::json!({ "openapi": "3.1.2", "paths": {} })),
+        );
+
+        let error = ComposedApiAssembly::try_compose("SDKWork API", vec![contribution])
+            .err()
+            .expect("the composed OpenAPI document path is host-owned");
+        assert!(error.contains("/openapi.json"), "{error}");
     }
 }
