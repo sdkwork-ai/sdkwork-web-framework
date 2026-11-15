@@ -90,6 +90,7 @@ fn row_to_policy(row: Option<CorsPolicyRow>) -> Result<Option<CorsPolicy>, WebFr
         allow_all_origins: row.allow_all_origins != 0,
         allowed_origins,
         registered_console_hosts: None,
+        registered_subdomain_hosts: None,
         allowed_methods: CorsPolicy::default().allowed_methods,
         allowed_headers: CorsPolicy::default().allowed_headers,
         expose_headers: CorsPolicy::default().expose_headers,

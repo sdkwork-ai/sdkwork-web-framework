@@ -1,6 +1,7 @@
 use crate::error::WebFrameworkError;
 use crate::registered_client_origins::merge_registered_sdkwork_client_origins;
 use crate::registered_console_hosts::RegisteredConsoleHosts;
+use crate::registered_subdomain_hosts::RegisteredSubdomainHosts;
 use axum::extract::Request;
 use axum::http::{HeaderName, HeaderValue, Method, Uri};
 use axum::response::Response;
@@ -24,6 +25,12 @@ pub struct CorsPolicy {
     /// closed pattern. `None` keeps the historical exact-origin-only behavior.
     /// See [`crate::registered_console_hosts`].
     pub registered_console_hosts: Option<RegisteredConsoleHosts>,
+    /// Opt-in registered sub-domain origin rule (`CORS_SPEC.md` §5.1).
+    ///
+    /// Declares whole registered base domains whose entire sub-domain space, at
+    /// any depth, is a trusted first-party origin. `None` keeps exact matching
+    /// plus the console-host pattern.
+    pub registered_subdomain_hosts: Option<RegisteredSubdomainHosts>,
     pub allowed_methods: Vec<Method>,
     pub allowed_headers: Vec<String>,
     /// Response headers exposed to browser clients (written as
@@ -145,6 +152,7 @@ impl Default for CorsPolicy {
             allow_all_origins: false,
             allowed_origins: Vec::new(),
             registered_console_hosts: None,
+            registered_subdomain_hosts: None,
             allowed_methods: vec![
                 Method::GET,
                 Method::POST,
@@ -317,6 +325,11 @@ impl CorsPolicy {
                 format!("production CORS policy registered console hosts are invalid: {error}")
             })?;
         }
+        if let Some(hosts) = &self.registered_subdomain_hosts {
+            hosts.validate().map_err(|error| {
+                format!("production CORS policy registered sub-domain hosts are invalid: {error}")
+            })?;
+        }
         if self
             .allowed_origins
             .iter()
@@ -326,6 +339,13 @@ impl CorsPolicy {
                 "production CORS policy must not use port wildcard origins; configure exact origins"
                     .into(),
             );
+        }
+        for origin in &self.allowed_origins {
+            if origin.contains("*.") {
+                crate::cors_wildcard::validate_host_wildcard_origin_pattern(origin).map_err(
+                    |error| format!("production CORS policy wildcard origin is invalid: {error}"),
+                )?;
+            }
         }
         if self.allowed_headers.iter().any(|header| header == "*") {
             return Err(
@@ -393,13 +413,30 @@ impl CorsPolicy {
         Ok(self)
     }
 
+    /// Attaches the opt-in registered sub-domain origin rule
+    /// (`CORS_SPEC.md` §5.1): every host under a registered base domain, at any
+    /// depth, is a trusted first-party origin.
+    ///
+    /// Fails closed when the rule is not valid, so a deployment can never widen
+    /// the trust boundary to an unregistered domain by accident.
+    pub fn with_registered_subdomain_hosts(
+        mut self,
+        hosts: RegisteredSubdomainHosts,
+    ) -> Result<Self, String> {
+        hosts.validate()?;
+        self.registered_subdomain_hosts = Some(hosts);
+        Ok(self)
+    }
+
     /// Returns whether this policy accepts at least one browser origin source.
     ///
     /// A policy satisfied only by the registered console host pattern is a valid
     /// non-permissive configuration and must not be treated as an empty
     /// allowlist by deployment gates.
     pub fn has_origin_configuration(&self) -> bool {
-        !self.allowed_origins.is_empty() || self.registered_console_hosts.is_some()
+        !self.allowed_origins.is_empty()
+            || self.registered_console_hosts.is_some()
+            || self.registered_subdomain_hosts.is_some()
     }
 
     pub fn validate_origin(&self, request: &Request) -> Result<(), WebFrameworkError> {
@@ -555,12 +592,21 @@ impl CorsPolicy {
         self.registered_console_hosts
             .as_ref()
             .is_some_and(|hosts| hosts.matches(origin))
+            || self
+                .registered_subdomain_hosts
+                .as_ref()
+                .is_some_and(|hosts| hosts.matches(origin))
     }
 }
-
 fn origin_matches_allowed(allowed: &str, origin: &str) -> bool {
     if allowed == origin {
         return true;
+    }
+
+    // Host-wildcard entries (`https://*.example.com`, `https://**.example.com`)
+    // let one allowlist line cover an arbitrary number of sub-domain levels.
+    if crate::cors_wildcard::is_host_wildcard_origin_pattern(allowed) {
+        return crate::cors_wildcard::host_wildcard_origin_matches(allowed, origin);
     }
 
     if matches!(
@@ -1621,6 +1667,89 @@ mod tests {
             .expect("request");
         let error = validate_cookie_authenticated_source(&cors, &request).expect_err("referer");
         assert_eq!(WebFrameworkErrorKind::Forbidden, error.kind);
+    }
+
+    #[test]
+    fn registered_subdomain_rule_admits_first_party_origins_at_every_depth() {
+        // Regression: `iam_web_security_policy` built the pipeline policy with
+        // exact origins and console hosts only, so the request-path Cors stage
+        // rejected `https://mall.sdkwork.com` with 40301 `failedStage: cors`
+        // while the edge layer admitted it.
+        let policy = CorsPolicy::default()
+            .with_registered_subdomain_hosts(RegisteredSubdomainHosts::new(
+                vec!["sdkwork.com".to_owned(), "birdcoder.com".to_owned()],
+                vec!["https".to_owned()],
+            ))
+            .expect("valid sub-domain rule");
+        for origin in [
+            "https://sdkwork.com",
+            "https://mall.sdkwork.com",
+            "https://admin.region.sdkwork.com",
+            "https://x.y.z.birdcoder.com",
+        ] {
+            policy
+                .validate_origin_value(origin)
+                .unwrap_or_else(|_| panic!("expected `{origin}` to be admitted"));
+        }
+        for origin in [
+            "https://evil.example.com",
+            "https://evil-sdkwork.com",
+            "https://sdkwork.com.attacker.example",
+            "http://mall.sdkwork.com",
+        ] {
+            assert!(
+                policy.validate_origin_value(origin).is_err(),
+                "expected `{origin}` to stay rejected"
+            );
+        }
+        policy
+            .validate_for_production()
+            .expect("the sub-domain rule is a production-safe allowlist form");
+    }
+
+    #[test]
+    fn host_wildcard_allowlist_covers_second_third_and_fourth_level_subdomains() {
+        let policy = CorsPolicy {
+            allowed_origins: vec![
+                "https://**.sdkwork.com".to_owned(),
+                "https://*.birdcoder.com".to_owned(),
+            ],
+            ..CorsPolicy::default()
+        };
+        for origin in [
+            "https://mall.sdkwork.com",
+            "https://a.b.sdkwork.com",
+            "https://region.console.eu.sdkwork.com",
+            "https://platform.birdcoder.com",
+        ] {
+            policy
+                .validate_origin_value(origin)
+                .unwrap_or_else(|_| panic!("expected `{origin}` to match a host wildcard"));
+        }
+        for origin in [
+            "https://sdkwork.com",
+            "https://evil-sdkwork.com",
+            "https://sdkwork.com.attacker.example",
+            "https://a.b.birdcoder.com",
+            "http://mall.sdkwork.com",
+        ] {
+            assert!(
+                policy.validate_origin_value(origin).is_err(),
+                "expected `{origin}` to stay rejected"
+            );
+        }
+        policy
+            .validate_for_production()
+            .expect("host wildcards are a production-safe allowlist form");
+    }
+
+    #[test]
+    fn production_policy_rejects_malformed_host_wildcards() {
+        let policy = CorsPolicy {
+            allowed_origins: vec!["https://**.com".to_owned()],
+            ..CorsPolicy::default()
+        };
+        assert!(policy.validate_for_production().is_err());
     }
 
     #[test]

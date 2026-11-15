@@ -8,6 +8,7 @@ pub mod client_kind;
 pub mod constants;
 pub mod context_injection;
 pub mod cors_policy;
+pub mod cors_wildcard;
 pub mod error;
 pub mod extractors;
 pub mod hashing;

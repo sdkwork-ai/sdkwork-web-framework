@@ -70,6 +70,7 @@ async fn production_cors_policy_rejects_allow_all_origins() {
         allow_all_origins: true,
         allowed_origins: vec![],
         registered_console_hosts: None,
+        registered_subdomain_hosts: None,
         allowed_methods: vec![],
         allowed_headers: vec![],
         expose_headers: vec![],

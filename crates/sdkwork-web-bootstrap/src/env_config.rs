@@ -25,8 +25,10 @@ pub const SHARED_REGION_CODE_ENV_KEY: &str = "SDKWORK_REGION_CODE";
 /// services that already depend on bootstrap pick it up from one place.
 pub use sdkwork_web_core::{
     registered_console_hosts_from_env, registered_console_hosts_from_lookup,
+    registered_subdomain_hosts_from_env, registered_subdomain_hosts_from_lookup,
     SHARED_CORS_CONSOLE_HOST_BASE_DOMAINS_ENV_KEY, SHARED_CORS_CONSOLE_HOST_LABELS_ENV_KEY,
     SHARED_CORS_CONSOLE_HOST_SCHEMES_ENV_KEY, SHARED_CORS_CONSOLE_HOST_SUFFIX_ENV_KEY,
+    SHARED_CORS_SUBDOMAIN_BASE_DOMAINS_ENV_KEY, SHARED_CORS_SUBDOMAIN_SCHEMES_ENV_KEY,
 };
 
 /// REGION_SPEC §4.1 default region code when nothing is declared.
@@ -173,6 +175,30 @@ pub fn with_registered_console_hosts_from_env(
     match registered_console_hosts_from_env()? {
         Some(hosts) => Ok(SecurityPolicy {
             cors: policy.cors.with_registered_console_hosts(hosts)?,
+            ..policy
+        }),
+        None => Ok(policy),
+    }
+}
+
+/// Attaches the registered sub-domain origin rule (`CORS_SPEC.md` §5.1) resolved
+/// from `SDKWORK_CORS_SUBDOMAIN_BASE_DOMAINS` /
+/// `SDKWORK_CORS_SUBDOMAIN_SCHEMES` to an already-built security policy.
+///
+/// Every process that mounts dependency routers must project the rule into its
+/// request-path pipeline policy, not only into its edge layer; otherwise the
+/// edge admits a first-party sub-domain origin while the Cors interceptor
+/// rejects the same origin with a 40301 `failedStage: cors` problem.
+///
+/// Returns the policy unchanged when the base-domain key is unset, and a
+/// diagnosable error when the rule is half-configured or invalid so startup
+/// fails loudly instead of silently rejecting first-party preflights.
+pub fn with_registered_subdomain_hosts_from_env(
+    policy: SecurityPolicy,
+) -> Result<SecurityPolicy, String> {
+    match registered_subdomain_hosts_from_env()? {
+        Some(hosts) => Ok(SecurityPolicy {
+            cors: policy.cors.with_registered_subdomain_hosts(hosts)?,
             ..policy
         }),
         None => Ok(policy),
