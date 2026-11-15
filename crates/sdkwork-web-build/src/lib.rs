@@ -188,6 +188,7 @@ fn auth_mode(mode: &str) -> Result<&'static str, String> {
         "bootstrap-body" => Ok("RouteAuth::BootstrapBody"),
         "credential-entry-bootstrap" => Ok("RouteAuth::CredentialEntryBootstrap"),
         "dual-token" => Ok("RouteAuth::DualToken"),
+        "dual-token-or-anonymous" => Ok("RouteAuth::DualTokenOrAnonymous"),
         "api-key" => Ok("RouteAuth::ApiKey"),
         "ingress-token" => Ok("RouteAuth::IngressToken"),
         "oauth" => Ok("RouteAuth::OAuth"),
@@ -267,5 +268,24 @@ mod tests {
         let generated = render_http_route_manifest(&source, "WIDGET_ROUTES").unwrap();
 
         assert!(generated.contains("with_log_retention(\"permanent\")"));
+    }
+
+    #[test]
+    fn maps_optional_credential_auth_mode_to_dual_token_or_anonymous() {
+        let source = json!({
+            "paths": {"/app/v3/api/catalog/products": {"get": {
+                "operationId": "products.list",
+                "x-sdkwork-auth-mode": "dual-token-or-anonymous",
+                "security": [{"AuthToken": [], "AccessToken": []}]
+            }}}
+        });
+
+        let generated = render_http_route_manifest(&source, "WIDGET_ROUTES").unwrap();
+
+        assert!(
+            generated.contains("RouteAuth::DualTokenOrAnonymous"),
+            "optional-credential operations must materialize as RouteAuth::DualTokenOrAnonymous:\n{generated}"
+        );
+        assert!(!generated.contains("RouteAuth::DualToken,"));
     }
 }
