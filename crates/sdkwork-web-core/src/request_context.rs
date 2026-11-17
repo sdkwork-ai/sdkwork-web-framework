@@ -165,6 +165,21 @@ pub struct WebAppContext {
     pub workspace_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub composition_id: Option<String>,
+    /// Release scope of the application this request is authenticated against:
+    /// `TENANT`, `ORGANIZATION`, or `USER` (`APPLICATION_IDENTITY_SPEC.md` §4.1).
+    ///
+    /// The identity provider stamps it from the installation that issued the
+    /// credential; it is never derived from the request. Downstream data planes
+    /// read it to choose the isolation key of the application's rows —
+    /// `(tenant_id, app_id)`, `(tenant_id, organization_id, app_id)`, or
+    /// `(tenant_id, app_id, user_id)`.
+    ///
+    /// `None` means the authenticating pipeline does not resolve application
+    /// scope (a framework-default JWT/API-key parser, or a host that does not own
+    /// installations). A consumer `MUST` then fall back to the legacy derivation
+    /// from the organization scope and `MUST NOT` treat `None` as `USER`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ownership_scope: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -339,6 +354,15 @@ impl WebRequestPrincipal {
         &self.app.app_id
     }
 
+    /// Release scope of the application behind this principal, when the
+    /// authenticating resolver knows it (`APPLICATION_IDENTITY_SPEC.md` §4.1).
+    ///
+    /// `None` means "unknown", never `USER`: a consumer derives the legacy
+    /// tenant/organization level from [`Self::organization_scope`] instead.
+    pub fn ownership_scope(&self) -> Option<&str> {
+        self.app.ownership_scope.as_deref()
+    }
+
     pub fn user_id(&self) -> &str {
         &self.subject.user_id
     }
@@ -378,6 +402,7 @@ pub struct WebRequestPrincipalBuilder {
     display_name: Option<String>,
     workspace_id: Option<String>,
     composition_id: Option<String>,
+    ownership_scope: Option<String>,
 }
 
 impl WebRequestPrincipalBuilder {
@@ -451,6 +476,15 @@ impl WebRequestPrincipalBuilder {
         self
     }
 
+    /// Release scope of the application the credential was issued for
+    /// (`APPLICATION_IDENTITY_SPEC.md` §4.1): `TENANT`, `ORGANIZATION`, or
+    /// `USER`. Set by an identity-provider resolver that owns installation
+    /// records; omitted by generic claim parsers.
+    pub fn ownership_scope(mut self, value: Option<String>) -> Self {
+        self.ownership_scope = value;
+        self
+    }
+
     pub fn build(self) -> WebRequestPrincipal {
         // The resolved organization scope has exactly one representation at the
         // boundary: the sentinel `0` for tenant-level, else the claim/record
@@ -473,6 +507,7 @@ impl WebRequestPrincipalBuilder {
                 deployment_mode: self.deployment_mode.unwrap_or(WebDeploymentMode::Local),
                 workspace_id: self.workspace_id,
                 composition_id: self.composition_id,
+                ownership_scope: self.ownership_scope,
             },
             subject: WebSubjectContext {
                 user_id: self.user_id.unwrap_or_default(),

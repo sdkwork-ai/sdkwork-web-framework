@@ -1481,6 +1481,55 @@ async fn api_key_or_dual_token_route_rejects_profile_mixing() {
 }
 
 #[tokio::test]
+async fn api_key_or_dual_token_route_with_lone_bearer_reports_401_authentication_required() {
+    use sdkwork_web_contract::{HttpMethod, HttpRoute};
+
+    // Regression for the production 400/40001 on POST /v1/chat/completions:
+    // the caller supplied a single bearer credential, which this profile cannot
+    // complete, so the failure is authentication (401/40101), not request
+    // validation (400/40001), and the detail must name every form the profile
+    // accepts instead of describing only the dual-token branch.
+    const ROUTES: &[HttpRoute] = &[HttpRoute::api_key_or_dual_token(
+        HttpMethod::Post,
+        "/v1/chat/completions",
+        "chat",
+        "createChatCompletion",
+    )];
+    let runtime = WebCallRuntime::new(DefaultOpenApiWebRequestContextResolver::default())
+        .with_profile(WebRequestContextProfile {
+            open_api_prefixes: vec!["/v1".to_owned()],
+            ..Default::default()
+        })
+        .with_route_manifest(HttpRouteManifest::new(ROUTES));
+    let chain = WebCallInterceptorChain::standard();
+    let mut request = Request::builder()
+        .method("POST")
+        .uri("/v1/chat/completions")
+        .header("Authorization", fixture_auth_header())
+        .body(Body::empty())
+        .expect("lone bearer request");
+    let mut state = WebCallState::from_request(&request);
+    let error = chain
+        .before(&mut state, &mut request, &runtime)
+        .await
+        .expect_err("a lone bearer cannot complete the declared profile");
+    assert_eq!(WebFrameworkErrorKind::MissingCredentials, error.kind);
+    assert_eq!(401, error.status().as_u16());
+    assert_eq!(40101, error.result_code());
+    assert_eq!(
+        Some("incomplete-credential-profile"),
+        error.reason.as_deref()
+    );
+    assert_eq!(
+        Some("surface-classification"),
+        error.failed_stage.as_deref()
+    );
+    assert_eq!(Some("api-key-or-dual-token"), error.auth_profile.as_deref());
+    assert!(error.message.contains("X-API-Key"), "{}", error.message);
+    assert!(error.message.contains("Access-Token"), "{}", error.message);
+}
+
+#[tokio::test]
 async fn manifest_refresh_token_route_rejects_automatic_credentials() {
     use sdkwork_web_contract::{HttpMethod, HttpRoute};
 

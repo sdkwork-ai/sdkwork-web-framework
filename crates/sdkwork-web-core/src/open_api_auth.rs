@@ -195,8 +195,12 @@ impl OpenApiCredentialSchemeDetector for DefaultOpenApiCredentialSchemeDetector 
                     .with_reason("credential-profile-contamination"));
                 }
                 if auth_token_present != access_token_present {
+                    // The caller supplied one half of the dual-token pair, but
+                    // the profile also accepts X-API-Key alone: an authentication
+                    // failure (40101), not request validation (40001), and the
+                    // detail names every form the profile accepts.
                     return Err(WebFrameworkError::missing_credentials(
-                        "the dual-token branch requires both Authorization and Access-Token",
+                        missing_credentials_detail(Some(RouteAuth::ApiKeyOrDualToken)),
                     )
                     .with_reason("incomplete-credential-profile"));
                 }
@@ -281,9 +285,7 @@ where
     let scheme = detector
         .detect(credentials, headers, route_auth)?
         .ok_or_else(|| {
-            WebFrameworkError::missing_credentials(
-                "open-api requests require API key (X-Api-Key) or OAuth bearer (Authorization: Bearer)",
-            )
+            WebFrameworkError::missing_credentials(missing_credentials_detail(route_auth))
         })?;
 
     match scheme {
@@ -335,6 +337,32 @@ pub fn allowed_open_api_schemes(route_auth: RouteAuth) -> &'static [OpenApiAuthS
         | RouteAuth::IngressToken
         | RouteAuth::AgentToken
         | RouteAuth::Compatibility => &[],
+    }
+}
+
+/// Human-readable `ProblemDetail.detail` naming the credential forms a route
+/// profile accepts.
+///
+/// API_SPEC §9.2 makes the declared profile the credential authority, so a
+/// missing or incomplete credential must name the alternatives of *that*
+/// profile rather than describe one branch the caller never claimed. The
+/// diagnostic stays free of token contents and lookup keys (API_SPEC §15.1).
+pub(crate) fn missing_credentials_detail(route_auth: Option<RouteAuth>) -> &'static str {
+    match route_auth {
+        Some(RouteAuth::ApiKey) => "api-key routes require X-API-Key",
+        Some(RouteAuth::OAuth) => "oauth routes require Authorization: Bearer",
+        Some(RouteAuth::OpenApiFlexible) => {
+            "open-api-flexible routes require X-API-Key or Authorization: Bearer"
+        }
+        Some(RouteAuth::OpenApiBearerFlexible) => {
+            "open-api bearer-flexible routes require Authorization: Bearer or X-API-Key"
+        }
+        Some(RouteAuth::ApiKeyOrDualToken) => {
+            "api-key-or-dual-token routes require X-API-Key alone, or a complete Authorization plus Access-Token pair"
+        }
+        _ => {
+            "open-api requests require API key (X-Api-Key) or OAuth bearer (Authorization: Bearer)"
+        }
     }
 }
 
@@ -468,6 +496,55 @@ mod tests {
                 .detect(&credentials, &headers, Some(RouteAuth::ApiKeyOrDualToken))
                 .expect_err("mixed or partial credentials must fail");
         }
+    }
+
+    #[test]
+    fn incomplete_or_missing_credentials_name_the_profile_alternatives() {
+        let detector = DefaultOpenApiCredentialSchemeDetector::default();
+        let headers = HeaderMap::new();
+
+        let incomplete = detector
+            .detect(
+                &credentials(None, Some("auth-token"), None),
+                &headers,
+                Some(RouteAuth::ApiKeyOrDualToken),
+            )
+            .expect_err("a lone authorization header is incomplete for this profile");
+        assert_eq!(
+            crate::error::WebFrameworkErrorKind::MissingCredentials,
+            incomplete.kind
+        );
+        assert_eq!(
+            Some("incomplete-credential-profile"),
+            incomplete.reason.as_deref()
+        );
+        assert_eq!(40101, incomplete.result_code());
+        assert!(
+            incomplete.message.contains("X-API-Key"),
+            "{}",
+            incomplete.message
+        );
+        assert!(
+            incomplete.message.contains("Access-Token"),
+            "{}",
+            incomplete.message
+        );
+
+        for (route_auth, expected) in [
+            (RouteAuth::ApiKey, "X-API-Key"),
+            (RouteAuth::OAuth, "Authorization: Bearer"),
+            (
+                RouteAuth::OpenApiFlexible,
+                "X-API-Key or Authorization: Bearer",
+            ),
+        ] {
+            let detail = missing_credentials_detail(Some(route_auth));
+            assert!(detail.contains(expected), "{detail}");
+        }
+        assert!(
+            missing_credentials_detail(None).contains("Authorization: Bearer"),
+            "the generic detail must still name the bearer form"
+        );
     }
 
     #[tokio::test]

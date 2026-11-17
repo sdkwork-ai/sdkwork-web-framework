@@ -812,8 +812,13 @@ impl SecurityPolicy {
                 .with_reason("credential-profile-contamination"));
             }
             if has_auth_token != has_access_token {
-                return Err(WebFrameworkError::bad_request(
-                    "the dual-token branch requires both Authorization and Access-Token",
+                // Credentials are incomplete, not malformed: API_SPEC §15.3 maps
+                // missing authentication to 401/40101, and the detail names the
+                // complete alternatives of the declared profile.
+                return Err(WebFrameworkError::missing_credentials(
+                    crate::open_api_auth::missing_credentials_detail(Some(
+                        RouteAuth::ApiKeyOrDualToken,
+                    )),
                 )
                 .with_reason("incomplete-credential-profile"));
             }
@@ -1329,6 +1334,19 @@ mod tests {
             } else {
                 let error = result.expect_err("invalid credential combination must fail");
                 assert_eq!(expected_reason, error.reason.as_deref());
+                // API_SPEC §15.3: an incomplete credential is a missing
+                // authentication, not a request-validation failure. The detail
+                // must name every form the declared profile accepts.
+                if error.reason.as_deref() == Some("incomplete-credential-profile") {
+                    assert_eq!(
+                        crate::error::WebFrameworkErrorKind::MissingCredentials,
+                        error.kind
+                    );
+                    assert_eq!(axum::http::StatusCode::UNAUTHORIZED, error.status());
+                    assert_eq!(40101, error.result_code());
+                    assert!(error.message.contains("X-API-Key"), "{}", error.message);
+                    assert!(error.message.contains("Access-Token"), "{}", error.message);
+                }
             }
         }
     }
