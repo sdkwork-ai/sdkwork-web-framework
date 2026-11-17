@@ -9,7 +9,11 @@
     "appType": "SDK",
     "officialWebsiteUrl": "https://sdkwork.com/apps/sdkwork-web-framework"
   },
-  "backend": {},
+  "backend": {
+    "accessTokenPermissionScope": [
+      "iam:self"
+    ]
+  },
   "runtime": {
     "family": "server",
     "framework": "rust-service",
