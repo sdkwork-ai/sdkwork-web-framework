@@ -22,6 +22,9 @@ pub use crate::axum_integration::{
     RequireAppApi, RequireDualToken, RequireInternalApi, RequireOpenApi, RequirePrincipal,
     RequireTenantApp,
 };
+pub use crate::caller_scope::{
+    current_caller_credentials, has_current_caller_credentials, with_caller_credentials,
+};
 pub use crate::client_context_guard::{
     inspect_json_body_context_selectors, is_forbidden_context_selector_key,
     reject_client_context_selectors, reject_forbidden_ambient_context_path,
@@ -36,7 +39,9 @@ pub use crate::constants::{
     PRODUCTION_DEFAULT_SHUTDOWN_GRACE_SECS, REQUEST_ID_HEADER, SDKWORK_ACCESS_TOKEN_HEADER,
     SDKWORK_TRACE_ID_HEADER, WS_APP_API_SUFFIX, X_IDEMPOTENCY_KEY_HEADER,
 };
-pub use crate::context_injection::{inject_web_request_context, DomainContextInjector};
+pub use crate::context_injection::{
+    inject_web_request_context, inject_web_request_context_with_credentials, DomainContextInjector,
+};
 pub use crate::cors_policy::{
     CorsPolicyContext, DynamicCorsPolicySource, NoOpDynamicCorsPolicySource,
 };
@@ -205,6 +210,11 @@ pub use crate::websocket::{
 };
 pub use crate::ws_interceptors::{
     StandardWebSocketCallInterceptor, StandardWebSocketCallInterceptorKind,
+};
+/// Caller dual-credential carrier injected next to `WebRequestContext`
+/// (`APP_SDK_INTEGRATION_SPEC.md` §5.2.1).
+pub use sdkwork_utils_rust::caller_identity::{
+    missing_caller_identity, CallerCredentials, CallerTokenKind,
 };
 pub use sdkwork_web_contract::{
     ApiSurface, HttpMethod, HttpRoute, IamHttpRoute, RateLimitTier, RouteAuth,

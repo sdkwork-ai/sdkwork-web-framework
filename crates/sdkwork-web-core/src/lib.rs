@@ -3,6 +3,7 @@
 pub mod api_chain;
 pub mod authz_scope;
 pub mod axum_integration;
+pub mod caller_scope;
 pub mod client_context_guard;
 pub mod client_kind;
 pub mod constants;

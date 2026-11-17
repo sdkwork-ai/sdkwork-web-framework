@@ -1,6 +1,6 @@
 use crate::api_chain::{WebCallInterceptor, WebCallRuntime, WebCallStage, WebCallState};
 use crate::constants::IDEMPOTENCY_KEY_HEADER;
-use crate::context_injection::inject_web_request_context;
+use crate::context_injection::inject_web_request_context_with_credentials;
 use crate::cors_policy::CorsPolicyContext;
 use crate::error::{WebFrameworkError, WebFrameworkErrorKind};
 use crate::extractors::header_value;
@@ -501,7 +501,21 @@ where
             StandardWebCallInterceptorKind::ContextInjection => {
                 let context = state.to_context()?;
                 let request_id = context.request_id.clone();
-                inject_web_request_context(request, request_id, context, &runtime.domain_injectors);
+                // APP_SDK_INTEGRATION_SPEC §5.2.1: the verified caller's dual
+                // credentials travel beside the context so an outbound backend
+                // SDK call can carry them instead of substituting process
+                // credentials. The context itself keeps only presence flags.
+                let credentials = crate::CallerCredentials::new(
+                    state.credentials.auth_token.clone(),
+                    state.credentials.access_token.clone(),
+                );
+                inject_web_request_context_with_credentials(
+                    request,
+                    request_id,
+                    context,
+                    credentials,
+                    &runtime.domain_injectors,
+                );
             }
             StandardWebCallInterceptorKind::Logging => {
                 state.accepted_at = Some(std::time::Instant::now());

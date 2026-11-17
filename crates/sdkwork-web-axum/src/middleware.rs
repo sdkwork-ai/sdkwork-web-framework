@@ -6,9 +6,10 @@ use axum::response::{IntoResponse, Response};
 use axum::Router;
 use futures_util::FutureExt;
 use sdkwork_web_core::{
-    http_request_labels_from_state, idempotency_replay_response, inject_web_request_context,
-    new_request_id, problem_response, resolve_trace_context, trace_id_from_traceparent,
-    AuditEmitter, AuthorizationPolicy, DomainContextInjector, HttpMetricsRegistry,
+    http_request_labels_from_state, idempotency_replay_response,
+    inject_web_request_context_with_credentials, new_request_id, problem_response,
+    resolve_trace_context, trace_id_from_traceparent, with_caller_credentials, AuditEmitter,
+    AuthorizationPolicy, CallerCredentials, DomainContextInjector, HttpMetricsRegistry,
     HttpRouteManifest, IdempotencyStore, RateLimitPolicyResolver, RateLimitStore,
     SecurityEventEmitter, SecurityPolicy, ServerRequestId, TenantIsolationPolicy, WebApiSurface,
     WebAuthMode, WebCallInterceptorChain, WebCallRuntime, WebCallState, WebFrameworkError,
@@ -261,10 +262,22 @@ async fn server_request_identity_middleware(mut request: Request, next: Next) ->
         HeaderValue::from_str(&request_id).expect("valid request id"),
     );
     let context = anonymous_context_from_request(&request, &request_id);
-    inject_web_request_context(
+    // Public/unauthenticated surfaces still get the caller's presented
+    // credentials (an open-api bearer, for example) so a downstream SDK call can
+    // forward them instead of substituting a process credential
+    // (APP_SDK_INTEGRATION_SPEC §5.2.1).
+    let credentials = CallerCredentials::from_header_lookup(|name| {
+        request
+            .headers()
+            .get(name)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_owned)
+    });
+    inject_web_request_context_with_credentials(
         &mut request,
         ServerRequestId(request_id.clone()),
         context,
+        credentials,
         &[],
     );
     let mut response = next.run(request).await;
@@ -410,7 +423,15 @@ where
         .map(|context| context.api_surface != WebApiSurface::Unknown)
         .unwrap_or(false)
     {
-        return next.run(request).await;
+        // A composed host already authenticated this request; its pipeline
+        // installed the caller carrier in the extensions. Keep the request-scoped
+        // accessor populated for this module's handlers too.
+        let caller = request
+            .extensions()
+            .get::<CallerCredentials>()
+            .cloned()
+            .unwrap_or_default();
+        return with_caller_credentials(caller, next.run(request)).await;
     }
     normalize_inbound_request_uri(&mut request);
     let request_started = std::time::Instant::now();
@@ -458,9 +479,20 @@ where
         )
     });
 
-    let handler_result = AssertUnwindSafe(run_handler_with_timeout(&layer.runtime, request, next))
-        .catch_unwind()
-        .await;
+    // APP_SDK_INTEGRATION_SPEC §5.2.1: expose the verified caller pair to every
+    // service layer reached by this handler, so an outbound adapter can carry it
+    // instead of substituting a process credential. The task-local never crosses
+    // a spawn boundary (see `sdkwork_web_core::caller_scope`).
+    let caller_credentials = CallerCredentials::new(
+        state.credentials.auth_token.clone(),
+        state.credentials.access_token.clone(),
+    );
+    let handler_result = AssertUnwindSafe(with_caller_credentials(
+        caller_credentials,
+        run_handler_with_timeout(&layer.runtime, request, next),
+    ))
+    .catch_unwind()
+    .await;
     let response = match handler_result {
         Ok(response) => response,
         Err(_) => {

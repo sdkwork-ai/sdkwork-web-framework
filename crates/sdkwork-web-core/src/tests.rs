@@ -524,3 +524,58 @@ fn manifest_validation_accepts_optional_credential_app_api_routes() {
         .validate_route_auth_for_surfaces(&WebRequestContextProfile::default())
         .expect("optional-credential app-api routes are a valid profile");
 }
+
+#[test]
+fn caller_credentials_are_injected_beside_the_request_context() {
+    // APP_SDK_INTEGRATION_SPEC §5.2.1: the verified caller's dual tokens must be
+    // available to an outbound backend SDK call without re-parsing headers or
+    // substituting process credentials.
+    use crate::context_injection::inject_web_request_context_with_credentials;
+    use axum::body::Body;
+    use axum::http::Request;
+    use sdkwork_utils_rust::caller_identity::CallerCredentials;
+
+    let context = WebRequestContext {
+        request_id: ServerRequestId("550e8400-e29b-41d4-a716-446655440000".to_owned()),
+        api_surface: WebApiSurface::AppApi,
+        auth_mode: WebAuthMode::DualToken,
+        principal: None,
+        transport: WebTransportFacts {
+            path: "/app/v3/api/notes/pages".to_owned(),
+            method: "POST".to_owned(),
+            auth_token_present: true,
+            access_token_present: true,
+            api_key_present: false,
+            ingress_token_present: false,
+            oauth_bearer_present: false,
+            agent_token_present: false,
+        },
+        locale: None,
+        client_kind: None,
+        operation: None,
+        trace_id: None,
+        idempotency_key: None,
+    };
+    let mut request = Request::builder()
+        .uri("/app/v3/api/notes/pages")
+        .body(Body::empty())
+        .expect("request");
+
+    inject_web_request_context_with_credentials(
+        &mut request,
+        context.request_id.clone(),
+        context,
+        CallerCredentials::new(
+            Some("auth-token".to_owned()),
+            Some("access-token".to_owned()),
+        ),
+        &[],
+    );
+
+    let credentials = request
+        .extensions()
+        .get::<CallerCredentials>()
+        .expect("caller credentials extension");
+    assert_eq!(credentials.auth_token(), Some("auth-token"));
+    assert_eq!(credentials.access_token(), Some("access-token"));
+}
