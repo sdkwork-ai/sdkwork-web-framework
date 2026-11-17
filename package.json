@@ -34,7 +34,8 @@
     "build:pc:staging:cloud": "node ../sdkwork-specs/tools/build-browser-client.mjs --root . --architecture pc --environment staging --deployment-profile cloud",
     "build:pc:demo:cloud": "node ../sdkwork-specs/tools/build-browser-client.mjs --root . --architecture pc --environment demo --deployment-profile cloud",
     "build:pc:prod:cloud": "node ../sdkwork-specs/tools/build-browser-client.mjs --root . --architecture pc --environment prod --deployment-profile cloud",
-    "topology:validate": "node ../sdkwork-app-topology/scripts/sdkwork-topology.mjs validate --root . --spec specs/topology.spec.json"
+    "topology:validate": "node ../sdkwork-app-topology/scripts/sdkwork-topology.mjs validate --root . --spec specs/topology.spec.json",
+    "check:release-access-token:require-anchor": "node ../sdkwork-specs/tools/check-release-access-token-env.mjs --root . --require-anchor"
   },
   "exports": {
     ".": {
