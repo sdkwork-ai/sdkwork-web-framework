@@ -627,8 +627,12 @@ where
                     .traceparent
                     .as_deref()
                     .and_then(crate::trace::trace_id_from_traceparent)
-                    .map(str::to_owned)
-                    .or_else(|| state.request_id_value().map(str::to_owned));
+                    .and_then(crate::trace::normalize_wire_trace_id)
+                    .or_else(|| {
+                        state.request_id_value().map(|request_id| {
+                            crate::trace::resolve_problem_trace_id(request_id, None)
+                        })
+                    });
                 if let Some(trace_id) = trace_id {
                     if let Ok(value) = axum::http::HeaderValue::from_str(&trace_id) {
                         response.headers_mut().insert(
