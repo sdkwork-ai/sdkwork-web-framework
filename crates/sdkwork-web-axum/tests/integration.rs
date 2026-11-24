@@ -592,3 +592,85 @@ async fn ws_upgrade(
     )
     .await
 }
+
+/// A prompt-sized JSON body must reach the handler byte for byte.
+///
+/// Regression: the client-context guard buffers guarded JSON bodies and must
+/// hand back exactly the bytes it took. A body beyond the buffer it once used
+/// reached the dependent service as an empty body, which that service then
+/// reported as a missing request field (`model is required`), blaming the
+/// caller for a body the gateway had already dropped.
+#[tokio::test]
+async fn prompt_sized_json_body_reaches_the_handler_intact() {
+    use axum::routing::post;
+    use sdkwork_web_core::{HttpMethod, HttpRoute, HttpRouteManifest, RouteAuth};
+
+    // Mirror the relay's own profile and manifest for `/v1/chat/completions`:
+    // the OpenAI surface is an open-api prefix whose caller the relay
+    // authenticates itself once it has the payload.
+    let mut profile = WebRequestContextProfile::default();
+    // The relay's own profile: `/v1` is its open-api surface, not a gateway one.
+    profile.gateway_api_prefixes.retain(|prefix| prefix != "/v1");
+    profile.open_api_prefixes = vec!["/v1".to_owned()];
+    let routes = [HttpRoute::new(
+        HttpMethod::Post,
+        "/v1/chat/completions",
+        "Llm",
+        "createChatCompletion",
+        RouteAuth::Public,
+    )];
+    let manifest = HttpRouteManifest::new(&routes);
+    let layer = WebFrameworkLayer::new(DefaultWebRequestContextResolver::default())
+        .with_profile(profile)
+        .with_route_manifest(manifest);
+    let app = with_web_request_context(
+        Router::new().route(
+            "/v1/chat/completions",
+            post(|request: Request<Body>| async move {
+                let bytes = to_bytes(request.into_body(), 8 * 1024 * 1024)
+                    .await
+                    .expect("handler body");
+                format!("{}", bytes.len())
+            }),
+        ),
+        layer,
+    );
+
+    let pad = "x".repeat(300 * 1024);
+    let payload = format!(
+        r#"{{"model":"deepseek/deepseek-flash","messages":[{{"role":"user","content":"{pad}"}}]}}"#
+    );
+    let expected = payload.len();
+
+    // Declared length (what the OpenAI SDKs send) and chunked framing (no
+    // declared length) must both deliver the same bytes.
+    for declared in [Some(expected), None] {
+        let mut builder = Request::builder()
+            .method("POST")
+            .uri("/v1/chat/completions")
+            .header("content-type", "application/json");
+        if let Some(length) = declared {
+            builder = builder.header("content-length", length.to_string());
+        }
+        let response = app
+            .clone()
+            .oneshot(builder.body(Body::from(payload.clone())).expect("request"))
+            .await
+            .expect("response");
+        let status = response.status();
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body");
+        assert_eq!(
+            status,
+            axum::http::StatusCode::OK,
+            "declared={declared:?} body={}",
+            String::from_utf8_lossy(&body)
+        );
+        assert_eq!(
+            String::from_utf8(body.to_vec()).expect("utf8"),
+            expected.to_string(),
+            "handler saw a different byte count (declared={declared:?})"
+        );
+    }
+}
