@@ -186,6 +186,17 @@ pub async fn enrich_problem_response(
         return Ok(());
     }
 
+    // Observation must never cost the caller its response. Declare the decision
+    // before polling: a body that cannot be proven to fit the budget cannot be
+    // replayed once it has been read, so it is left untouched
+    // (`body_contract::may_buffer_whole`).
+    if !crate::body_contract::may_buffer_whole(
+        response.body(),
+        PROBLEM_RESPONSE_ENRICHMENT_MAX_BYTES,
+    ) {
+        return Ok(());
+    }
+
     let (parts, body) = std::mem::replace(response, Response::new(Body::empty())).into_parts();
     let bytes = axum::body::to_bytes(body, PROBLEM_RESPONSE_ENRICHMENT_MAX_BYTES)
         .await
