@@ -328,6 +328,49 @@ Route crates for **business** capabilities `MUST NOT` live in `sdkwork-web-frame
 - Series saturation must increment `sdkwork_http_metric_series_dropped_total{kind=...}` without rejecting the business request or preventing updates to already registered series.
 - Infrastructure paths `/health`, `/healthz`, `/livez`, `/readyz`, and `/metrics` must not inflate application request counters.
 
+### 10.1 Body observation MUST NOT be destructive
+
+A request body — and equally a streamed response body — can be polled to
+completion **exactly once**. Any stage that reads one (request logging, audit,
+metrics, tracing, context building, problem enrichment, localization,
+idempotency capture, cache or error observation) `MUST` leave the message
+complete for every later reader. There are exactly two conforming shapes:
+
+1. **Replay.** Decide with `sdkwork_web_core::body_contract::may_buffer_whole`
+   that the body fits the observation budget, buffer it once, then hand the same
+   bytes on: `Request::from_parts(parts, Body::from(bytes))` /
+   `Response::from_parts(parts, Body::from(bytes))`.
+2. **Pass through.** Do not poll the stream at all. When the body is not provably
+   within the budget (oversized, or streamed/chunked with no declared length),
+   observation `MUST` be skipped and the body left untouched.
+
+Observation-only stages (logging, audit, tracing) `SHOULD` prefer a **tee**:
+forward every frame unchanged and retain a bounded copy for the record.
+
+`MUST NOT`:
+
+- rebuild a message from an optional capture and substitute an empty body —
+  `captured.map(Body::from).unwrap_or_else(Body::empty)` — when the capture was
+  skipped or failed the payload (or the response) silently disappears while the
+  headers still advertise the original `content-length`;
+- answer a body-read failure by erasing the content. After the decision to buffer,
+  a failure is a transport fault and `MUST` surface as an explicit 4xx/5xx
+  problem, never as an empty body;
+- treat an observation budget (how much a log row retains) as an acceptance
+  limit (how large a body the endpoint may receive): they are independent knobs.
+
+Anti-pattern (forbidden, and the shape of the 2026-11-25 gateway outage):
+
+```ignore
+// FORBIDDEN: `None` (skipped capture, or a failed read) forwards an empty body.
+let captured: Option<Bytes> = body.collect().await.ok().map(|c| c.to_bytes());
+let rebuilt = Request::from_parts(parts, captured.map(Body::from).unwrap_or_else(Body::empty));
+```
+
+Verification: contract unit tests in `sdkwork-web-core::body_contract`, plus one
+regression test per reader proving the identical bytes reach the next reader
+(request) or the client (response).
+
 ## 11. Verification
 
 Framework repository canonical gate list: `specs/component.spec.json` → `verification.commands`.
@@ -346,6 +389,7 @@ Business repository after integration:
 - Problem routing test: extractor, handler, timeout, and fallback errors contain `instance`; matched
   routes contain the manifest `operationId`; explicit external protocol operations retain their wire.
 - Open-api auth check: protected routes declare `api-key`, `oauth`, or `open-api-flexible`; security vectors cover missing credentials, API key resolution, OAuth bearer resolution, and flexible scheme selection.
+- Body read contract test (§10.1): every stage that reads a request or response body proves the identical bytes still reach the next reader / the client, including bodies above the observation budget and streamed bodies.
 
 ## 12. Capability Matrix
 

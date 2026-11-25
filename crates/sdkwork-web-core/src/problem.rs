@@ -186,6 +186,17 @@ pub async fn enrich_problem_response(
         return Ok(());
     }
 
+    // Observation must never cost the caller its response. Declare the decision
+    // before polling: a body that cannot be proven to fit the budget cannot be
+    // replayed once it has been read, so it is left untouched
+    // (`body_contract::may_buffer_whole`).
+    if !crate::body_contract::may_buffer_whole(
+        response.body(),
+        PROBLEM_RESPONSE_ENRICHMENT_MAX_BYTES,
+    ) {
+        return Ok(());
+    }
+
     let (parts, body) = std::mem::replace(response, Response::new(Body::empty())).into_parts();
     let bytes = axum::body::to_bytes(body, PROBLEM_RESPONSE_ENRICHMENT_MAX_BYTES)
         .await
@@ -422,6 +433,36 @@ mod tests {
         let payload: serde_json::Value = serde_json::from_slice(&bytes).expect("json");
         assert_eq!(42201, payload["code"].as_i64().unwrap());
         assert_eq!(422, payload["status"].as_u64().unwrap());
+    }
+
+    /// Enrichment must never cost the caller its response: a problem body that
+    /// cannot be buffered whole is passed through byte for byte.
+    #[tokio::test]
+    async fn oversized_problem_body_is_left_untouched() {
+        let mut payload = vec![b'{'];
+        payload.extend(std::iter::repeat(b'x').take(PROBLEM_RESPONSE_ENRICHMENT_MAX_BYTES));
+        payload.push(b'}');
+        let mut response = Response::builder()
+            .status(axum::http::StatusCode::BAD_REQUEST)
+            .header(header::CONTENT_TYPE, "application/problem+json")
+            .body(Body::from(payload.clone()))
+            .expect("response");
+
+        enrich_problem_response(
+            ProblemCorrelation::new(Some("req-oversized"), Some("trace-oversized")),
+            &mut response,
+        )
+        .await
+        .expect("an unbufferable body is skipped, not failed");
+
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body");
+        assert_eq!(
+            payload,
+            bytes.to_vec(),
+            "an unbufferable problem body must reach the client unchanged"
+        );
     }
 
     #[test]

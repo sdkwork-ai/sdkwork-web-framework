@@ -576,9 +576,33 @@ where
                             .security_policy
                             .idempotency
                             .max_cached_response_bytes;
+                        // Observation must not cost the caller its response. A
+                        // body that cannot be proven to fit the cache budget
+                        // cannot be replayed once it has been read, so the
+                        // response is passed through untouched and only the
+                        // reservation is released (a retried command then
+                        // re-executes instead of replaying a truncated answer).
+                        if !crate::body_contract::may_buffer_whole(
+                            response.body(),
+                            max_bytes as usize,
+                        ) {
+                            if let Err(error) =
+                                runtime.idempotency_store.release(key, fingerprint).await
+                            {
+                                tracing::warn!(
+                                    request_id = ?state.request_id_value(),
+                                    error = ?error,
+                                    "idempotency release failed for an uncacheable response"
+                                );
+                            }
+                            return Ok(());
+                        }
                         let (parts, body) =
                             std::mem::replace(response, Response::new(axum::body::Body::empty()))
                                 .into_parts();
+                        // The budget check above proved the declared length fits,
+                        // so a failure here is a transport fault, not an
+                        // oversized response.
                         let bytes = axum::body::to_bytes(body, max_bytes as usize)
                             .await
                             .map_err(|_| {
