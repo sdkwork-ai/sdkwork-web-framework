@@ -120,6 +120,13 @@ fn request_has_json_payload(request: &Request) -> bool {
 }
 
 /// Buffers JSON request bodies on guarded surfaces and rejects client context selector fields.
+///
+/// The guard judges payload; it must never consume it. Every accepted request
+/// keeps the exact bytes it arrived with, and every rejection that happens before
+/// the body is taken leaves the body in place, so a caller whose error handling
+/// continues can never hand a down-stream service a request that merely *looks*
+/// complete while its body is gone. A body that cannot be read within the guard's
+/// budget is still a rejection, never a silently emptied request.
 pub async fn inspect_json_body_context_selectors(
     request: &mut Request,
     max_bytes: u64,
@@ -129,36 +136,56 @@ pub async fn inspect_json_body_context_selectors(
         return Ok(());
     }
     let limit = max_bytes.max(1) as usize;
-    let (parts, body) = std::mem::replace(request, Request::new(Body::empty())).into_parts();
-    let bytes = to_bytes(body, limit.saturating_add(1))
-        .await
-        .map_err(|error| {
-            WebFrameworkError::bad_request(format!("failed to read request body: {error}"))
-        })?;
-    if bytes.len() > limit {
-        return Err(WebFrameworkError::payload_too_large(format!(
-            "request body exceeds {limit} byte limit"
-        )));
-    }
-    let path = parts.uri.path();
-    if allows_login_context_organization_selector(path, "organizationId") {
-        let value = serde_json::from_slice::<serde_json::Value>(&bytes).ok();
-        if let Some(object) = value.as_ref().and_then(serde_json::Value::as_object) {
-            for key in object.keys() {
-                if is_forbidden_context_selector_key(key)
-                    && !allows_login_context_organization_selector(path, key)
-                {
-                    return Err(WebFrameworkError::bad_request(format!(
-                        "client must not supply context selector body field `{key}`"
-                    )));
-                }
-            }
+    // Reject a declared oversize before touching the stream: this is the one
+    // rejection that can be answered without taking the body out of `request`.
+    if let Some(declared) = content_length_from_headers(request.headers()) {
+        if declared > limit as u64 {
+            return Err(WebFrameworkError::payload_too_large(format!(
+                "request body exceeds {limit} byte limit"
+            )));
         }
-    } else {
-        reject_forbidden_context_body_json(&bytes)?;
     }
+    let (parts, body) = std::mem::replace(request, Request::new(Body::empty())).into_parts();
+    let bytes = match to_bytes(body, limit.saturating_add(1)).await {
+        Ok(bytes) => bytes,
+        // The stream is already consumed, so the request cannot continue as a
+        // complete message; the rejection is the only honest outcome.
+        Err(error) => {
+            return Err(WebFrameworkError::bad_request(format!(
+                "failed to read request body: {error}"
+            )));
+        }
+    };
+    let over_limit = bytes.len() > limit;
+    let path = parts.uri.path();
+    let verdict = if over_limit {
+        Err(WebFrameworkError::payload_too_large(format!(
+            "request body exceeds {limit} byte limit"
+        )))
+    } else if allows_login_context_organization_selector(path, "organizationId") {
+        let value = serde_json::from_slice::<serde_json::Value>(&bytes).ok();
+        let forbidden = value
+            .as_ref()
+            .and_then(serde_json::Value::as_object)
+            .and_then(|object| {
+                object.keys().find(|key| {
+                    is_forbidden_context_selector_key(key)
+                        && !allows_login_context_organization_selector(path, key)
+                })
+            })
+            .map(|key| {
+                WebFrameworkError::bad_request(format!(
+                    "client must not supply context selector body field `{key}`"
+                ))
+            });
+        forbidden.map_or(Ok(()), Err)
+    } else {
+        reject_forbidden_context_body_json(&bytes)
+    };
+    // Restore the body *before* reporting the verdict: whether this request is
+    // accepted or rejected, it leaves the guard with the payload it arrived with.
     *request = Request::from_parts(parts, Body::from(bytes));
-    Ok(())
+    verdict
 }
 
 /// Returns `true` when the path addresses canonical IAM tenant/org resources (API_SPEC §11.3).
@@ -289,5 +316,76 @@ mod tests {
             .await
             .expect_err("tenant selector");
         assert!(error.message.contains("tenantId"));
+    }
+
+    /// A prompt-sized payload must come out of the guard byte for byte.
+    ///
+    /// Regression: the guard used to hand a dependent service an empty body for
+    /// payloads beyond the buffer it read, so the service reported a missing
+    /// request field (`model is required`) for a body the caller had sent.
+    #[tokio::test]
+    async fn keeps_a_prompt_sized_body_intact_when_it_inspects_it() {
+        let pad = "x".repeat(300 * 1024);
+        let payload = format!(r#"{{"model":"deepseek/deepseek-flash","pad":"{pad}"}}"#);
+        let mut request = Request::builder()
+            .method("POST")
+            .uri("/v1/chat/completions")
+            .header("content-type", "application/json")
+            .header("content-length", payload.len().to_string())
+            .body(Body::from(payload.clone()))
+            .expect("request");
+
+        inspect_json_body_context_selectors(&mut request, 16 * 1024 * 1024, WebApiSurface::OpenApi)
+            .await
+            .expect("a prompt body with no context selector is accepted");
+
+        let body = to_bytes(request.into_body(), 16 * 1024 * 1024)
+            .await
+            .expect("body");
+        assert_eq!(body.len(), payload.len());
+        assert_eq!(body.as_ref(), payload.as_bytes());
+    }
+
+    /// A rejected request must keep its body: the guard judges payload, never
+    /// consumes it, so error handling downstream cannot see an empty message.
+    #[tokio::test]
+    async fn restores_the_body_of_a_rejected_request() {
+        let payload = r#"{"tenantId":"100001","name":"x"}"#;
+        let mut request = Request::builder()
+            .method("POST")
+            .uri("/app/v3/api/orders")
+            .header("content-type", "application/json")
+            .header("content-length", payload.len().to_string())
+            .body(Body::from(payload))
+            .expect("request");
+
+        let error = inspect_json_body_context_selectors(&mut request, 1024, WebApiSurface::AppApi)
+            .await
+            .expect_err("tenant selector");
+        assert!(error.message.contains("tenantId"));
+
+        let body = to_bytes(request.into_body(), 1024).await.expect("body");
+        assert_eq!(body.as_ref(), payload.as_bytes());
+    }
+
+    /// An oversized declaration is rejected without touching the stream.
+    #[tokio::test]
+    async fn leaves_the_body_in_place_when_the_declared_size_exceeds_the_budget() {
+        let payload = format!(r#"{{"pad":"{}"}}"#, "x".repeat(4096));
+        let mut request = Request::builder()
+            .method("POST")
+            .uri("/v1/chat/completions")
+            .header("content-type", "application/json")
+            .header("content-length", payload.len().to_string())
+            .body(Body::from(payload.clone()))
+            .expect("request");
+
+        let error = inspect_json_body_context_selectors(&mut request, 1024, WebApiSurface::OpenApi)
+            .await
+            .expect_err("oversized body");
+        assert_eq!(error.status(), axum::http::StatusCode::PAYLOAD_TOO_LARGE);
+
+        let body = to_bytes(request.into_body(), 8192).await.expect("body");
+        assert_eq!(body.as_ref(), payload.as_bytes());
     }
 }
