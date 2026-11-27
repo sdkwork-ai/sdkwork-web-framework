@@ -610,7 +610,9 @@ async fn prompt_sized_json_body_reaches_the_handler_intact() {
     // authenticates itself once it has the payload.
     let mut profile = WebRequestContextProfile::default();
     // The relay's own profile: `/v1` is its open-api surface, not a gateway one.
-    profile.gateway_api_prefixes.retain(|prefix| prefix != "/v1");
+    profile
+        .gateway_api_prefixes
+        .retain(|prefix| prefix != "/v1");
     profile.open_api_prefixes = vec!["/v1".to_owned()];
     let routes = [HttpRoute::new(
         HttpMethod::Post,
